@@ -57,6 +57,7 @@ export interface BusEventMap {
 
   // Dialogs
   'show-command-palette': void
+  'show-recent': void
   'aboutDialog': void
   'tweetDialog': void
   'rename': void

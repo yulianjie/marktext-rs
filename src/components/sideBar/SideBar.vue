@@ -13,6 +13,7 @@ import { useLayoutStore, type RightColumn } from '@/stores/layout'
 import { openSettings } from '@/services/tauri-invoke'
 import TreePane from './TreePane.vue'
 import TocPane from './TocPane.vue'
+import SearchPane from './SearchPane.vue'
 
 const layout = useLayoutStore()
 
@@ -74,7 +75,8 @@ onBeforeUnmount(() => { dragging.value = false })
     >
       <TreePane v-if="layout.rightColumn === 'files'" />
       <TocPane v-else-if="layout.rightColumn === 'toc'" />
-      <div v-else class="placeholder">Search coming in Phase 6.</div>
+      <SearchPane v-else-if="layout.rightColumn === 'search'" />
+      <div v-else class="placeholder" />
       <div class="resizer" :class="{ dragging }" @pointerdown="onResizeDown" />
     </div>
   </aside>

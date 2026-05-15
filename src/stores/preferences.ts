@@ -108,6 +108,11 @@ interface State {
   githubToken: string
   imageBed: { github: { owner: string; repo: string; branch: string } }
   cliScript: string
+
+  // Recent files/folders. Capped to ~20 entries each; managed by the editor /
+  // project stores via `pushRecentFile` / `pushRecentFolder`.
+  recentFiles: string[]
+  recentFolders: string[]
 }
 
 const defaults: State = {
@@ -190,6 +195,9 @@ const defaults: State = {
   githubToken: '',
   imageBed: { github: { owner: '', repo: '', branch: '' } },
   cliScript: '',
+
+  recentFiles: [],
+  recentFolders: [],
 }
 
 export const usePreferencesStore = defineStore('preferences', {
@@ -231,6 +239,26 @@ export const usePreferencesStore = defineStore('preferences', {
     toggleViewMode(entry: keyof State) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ;(this as any)[entry] = !(this as any)[entry]
+    },
+
+    pushRecentFile(path: string) {
+      const cur = this.recentFiles.filter(p => p !== path)
+      cur.unshift(path)
+      this.recentFiles = cur.slice(0, 20)
+      void setPreference('recentFiles', this.recentFiles)
+    },
+
+    pushRecentFolder(path: string) {
+      const cur = this.recentFolders.filter(p => p !== path)
+      cur.unshift(path)
+      this.recentFolders = cur.slice(0, 20)
+      void setPreference('recentFolders', this.recentFolders)
+    },
+
+    clearRecents() {
+      this.recentFiles = []
+      this.recentFolders = []
+      void setPreferences({ recentFiles: [], recentFolders: [] })
     },
   },
 })

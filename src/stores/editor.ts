@@ -60,6 +60,10 @@ export const useEditorStore = defineStore('editor', () => {
   const tabs = ref<DocumentState[]>([])
   const currentFileId = ref<string | null>(null)
   const listToc = ref<{ lvl: number; content: string; slug?: string }[]>([])
+  /** True when the editor shows raw markdown source instead of WYSIWYG Muya. */
+  const sourceCodeMode = ref(false)
+  /** True when the in-editor find/replace bar is visible. */
+  const findReplaceOpen = ref(false)
 
   const currentFile = computed<DocumentState | null>(() => {
     if (!currentFileId.value) return null
@@ -110,6 +114,7 @@ export const useEditorStore = defineStore('editor', () => {
     file.pendingBaselineUpdate = true
     tabs.value.push(file)
     currentFileId.value = file.id
+    prefs.pushRecentFile(doc.path)
     return file
   }
 
@@ -219,6 +224,25 @@ export const useEditorStore = defineStore('editor', () => {
     tab.filename = newPath.split(/[\\/]/).pop() || tab.filename
   }
 
+  /* ─── view modes ────────────────────────────────────────────── */
+
+  function toggleSourceCode() { sourceCodeMode.value = !sourceCodeMode.value }
+  function toggleFindReplace() { findReplaceOpen.value = !findReplaceOpen.value }
+
+  /**
+   * Update a tab's markdown from an external editor (e.g. the source-code
+   * pane writing back to the in-memory document). Doesn't go through the
+   * baseline shim — assumes the caller already knows what's a real edit.
+   */
+  function setMarkdownExternal(id: string, markdown: string) {
+    const tab = tabs.value.find(t => t.id === id)
+    if (!tab) return
+    if (tab.markdown !== markdown) {
+      tab.markdown = markdown
+      tab.isSaved = false
+    }
+  }
+
   /* ─── notifications ─────────────────────────────────────────── */
 
   function pushTabNotification(id: string, message: string, type: 'info' | 'warning' | 'error' = 'info') {
@@ -249,6 +273,8 @@ export const useEditorStore = defineStore('editor', () => {
     tabs,
     currentFileId,
     listToc,
+    sourceCodeMode,
+    findReplaceOpen,
     // getters
     currentFile,
     toc,
@@ -262,6 +288,7 @@ export const useEditorStore = defineStore('editor', () => {
     exchangeTabs,
     // content & save
     applyContentChange,
+    setMarkdownExternal,
     saveCurrent,
     saveTab,
     saveAllTabs,
@@ -269,6 +296,9 @@ export const useEditorStore = defineStore('editor', () => {
     // notifications
     pushTabNotification,
     clearTabNotifications,
+    // view modes
+    toggleSourceCode,
+    toggleFindReplace,
     // lifecycle
     bootstrap,
   }

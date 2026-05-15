@@ -25,6 +25,7 @@ import {
 } from '@/services/tauri-invoke'
 import { listenTyped } from '@/services/tauri-bridge'
 import { useNotificationStore } from './notification'
+import { usePreferencesStore } from './preferences'
 
 interface ClipboardEntry {
   kind: 'copy' | 'cut'
@@ -59,6 +60,7 @@ async function buildSubtree(root: TreeFolder, dir: string, depth: number) {
 
 export const useProjectStore = defineStore('project', () => {
   const notify = useNotificationStore()
+  const prefs = usePreferencesStore()
 
   const projectTree = ref<TreeFolder | null>(null)
   const activeItem = ref<{ pathname: string; isDirectory: boolean } | null>(null)
@@ -78,6 +80,7 @@ export const useProjectStore = defineStore('project', () => {
       await buildSubtree(root, pathname, 0)
       await watchFolder(pathname)
       installWatcher()
+      prefs.pushRecentFolder(pathname)
     } catch (err) {
       notify.pushToast({
         type: 'error',

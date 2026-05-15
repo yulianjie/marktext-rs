@@ -1,0 +1,227 @@
+<script setup lang="ts">
+/**
+ * Folder-wide search panel — runs ripgrep on the Rust side and lists hits
+ * grouped by file. Click a hit to open the file at the matching line.
+ */
+import { computed, ref } from 'vue'
+import { Search } from '@element-plus/icons-vue'
+import { useProjectStore } from '@/stores/project'
+import { useEditorStore } from '@/stores/editor'
+import { usePreferencesStore } from '@/stores/preferences'
+import { useNotificationStore } from '@/stores/notification'
+import { searchInFolder, type SearchHit } from '@/services/tauri-invoke'
+
+interface Group { path: string; hits: SearchHit[] }
+
+const project = useProjectStore()
+const editor = useEditorStore()
+const prefs = usePreferencesStore()
+const notify = useNotificationStore()
+
+const query = ref('')
+const caseSensitive = ref(false)
+const wholeWord = ref(false)
+const regex = ref(false)
+const includeHidden = ref(false)
+const busy = ref(false)
+const groups = ref<Group[]>([])
+
+const hasResults = computed(() => groups.value.length > 0)
+const totalHits = computed(() => groups.value.reduce((n, g) => n + g.hits.length, 0))
+
+let runToken = 0
+async function runSearch() {
+  if (!project.projectTree) {
+    notify.pushToast({ type: 'warning', message: 'Open a folder first.' })
+    return
+  }
+  const text = query.value.trim()
+  if (!text) { groups.value = []; return }
+  busy.value = true
+  const token = ++runToken
+  try {
+    const hits = await searchInFolder({
+      root: project.projectTree.pathname,
+      query: text,
+      caseSensitive: caseSensitive.value,
+      wholeWord: wholeWord.value,
+      regex: regex.value,
+      includeHidden: includeHidden.value || prefs.searchIncludeHidden,
+      followSymlinks: prefs.searchFollowSymlinks,
+    })
+    if (token !== runToken) return // a newer search supersedes us
+    groups.value = group(hits)
+  } catch (err) {
+    if (token !== runToken) return
+    notify.pushToast({ type: 'error', title: 'Search failed', message: err instanceof Error ? err.message : String(err) })
+    groups.value = []
+  } finally {
+    if (token === runToken) busy.value = false
+  }
+}
+
+function group(hits: SearchHit[]): Group[] {
+  const map = new Map<string, SearchHit[]>()
+  for (const hit of hits) {
+    const arr = map.get(hit.path)
+    if (arr) arr.push(hit)
+    else map.set(hit.path, [hit])
+  }
+  return [...map.entries()].map(([path, hits]) => ({ path, hits }))
+}
+
+async function openHit(hit: SearchHit) {
+  try { await editor.openFile(hit.path) }
+  catch (err) {
+    notify.pushToast({ type: 'error', title: 'Open failed', message: err instanceof Error ? err.message : String(err) })
+  }
+  // TODO: scroll Muya to `hit.line`. Muya exposes a `scrollToHeader`-style
+  // bus event but no line-anchor jump yet; defer for now.
+}
+
+// Debounced auto-search on typing.
+let debounce: ReturnType<typeof setTimeout> | null = null
+function onQueryInput() {
+  if (debounce) clearTimeout(debounce)
+  debounce = setTimeout(() => { void runSearch() }, 300)
+}
+
+function shortPath(full: string): string {
+  if (!project.projectTree) return full
+  const root = project.projectTree.pathname
+  return full.startsWith(root) ? full.slice(root.length + 1) : full
+}
+</script>
+
+<template>
+  <div class="search-pane">
+    <div class="search-header">
+      <div class="input-row">
+        <el-icon class="leading"><Search /></el-icon>
+        <input
+          v-model="query"
+          class="search-input"
+          placeholder="Search in folder"
+          spellcheck="false"
+          @input="onQueryInput"
+          @keyup.enter="runSearch"
+        />
+      </div>
+      <div class="toggle-row">
+        <button class="toggle" :class="{ on: caseSensitive }" title="Case sensitive" @click="caseSensitive = !caseSensitive; runSearch()">Aa</button>
+        <button class="toggle" :class="{ on: wholeWord }" title="Whole word" @click="wholeWord = !wholeWord; runSearch()">ab</button>
+        <button class="toggle" :class="{ on: regex }" title="Regex" @click="regex = !regex; runSearch()">.*</button>
+        <span class="status">
+          <template v-if="busy">searching…</template>
+          <template v-else-if="hasResults">{{ totalHits }} match<template v-if="totalHits !== 1">es</template> in {{ groups.length }} file<template v-if="groups.length !== 1">s</template></template>
+        </span>
+      </div>
+    </div>
+    <div class="results">
+      <div v-for="group in groups" :key="group.path" class="group">
+        <div class="group-header" :title="group.path">{{ shortPath(group.path) }}</div>
+        <div
+          v-for="(hit, idx) in group.hits"
+          :key="idx"
+          class="hit"
+          @click="openHit(hit)"
+        >
+          <span class="line">{{ hit.line }}</span>
+          <span class="preview">{{ hit.preview }}</span>
+        </div>
+      </div>
+      <div v-if="!busy && query && !hasResults" class="empty">No matches.</div>
+      <div v-if="!busy && !query" class="empty">Type a query to search.</div>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.search-pane { height: 100%; display: flex; flex-direction: column; }
+.search-header {
+  border-bottom: 1px solid #eaecef;
+  padding: 8px 12px;
+}
+.input-row {
+  display: flex;
+  align-items: center;
+  border: 1px solid #d1d5da;
+  border-radius: 4px;
+  padding: 4px 8px;
+  background: #fff;
+}
+.input-row:focus-within { border-color: #0366d6; }
+.leading { color: #6a737d; margin-right: 6px; font-size: 14px; }
+.search-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: 12px;
+  background: transparent;
+}
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+}
+.toggle {
+  border: 1px solid transparent;
+  background: transparent;
+  color: #586069;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-family: ui-monospace, monospace;
+}
+.toggle:hover { background: #eaecef; color: #24292e; }
+.toggle.on { background: #dbedff; color: #0366d6; border-color: #79b8ff; }
+.status {
+  margin-left: auto;
+  color: #6a737d;
+  font-size: 11px;
+}
+.results { flex: 1; overflow-y: auto; padding-bottom: 16px; }
+.group { margin-top: 8px; }
+.group-header {
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #24292e;
+  background: #f1f3f5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hit {
+  display: flex;
+  gap: 8px;
+  padding: 3px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  align-items: baseline;
+}
+.hit:hover { background: #f1f8ff; }
+.hit .line {
+  color: #6a737d;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  min-width: 26px;
+  text-align: right;
+  flex-shrink: 0;
+}
+.hit .preview {
+  color: #24292e;
+  font-family: ui-monospace, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.empty {
+  padding: 16px;
+  text-align: center;
+  color: #959da5;
+  font-size: 12px;
+}
+</style>

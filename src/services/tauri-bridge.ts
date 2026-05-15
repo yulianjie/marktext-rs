@@ -38,6 +38,7 @@ export interface EventRegistry {
   'mt://fs/change': FileWatchEvent
   'mt://prefs/changed': PrefsChanged
   'mt://userdata/changed': PrefsChanged
+  'mt://menu/action': string
   'mt://menu/line-ending': MenuLineEndingChange
   'mt://menu/format': MenuFormatChange
   'mt://menu/sidebar': MenuSidebarChange
