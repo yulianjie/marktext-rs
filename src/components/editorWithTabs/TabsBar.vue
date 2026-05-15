@@ -2,14 +2,18 @@
 /**
  * Tab bar — one row of file tabs above the editor.
  *
- * Click a tab to activate it. Middle-click or × button to close.
- * Drag-to-reorder is intentionally deferred to a follow-up (would pull in
- * dragula + dom-autoscroller; not worth the dependency bump for spike).
+ * Click to activate, middle-click / × to close, drag-to-reorder via the
+ * HTML5 native drag API (no extra dependency). The drag-over indicator is
+ * just a left-border highlight on the tab being hovered.
  */
+import { ref } from 'vue'
 import { useEditorStore } from '@/stores/editor'
 import { Close, Plus } from '@element-plus/icons-vue'
 
 const editor = useEditorStore()
+
+const draggingId = ref<string | null>(null)
+const hoverId = ref<string | null>(null)
 
 function activate(id: string) {
   editor.setCurrent(id)
@@ -30,6 +34,44 @@ function onMiddleClick(id: string, ev: MouseEvent) {
 function newTab() {
   editor.newUntitledTab()
 }
+
+/* ── drag-and-drop reordering ─────────────────────────────────── */
+function onDragStart(id: string, ev: DragEvent) {
+  draggingId.value = id
+  if (ev.dataTransfer) {
+    ev.dataTransfer.effectAllowed = 'move'
+    // Required on Firefox; ignored on Chromium.
+    ev.dataTransfer.setData('text/plain', id)
+  }
+}
+
+function onDragOver(id: string, ev: DragEvent) {
+  if (!draggingId.value || draggingId.value === id) return
+  ev.preventDefault()
+  if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'move'
+  hoverId.value = id
+}
+
+function onDragLeave(id: string) {
+  if (hoverId.value === id) hoverId.value = null
+}
+
+function onDrop(id: string, ev: DragEvent) {
+  ev.preventDefault()
+  const fromId = draggingId.value
+  draggingId.value = null
+  hoverId.value = null
+  if (!fromId || fromId === id) return
+  const fromIdx = editor.tabs.findIndex(t => t.id === fromId)
+  const toIdx = editor.tabs.findIndex(t => t.id === id)
+  if (fromIdx < 0 || toIdx < 0) return
+  editor.exchangeTabs(fromIdx, toIdx)
+}
+
+function onDragEnd() {
+  draggingId.value = null
+  hoverId.value = null
+}
 </script>
 
 <template>
@@ -39,10 +81,21 @@ function newTab() {
         v-for="tab in editor.tabs"
         :key="tab.id"
         class="tab"
-        :class="{ active: tab.id === editor.currentFileId, dirty: !tab.isSaved }"
+        :class="{
+          active: tab.id === editor.currentFileId,
+          dirty: !tab.isSaved,
+          dragging: tab.id === draggingId,
+          'drop-target': tab.id === hoverId,
+        }"
         :title="tab.pathname || tab.filename"
+        draggable="true"
         @click="activate(tab.id)"
         @mousedown.middle="onMiddleClick(tab.id, $event)"
+        @dragstart="onDragStart(tab.id, $event)"
+        @dragover="onDragOver(tab.id, $event)"
+        @dragleave="onDragLeave(tab.id)"
+        @drop="onDrop(tab.id, $event)"
+        @dragend="onDragEnd"
       >
         <span class="dot" v-if="!tab.isSaved" />
         <span class="label">{{ tab.filename }}</span>
@@ -95,6 +148,8 @@ function newTab() {
   color: #24292e;
   border-bottom: 2px solid var(--mt-accent, #0366d6);
 }
+.tab.dragging { opacity: 0.5; }
+.tab.drop-target { box-shadow: inset 3px 0 0 var(--mt-accent, #0366d6); }
 .tab .label {
   flex: 1;
   overflow: hidden;

@@ -64,6 +64,11 @@ export const useEditorStore = defineStore('editor', () => {
   const sourceCodeMode = ref(false)
   /** True when the in-editor find/replace bar is visible. */
   const findReplaceOpen = ref(false)
+  /** Non-reactive handle to the live Muya instance, set by MuyaEditor on
+   *  mount. Lets non-component code (e.g. menu actions / export) reach into
+   *  Muya without dragging a ref around. */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let muyaInstance: any = null
 
   const currentFile = computed<DocumentState | null>(() => {
     if (!currentFileId.value) return null
@@ -229,6 +234,19 @@ export const useEditorStore = defineStore('editor', () => {
   function toggleSourceCode() { sourceCodeMode.value = !sourceCodeMode.value }
   function toggleFindReplace() { findReplaceOpen.value = !findReplaceOpen.value }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function setMuyaInstance(m: any) { muyaInstance = m }
+  function clearMuyaInstance() { muyaInstance = null }
+  function getMuyaInstance(): unknown { return muyaInstance }
+
+  /** Forward a Muya search-result blob into the current tab's state so the
+   *  find bar can show "n of m" counters. */
+  function applySearchResult(matches: { index: number; matches: unknown[]; value: string }) {
+    const tab = currentFile.value
+    if (!tab) return
+    tab.searchMatches = matches
+  }
+
   /**
    * Update a tab's markdown from an external editor (e.g. the source-code
    * pane writing back to the in-memory document). Doesn't go through the
@@ -299,6 +317,10 @@ export const useEditorStore = defineStore('editor', () => {
     // view modes
     toggleSourceCode,
     toggleFindReplace,
+    applySearchResult,
+    setMuyaInstance,
+    clearMuyaInstance,
+    getMuyaInstance,
     // lifecycle
     bootstrap,
   }

@@ -90,20 +90,29 @@ async function doExportHtml() {
   if (!tab) return
   const target = await saveAsDialog((tab.filename.replace(/\.md$/i, '') || 'untitled') + '.html')
   if (!target) return
-  // Naive HTML wrap; Muya's full export pipeline is too heavy for the spike
-  // version. Wrap markdown in a <pre> for now; real export comes later.
-  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(tab.filename)}</title></head><body><pre>${escapeHtml(tab.markdown)}</pre></body></html>`
-  try { await exportHtml(target, html); notify.pushToast({ type: 'success', message: `Exported to ${target}` }) }
-  catch (err) {
+  const muya = editor.getMuyaInstance()
+  if (!muya) {
+    notify.pushToast({ type: 'error', title: 'Export failed', message: 'Editor not ready.' })
+    return
+  }
+  try {
+    // @ts-expect-error Muya helper is plain JS with no .d.ts.
+    const { default: ExportHtml } = await import('muya/lib/utils/exportHtml')
+    const exporter = new ExportHtml(tab.markdown, muya)
+    const html = await exporter.generate({
+      title: tab.filename.replace(/\.md$/i, ''),
+      toc: false,
+      printOptimization: false,
+      extraCss: '',
+    })
+    await exportHtml(target, html)
+    notify.pushToast({ type: 'success', message: `Exported to ${target}` })
+  } catch (err) {
     notify.pushToast({ type: 'error', title: 'Export failed', message: err instanceof Error ? err.message : String(err) })
   }
 }
 
 function doPrint() { window.print() }
-
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>'"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[c]!))
-}
 
 /* ── menu action router ─────────────────────────────────────── */
 const MENU_ACTIONS: Record<string, () => void | Promise<void>> = {
@@ -128,6 +137,12 @@ const MENU_ACTIONS: Record<string, () => void | Promise<void>> = {
   'file.closeWindow': async () => { const win = await import('@tauri-apps/api/window'); await win.getCurrentWindow().close() },
   'edit.find': () => { editor.findReplaceOpen = true },
   'edit.replace': () => { editor.findReplaceOpen = true },
+  'edit.undo': () => bus.emit('undo', undefined),
+  'edit.redo': () => bus.emit('redo', undefined),
+  'edit.selectAll': () => bus.emit('selectAll', undefined),
+  'edit.copyAsMarkdown': () => bus.emit('copyAsMarkdown', undefined),
+  'edit.copyAsHtml': () => bus.emit('copyAsHtml', undefined),
+  'edit.pasteAsPlainText': () => bus.emit('pasteAsPlainText', undefined),
   'view.toggleSidebar': () => layout.toggleSideBar(),
   'view.toggleTabBar': () => layout.toggleTabBar(),
   'view.toggleSourceCode': () => editor.toggleSourceCode(),

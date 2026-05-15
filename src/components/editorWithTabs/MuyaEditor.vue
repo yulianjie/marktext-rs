@@ -9,6 +9,7 @@
  */
 import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useEditorStore } from '@/stores/editor'
+import { bus } from '@/bus'
 
 const editor = useEditorStore()
 
@@ -105,6 +106,7 @@ async function mount(initialMarkdown: string, id: string) {
     })
   })
   muyaRef.value = muya
+  editor.setMuyaInstance(muya)
   activeBoundId.value = id
   console.info('[Muya] mounted for tab', id, 'len=', initialMarkdown.length)
 }
@@ -126,14 +128,74 @@ watch(
   { immediate: false },
 )
 
+/* ── bus subscriptions: forward editor actions into the live Muya instance.
+ * Each handler short-circuits if no instance is mounted yet. */
+const busUnsubs: Array<() => void> = []
+
+function withMuya(fn: (muya: any) => void) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  const m = muyaRef.value
+  if (!m) return
+  try { fn(m) } catch (err) { console.warn('[Muya action failed]', err) }
+}
+
+function installBusHandlers() {
+  busUnsubs.push(bus.on('paragraph', (type) => withMuya(m => m.updateParagraph(type))))
+  busUnsubs.push(bus.on('format', (type) => withMuya(m => m.format(type))))
+  busUnsubs.push(bus.on('undo', () => withMuya(m => m.undo())))
+  busUnsubs.push(bus.on('redo', () => withMuya(m => m.redo())))
+  busUnsubs.push(bus.on('selectAll', () => withMuya(m => m.selectAll())))
+  busUnsubs.push(bus.on('copyAsMarkdown', () => withMuya(m => m.copyAsMarkdown?.())))
+  busUnsubs.push(bus.on('copyAsHtml', () => withMuya(m => m.copyAsHtml?.())))
+  busUnsubs.push(bus.on('pasteAsPlainText', () => withMuya(m => m.pasteAsPlainText?.())))
+  // Find / replace — Muya returns updated searchMatches we push into the tab.
+  busUnsubs.push(bus.on('find', ({ value, opt }) => withMuya(m => {
+    const matches = m.search(value, opt)
+    if (matches) editor.applySearchResult(matches)
+    scrollToHighlight()
+  })))
+  busUnsubs.push(bus.on('replace', ({ value, opt }) => withMuya(m => {
+    const matches = m.replace(value, opt)
+    if (matches) editor.applySearchResult(matches)
+  })))
+  busUnsubs.push(bus.on('findNext', () => withMuya(m => {
+    const matches = m.find('next')
+    if (matches) editor.applySearchResult(matches)
+    scrollToHighlight()
+  })))
+  busUnsubs.push(bus.on('findPrev', () => withMuya(m => {
+    const matches = m.find('prev')
+    if (matches) editor.applySearchResult(matches)
+    scrollToHighlight()
+  })))
+  busUnsubs.push(bus.on('find-action', (action) => withMuya(m => {
+    const matches = m.find(action)
+    if (matches) editor.applySearchResult(matches)
+    scrollToHighlight()
+  })))
+  // TOC click navigation.
+  busUnsubs.push(bus.on('scroll-to-header', (slug) => {
+    const el = document.getElementById(slug)
+    el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }))
+}
+
+function scrollToHighlight() {
+  const el = document.querySelector('.ag-highlight')
+  el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+}
+
 onMounted(async () => {
   // Bootstrap an Untitled tab if no tabs exist yet.
   editor.bootstrap()
   const active = editor.currentFile
   if (active) await mount(active.markdown, active.id)
+  installBusHandlers()
 })
 
 onBeforeUnmount(() => {
+  for (const off of busUnsubs) { try { off() } catch { /* ignore */ } }
+  busUnsubs.length = 0
+  editor.clearMuyaInstance()
   try { muyaRef.value?.destroy?.() } catch (err) {
     console.warn('[Muya destroy] non-fatal:', err)
   }

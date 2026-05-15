@@ -66,6 +66,14 @@ export interface BusEventMap {
   'paragraph': string
   'format': string
 
+  // Plain edit actions that route into Muya
+  'undo': void
+  'redo': void
+  'selectAll': void
+  'copyAsMarkdown': void
+  'copyAsHtml': void
+  'pasteAsPlainText': void
+
   // Commands
   'cmd::sort-commands': void
   'cmd::register-command': unknown
