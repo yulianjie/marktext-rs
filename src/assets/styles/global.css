@@ -1,0 +1,24 @@
+/* Global styles. Kept lean — per-component styling lives in SFCs. */
+
+:root {
+  --mt-bg: #ffffff;
+  --mt-fg: #24292e;
+  --mt-border: #eaecef;
+  --mt-accent: #0366d6;
+  font-family: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  font-size: 14px;
+  color: var(--mt-fg);
+  background: var(--mt-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  margin: 0;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}

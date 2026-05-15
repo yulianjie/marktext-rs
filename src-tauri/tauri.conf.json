@@ -1,0 +1,88 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "MarkText",
+  "version": "0.1.0",
+  "identifier": "com.marktext.rs",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "label": "main",
+        "title": "MarkText",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 800,
+        "minHeight": 600,
+        "decorations": true,
+        "resizable": true,
+        "fullscreen": false,
+        "transparent": false,
+        "visible": true,
+        "dragDropEnabled": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self' ipc: http://ipc.localhost; img-src 'self' asset: data: https: file: http://asset.localhost; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; connect-src ipc: http://ipc.localhost https: http:; font-src 'self' data: file: asset:",
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["**"]
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "Productivity",
+    "shortDescription": "Markdown editor (Tauri rewrite)",
+    "longDescription": "MarkText — a next-generation markdown editor, rewritten on top of Tauri.",
+    "copyright": "MarkText contributors",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "fileAssociations": [
+      {
+        "ext": ["md", "markdown", "mkd", "mdown", "mkdn", "mdtxt", "mdtext"],
+        "name": "Markdown",
+        "description": "Markdown document",
+        "role": "Editor"
+      }
+    ],
+    "windows": {
+      "webviewInstallMode": { "type": "embedBootstrapper" }
+    }
+  },
+  "plugins": {
+    "cli": {
+      "description": "MarkText markdown editor",
+      "args": [
+        {
+          "name": "files",
+          "takesValue": true,
+          "multiple": true,
+          "index": 1,
+          "description": "Files to open"
+        },
+        {
+          "name": "new-window",
+          "short": "n",
+          "description": "Open in a new window"
+        },
+        {
+          "name": "debug",
+          "short": "d",
+          "description": "Enable debug logging"
+        }
+      ]
+    }
+  }
+}
