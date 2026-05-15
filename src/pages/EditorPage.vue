@@ -1,197 +1,159 @@
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, ref, shallowRef } from 'vue'
-import { listenTyped } from '@/services/tauri-bridge'
-import {
-  readMarkdown,
-  saveMarkdown,
-  openFiles,
-  saveAsDialog,
-  type LoadedDocument,
-} from '@/services/tauri-invoke'
+/**
+ * Editor page — top-level layout: title bar / tab bar / sidebar / Muya host.
+ *
+ * Owns the keyboard shortcuts (Ctrl+S save, Ctrl+O open, Ctrl+Shift+P
+ * palette, Ctrl+T new tab) and the file-association open-on-launch handoff.
+ */
+import { onBeforeUnmount, onMounted } from 'vue'
+import TitleBar from '@/components/titleBar/TitleBar.vue'
+import TabsBar from '@/components/editorWithTabs/TabsBar.vue'
+import MuyaEditor from '@/components/editorWithTabs/MuyaEditor.vue'
+import SideBar from '@/components/sideBar/SideBar.vue'
+import CommandPalette from '@/components/commandPalette/CommandPalette.vue'
+import AboutDialog from '@/components/about/AboutDialog.vue'
+import { useEditorStore } from '@/stores/editor'
+import { useLayoutStore } from '@/stores/layout'
+import { usePreferencesStore } from '@/stores/preferences'
+import { useListenForMainStore } from '@/stores/listenForMain'
+import { useCommandCenterStore } from '@/stores/commandCenter'
+import { useNotificationStore } from '@/stores/notification'
+import { openFiles } from '@/services/tauri-invoke'
+import { bus } from '@/bus'
 
-// Muya is plain JS; type it loosely until we add a `.d.ts` for it.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const MuyaRef = shallowRef<any>(null)
-const editorRoot = ref<HTMLDivElement | null>(null)
-const currentPath = ref<string | null>(null)
-const isDirty = ref(false)
-const lastBaseline = ref('')
+const editor = useEditorStore()
+const layout = useLayoutStore()
+const prefs = usePreferencesStore()
+const listener = useListenForMainStore()
+const cc = useCommandCenterStore()
+const notify = useNotificationStore()
 
-async function loadMuya() {
-  // Dynamic import so Muya's CSS only loads when the editor mounts.
-  // @ts-expect-error Muya is JS with no .d.ts yet.
-  const { default: Muya } = await import('muya/lib')
-  if (!Muya.__pluginsRegistered) {
-    // @ts-expect-error see above
-    const [
-      TablePicker, QuickInsert, CodePicker, EmojiPicker, ImagePathPicker,
-      ImageSelector, ImageToolbar, Transformer, FormatPicker, LinkTools,
-      FootnoteTool, TableBarTools, FrontMenu,
-    ] = await Promise.all([
-      // @ts-expect-error JS module
-      import('muya/lib/ui/tablePicker'),
-      // @ts-expect-error JS module
-      import('muya/lib/ui/quickInsert'),
-      // @ts-expect-error JS module
-      import('muya/lib/ui/codePicker'),
-      // @ts-expect-error JS module
-      import('muya/lib/ui/emojiPicker'),
-      // @ts-expect-error JS module
-      import('muya/lib/ui/imagePicker'),
-      // @ts-expect-error JS module
-      import('muya/lib/ui/imageSelector'),
-      // @ts-expect-error JS module
-      import('muya/lib/ui/imageToolbar'),
-      // @ts-expect-error JS module
-      import('muya/lib/ui/transformer'),
-      // @ts-expect-error JS module
-      import('muya/lib/ui/formatPicker'),
-      // @ts-expect-error JS module
-      import('muya/lib/ui/linkTools'),
-      // @ts-expect-error JS module
-      import('muya/lib/ui/footnoteTool'),
-      // @ts-expect-error JS module
-      import('muya/lib/ui/tableTools'),
-      // @ts-expect-error JS module
-      import('muya/lib/ui/frontMenu'),
-    ]).then(modules => modules.map(m => m.default))
-    Muya.use(TablePicker)
-    Muya.use(QuickInsert)
-    Muya.use(CodePicker)
-    Muya.use(EmojiPicker)
-    Muya.use(ImagePathPicker)
-    Muya.use(ImageSelector, { unsplashAccessKey: '', photoCreatorClick: () => {} })
-    Muya.use(Transformer)
-    Muya.use(ImageToolbar)
-    Muya.use(FormatPicker)
-    Muya.use(FrontMenu)
-    Muya.use(LinkTools, { jumpClick: () => {} })
-    Muya.use(FootnoteTool)
-    Muya.use(TableBarTools)
-    Muya.__pluginsRegistered = true
+/* ── shortcuts ───────────────────────────────────────────────── */
+function onKey(ev: KeyboardEvent) {
+  const cmd = ev.ctrlKey || ev.metaKey
+  if (!cmd) return
+  if (ev.key === 's' && !ev.shiftKey) {
+    ev.preventDefault()
+    void editor.saveCurrent()
+  } else if (ev.key === 'S' && ev.shiftKey) {
+    ev.preventDefault()
+    void editor.saveAllTabs()
+  } else if (ev.key === 'o') {
+    ev.preventDefault()
+    void doOpen()
+  } else if (ev.key === 't') {
+    ev.preventDefault()
+    editor.newUntitledTab()
+  } else if (ev.key === 'w') {
+    ev.preventDefault()
+    if (editor.currentFileId) editor.closeTab(editor.currentFileId)
+  } else if (ev.key === 'P' && ev.shiftKey) {
+    ev.preventDefault()
+    bus.emit('show-command-palette', undefined)
+  } else if (ev.key === 'b') {
+    ev.preventDefault()
+    layout.toggleSideBar()
   }
-  return Muya
 }
 
-async function mountEditor(initialMarkdown = '') {
-  if (!editorRoot.value) return
-  const Muya = await loadMuya()
-  let muya
-  try {
-    muya = new Muya(editorRoot.value, {
-      markdown: initialMarkdown,
-      focusMode: false,
-      bulletListMarker: '-',
-      orderListMarker: '.',
-      preferLooseListItem: true,
-      autoPairBracket: true,
-      autoPairMarkdownSyntax: true,
-      autoPairQuote: true,
-      tabSize: 4,
-      listIndentation: 1,
-      frontmatterType: '-',
-      isHtmlEnabled: true,
-      sequenceTheme: 'hand',
-      hideQuickInsertHint: false,
-      hideLinkPopup: false,
-      autoCheck: false,
-    })
-  } catch (err) {
-    console.error('[Muya constructor failed]', err)
-    throw err
-  }
-  console.info('[Muya] mounted with markdown length=', initialMarkdown.length)
-  muya.on('change', (changes: { markdown: string }) => {
-    // First post-load change is the parse-roundtrip baseline; subsequent ones
-    // are real edits. This mirrors the `pendingBaselineUpdate` flag in the
-    // legacy Vuex `editor` module.
-    if (lastBaseline.value === '' || changes.markdown === lastBaseline.value) {
-      lastBaseline.value = changes.markdown
-      isDirty.value = false
-    } else {
-      isDirty.value = true
-    }
-  })
-  MuyaRef.value = muya
-}
-
-async function openFromDialog() {
+async function doOpen() {
   const paths = await openFiles()
   if (!paths.length) return
-  const doc: LoadedDocument = await readMarkdown(paths[0])
-  currentPath.value = doc.path
-  lastBaseline.value = ''
-  isDirty.value = false
-  MuyaRef.value?.setMarkdown(doc.markdown)
-}
-
-async function save() {
-  const markdown: string = MuyaRef.value?.getMarkdown?.() ?? ''
-  let path = currentPath.value
-  if (!path) {
-    path = await saveAsDialog('untitled.md')
-    if (!path) return
-    currentPath.value = path
+  for (const p of paths) {
+    try {
+      await editor.openFile(p)
+    } catch (err) {
+      notify.pushToast({
+        type: 'error',
+        title: 'Open failed',
+        message: err instanceof Error ? err.message : String(err),
+      })
+    }
   }
-  await saveMarkdown(path, markdown)
-  lastBaseline.value = markdown
-  isDirty.value = false
 }
 
-let unlistenOpenFile: (() => void) | null = null
+/* ── command palette registry ───────────────────────────────── */
+function registerBuiltinCommands() {
+  cc.register({
+    id: 'file.new',
+    description: 'File: New Tab',
+    shortcut: ['Ctrl+T'],
+    execute: () => { editor.newUntitledTab() },
+  })
+  cc.register({
+    id: 'file.open',
+    description: 'File: Open…',
+    shortcut: ['Ctrl+O'],
+    execute: doOpen,
+  })
+  cc.register({
+    id: 'file.save',
+    description: 'File: Save',
+    shortcut: ['Ctrl+S'],
+    execute: () => editor.saveCurrent().then(() => {}),
+  })
+  cc.register({
+    id: 'file.saveAll',
+    description: 'File: Save All',
+    shortcut: ['Ctrl+Shift+S'],
+    execute: () => editor.saveAllTabs().then(() => {}),
+  })
+  cc.register({
+    id: 'view.toggleSidebar',
+    description: 'View: Toggle Sidebar',
+    shortcut: ['Ctrl+B'],
+    execute: () => layout.toggleSideBar(),
+  })
+  cc.register({
+    id: 'app.about',
+    description: 'Help: About MarkText',
+    execute: () => bus.emit('aboutDialog', undefined),
+  })
+}
+
+let unsubOpenFile: (() => void) | null = null
 
 onMounted(async () => {
-  await mountEditor('# Welcome to MarkText\n\nStart typing…\n')
-  // File-association launches forward an open-file event.
+  await prefs.load()
+  layout.syncFromPreferences()
+  await listener.install()
+  registerBuiltinCommands()
+  window.addEventListener('keydown', onKey)
+
+  // File-association open-on-launch handoff. The Tauri bridge dispatches a
+  // CustomEvent on the window with `{ path }` payload.
   const handler = (e: Event) => {
     const detail = (e as CustomEvent<{ path: string }>).detail
-    void readMarkdown(detail.path).then(doc => {
-      currentPath.value = doc.path
-      lastBaseline.value = ''
-      MuyaRef.value?.setMarkdown(doc.markdown)
+    void editor.openFile(detail.path).catch(err => {
+      notify.pushToast({
+        type: 'error',
+        title: 'Open failed',
+        message: err instanceof Error ? err.message : String(err),
+      })
     })
   }
   window.addEventListener('mt:open-file', handler)
-  unlistenOpenFile = () => window.removeEventListener('mt:open-file', handler)
-
-  // Keyboard shortcut: Ctrl/Cmd+S to save.
-  const onKey = (e: KeyboardEvent) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-      e.preventDefault()
-      void save()
-    }
-  }
-  window.addEventListener('keydown', onKey)
-  unlistenOpenFile = () => {
-    window.removeEventListener('keydown', onKey)
-    window.removeEventListener('mt:open-file', handler)
-  }
+  unsubOpenFile = () => window.removeEventListener('mt:open-file', handler)
 })
 
 onBeforeUnmount(() => {
-  unlistenOpenFile?.()
-  try { MuyaRef.value?.destroy?.() } catch (err) {
-    // Muya's destroy reaches into plugin state that may not exist during HMR.
-    // Swallow and log — full app shutdown is handled by the WebView host.
-    console.warn('[Muya destroy] non-fatal:', err)
-  }
+  window.removeEventListener('keydown', onKey)
+  unsubOpenFile?.()
 })
 </script>
 
 <template>
   <div class="editor-page">
-    <header class="toolbar">
-      <el-button size="small" @click="openFromDialog">Open…</el-button>
-      <el-button size="small" type="primary" @click="save">
-        Save{{ isDirty ? ' *' : '' }}
-      </el-button>
-      <span class="path">{{ currentPath || '(untitled)' }}</span>
-    </header>
-    <main class="muya-host">
-      <div ref="editorRoot" class="muya-container">
-        <div></div>
+    <TitleBar />
+    <div class="page-body">
+      <SideBar v-if="layout.showSideBar" />
+      <div class="editor-column">
+        <TabsBar />
+        <MuyaEditor />
       </div>
-    </main>
+    </div>
+    <CommandPalette />
+    <AboutDialog />
   </div>
 </template>
 
@@ -200,30 +162,18 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
-}
-.toolbar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border-bottom: 1px solid #eaecef;
-  background: #fafbfc;
-}
-.path {
-  margin-left: auto;
-  font-size: 12px;
-  color: #6a737d;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-}
-.muya-host {
-  flex: 1;
-  overflow: auto;
-  padding: 32px 64px;
   background: #fff;
 }
-.muya-container {
-  max-width: 860px;
-  margin: 0 auto;
-  outline: none;
+.page-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+.editor-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
 }
 </style>

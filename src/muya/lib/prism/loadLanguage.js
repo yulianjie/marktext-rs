@@ -3,8 +3,20 @@ import { getDefer } from '../utils'
 
 // Vite needs a statically-analysable list of prism language modules so it can
 // resolve `import('prismjs/components/prism-<lang>')` at runtime. Use
-// `import.meta.glob` to materialise the registry at build time.
-const LANG_LOADERS = import.meta.glob('/node_modules/prismjs/components/prism-*.js')
+// `import.meta.glob` to materialise the registry at build time. Negative
+// pattern excludes the `.min.js` variants which don't have ES exports.
+//
+// Relative path (not root-relative `/node_modules/...`) because Vite's
+// Windows path resolution mangles the latter into an unresolvable mix of
+// `..` and `c:/`.
+const LANG_LOADERS = import.meta.glob([
+  '../../../../../node_modules/prismjs/components/prism-*.js',
+  '!../../../../../node_modules/prismjs/components/prism-*.min.js',
+])
+
+function langKey(lang) {
+  return `../../../../../node_modules/prismjs/components/prism-${lang}.js`
+}
 
 /**
  * The set of all languages which have been loaded using the below function.
@@ -93,7 +105,7 @@ function initLoadLanguage(Prism) {
         defer.resolve({ lang, status: 'cached' })
         continue
       }
-      const loader = LANG_LOADERS[`/node_modules/prismjs/components/prism-${lang}.js`]
+      const loader = LANG_LOADERS[langKey(lang)]
       if (!loader) {
         defer.resolve({ lang, status: 'noexist' })
         continue

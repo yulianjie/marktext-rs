@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Default capability granted to the main window. Includes filesystem, dialog, clipboard, OS, shell, store, and event APIs needed by MarkText.",
-  "windows": ["main"],
+  "windows": ["main", "settings", "editor-*"],
   "permissions": [
     "core:default",
     "core:window:default",
