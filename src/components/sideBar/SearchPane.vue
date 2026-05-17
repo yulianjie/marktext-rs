@@ -10,6 +10,7 @@ import { useEditorStore } from '@/stores/editor'
 import { usePreferencesStore } from '@/stores/preferences'
 import { useNotificationStore } from '@/stores/notification'
 import { searchInFolder, type SearchHit } from '@/services/tauri-invoke'
+import { t } from '@/i18n'
 
 interface Group { path: string; hits: SearchHit[] }
 
@@ -101,16 +102,16 @@ function shortPath(full: string): string {
         <input
           v-model="query"
           class="search-input"
-          placeholder="Search in folder"
+          :placeholder="t('sideBar.searchInFolder')"
           spellcheck="false"
           @input="onQueryInput"
           @keyup.enter="runSearch"
         />
       </div>
       <div class="toggle-row">
-        <button class="toggle" :class="{ on: caseSensitive }" title="Case sensitive" @click="caseSensitive = !caseSensitive; runSearch()">Aa</button>
-        <button class="toggle" :class="{ on: wholeWord }" title="Whole word" @click="wholeWord = !wholeWord; runSearch()">ab</button>
-        <button class="toggle" :class="{ on: regex }" title="Regex" @click="regex = !regex; runSearch()">.*</button>
+        <button class="toggle" :class="{ on: caseSensitive }" :title="t('sideBar.caseSensitive')" @click="caseSensitive = !caseSensitive; runSearch()">Aa</button>
+        <button class="toggle" :class="{ on: wholeWord }" :title="t('sideBar.wholeWord')" @click="wholeWord = !wholeWord; runSearch()">ab</button>
+        <button class="toggle" :class="{ on: regex }" :title="t('sideBar.regex')" @click="regex = !regex; runSearch()">.*</button>
         <span class="status">
           <template v-if="busy">searching…</template>
           <template v-else-if="hasResults">{{ totalHits }} match<template v-if="totalHits !== 1">es</template> in {{ groups.length }} file<template v-if="groups.length !== 1">s</template></template>
@@ -118,10 +119,10 @@ function shortPath(full: string): string {
       </div>
     </div>
     <div class="results">
-      <div v-for="group in groups" :key="group.path" class="group">
-        <div class="group-header" :title="group.path">{{ shortPath(group.path) }}</div>
+      <div v-for="g in groups" :key="g.path" class="group">
+        <div class="group-header" :title="g.path">{{ shortPath(g.path) }}</div>
         <div
-          v-for="(hit, idx) in group.hits"
+          v-for="(hit, idx) in g.hits"
           :key="idx"
           class="hit"
           @click="openHit(hit)"
@@ -130,8 +131,8 @@ function shortPath(full: string): string {
           <span class="preview">{{ hit.preview }}</span>
         </div>
       </div>
-      <div v-if="!busy && query && !hasResults" class="empty">No matches.</div>
-      <div v-if="!busy && !query" class="empty">Type a query to search.</div>
+      <div v-if="!busy && query && !hasResults" class="empty">{{ t('sideBar.noMatches') }}</div>
+      <div v-if="!busy && !query" class="empty">{{ t('sideBar.typeQuery') }}</div>
     </div>
   </div>
 </template>

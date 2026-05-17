@@ -6,6 +6,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useCommandCenterStore } from '@/stores/commandCenter'
 import { bus } from '@/bus'
+import { t } from '@/i18n'
 
 const cc = useCommandCenterStore()
 const visible = ref(false)
@@ -79,7 +80,7 @@ defineExpose({ open })
         ref="inputRef"
         v-model="query"
         class="cp-input"
-        placeholder="Type a command…"
+        :placeholder="t('command.placeholder')"
         spellcheck="false"
       />
     </template>
@@ -97,7 +98,7 @@ defineExpose({ open })
           {{ cmd.shortcut.join(' ') }}
         </span>
       </div>
-      <div v-if="!matches.length" class="cp-empty">No matching commands.</div>
+      <div v-if="!matches.length" class="cp-empty">{{ t('command.noMatches') }}</div>
     </div>
   </el-dialog>
 </template>

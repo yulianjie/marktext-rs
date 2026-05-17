@@ -9,6 +9,7 @@
  */
 import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useEditorStore } from '@/stores/editor'
+import { muyaImageAction } from '@/services/muya-image-action'
 import { bus } from '@/bus'
 
 const editor = useEditorStore()
@@ -19,10 +20,8 @@ const muyaRef = shallowRef<any>(null)
 const activeBoundId = ref<string | null>(null)
 
 async function loadMuya() {
-  // @ts-expect-error Muya is JS with no .d.ts yet
   const { default: Muya } = await import('muya/lib')
   if (!Muya.__pluginsRegistered) {
-    // @ts-expect-error JS modules
     const mods = await Promise.all([
       import('muya/lib/ui/tablePicker'),
       import('muya/lib/ui/quickInsert'),
@@ -93,6 +92,10 @@ async function mount(initialMarkdown: string, id: string) {
       hideQuickInsertHint: false,
       hideLinkPopup: false,
       autoCheck: false,
+      // Muya calls this whenever it materialises an image (drag/paste/local
+      // picker). The service routes the file/path through the preference-
+      // driven path/folder/upload strategies.
+      imageAction: muyaImageAction,
     })
   } catch (err) {
     console.error('[Muya constructor failed]', err)

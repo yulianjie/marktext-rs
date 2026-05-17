@@ -5,6 +5,7 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { bus } from '@/bus'
 import { getVersion } from '@tauri-apps/api/app'
+import { t } from '@/i18n'
 
 const visible = ref(false)
 const appVersion = ref('0.1.0')
@@ -22,12 +23,12 @@ onBeforeUnmount(() => { unsub?.() })
 <template>
   <el-dialog v-model="visible" width="420px" align-center :show-close="true">
     <template #header>
-      <h3 class="about-title">MarkText</h3>
+      <h3 class="about-title">{{ t('app.name') }}</h3>
     </template>
     <div class="about-body">
-      <p class="version">Version {{ appVersion }}</p>
-      <p class="tagline">Markdown editor — Tauri rewrite.</p>
-      <p class="meta">© MarkText contributors · MIT License</p>
+      <p class="version">{{ t('about.version', { version: appVersion }) }}</p>
+      <p class="tagline">{{ t('about.tagline') }}</p>
+      <p class="meta">{{ t('about.copyright') }}</p>
     </div>
   </el-dialog>
 </template>

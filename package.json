@@ -11,8 +11,8 @@
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
-    "lint": "eslint --ext .ts,.vue src",
-    "lint:fix": "eslint --ext .ts,.vue --fix src",
+    "lint": "eslint src",
+    "lint:fix": "eslint --fix src",
     "test:unit": "vitest run",
     "test:e2e": "playwright test -c test/e2e/playwright.config.ts"
   },

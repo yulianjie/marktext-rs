@@ -11,19 +11,21 @@ import { computed, onBeforeUnmount, ref } from 'vue'
 import { Folder, Compass, Search, Setting } from '@element-plus/icons-vue'
 import { useLayoutStore, type RightColumn } from '@/stores/layout'
 import { openSettings } from '@/services/tauri-invoke'
+import { useI18n } from '@/i18n'
 import TreePane from './TreePane.vue'
 import TocPane from './TocPane.vue'
 import SearchPane from './SearchPane.vue'
 
 const layout = useLayoutStore()
+const { t } = useI18n()
 
 const panelWidth = computed(() => layout.sideBarWidth)
 
-interface RailItem { key: RightColumn; icon: typeof Folder; title: string }
+interface RailItem { key: RightColumn; icon: typeof Folder; titleKey: string }
 const rails: RailItem[] = [
-  { key: 'files', icon: Folder, title: 'Files' },
-  { key: 'toc', icon: Compass, title: 'Outline' },
-  { key: 'search', icon: Search, title: 'Search' },
+  { key: 'files', icon: Folder, titleKey: 'sideBar.files' },
+  { key: 'toc', icon: Compass, titleKey: 'sideBar.toc' },
+  { key: 'search', icon: Search, titleKey: 'sideBar.search' },
 ]
 
 function switchTo(key: RightColumn) {
@@ -58,13 +60,13 @@ onBeforeUnmount(() => { dragging.value = false })
         :key="item.key"
         class="rail-icon"
         :class="{ active: layout.rightColumn === item.key }"
-        :title="item.title"
+        :title="t(item.titleKey)"
         @click="switchTo(item.key)"
       >
         <el-icon :size="18"><component :is="item.icon" /></el-icon>
       </button>
       <div class="spacer" />
-      <button class="rail-icon" title="Preferences" @click="openSettings">
+      <button class="rail-icon" :title="t('sideBar.preferences')" @click="openSettings">
         <el-icon :size="18"><Setting /></el-icon>
       </button>
     </div>

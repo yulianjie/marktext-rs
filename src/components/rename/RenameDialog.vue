@@ -10,6 +10,7 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { bus } from '@/bus'
 import { useEditorStore } from '@/stores/editor'
 import { useNotificationStore } from '@/stores/notification'
+import { t } from '@/i18n'
 
 const editor = useEditorStore()
 const notify = useNotificationStore()
@@ -58,21 +59,21 @@ watch(visible, async (v) => { if (v) { await Promise.resolve(); input.value?.foc
 <template>
   <el-dialog v-model="visible" width="420px" align-center :show-close="false">
     <template #header>
-      <h3 class="rename-title">Rename</h3>
+      <h3 class="rename-title">{{ t('rename.title') }}</h3>
     </template>
     <input
       ref="input"
       v-model="draft"
       class="rename-input"
       spellcheck="false"
-      placeholder="filename.md"
+      :placeholder="t('rename.placeholder')"
       @keyup.enter="apply"
       @keyup.escape="cancel"
     />
     <template #footer>
       <div class="footer">
-        <el-button size="small" @click="cancel">Cancel</el-button>
-        <el-button size="small" type="primary" @click="apply">Rename</el-button>
+        <el-button size="small" @click="cancel">{{ t('rename.cancel') }}</el-button>
+        <el-button size="small" type="primary" @click="apply">{{ t('rename.apply') }}</el-button>
       </div>
     </template>
   </el-dialog>

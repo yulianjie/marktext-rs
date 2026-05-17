@@ -8,6 +8,7 @@ import { useEditorStore } from '@/stores/editor'
 import { openFolder } from '@/services/tauri-invoke'
 import { useNotificationStore } from '@/stores/notification'
 import type { TreeFile } from '@/stores/treeCtrl'
+import { t } from '@/i18n'
 import TreeRow from './TreeRow.vue'
 
 const project = useProjectStore()
@@ -36,8 +37,8 @@ async function openFile(file: TreeFile) {
 <template>
   <div class="tree-pane">
     <div v-if="!project.projectTree" class="empty-state">
-      <p class="empty-msg">No folder opened.</p>
-      <el-button size="small" type="primary" @click="pickFolder">Open Folder…</el-button>
+      <p class="empty-msg">{{ t('sideBar.noFolderOpen') }}</p>
+      <el-button size="small" type="primary" @click="pickFolder">{{ t('sideBar.openFolder') }}</el-button>
     </div>
     <div v-else class="tree-root">
       <div class="tree-header">

@@ -9,6 +9,7 @@ import { bus } from '@/bus'
 import { useEditorStore } from '@/stores/editor'
 import { useProjectStore } from '@/stores/project'
 import { usePreferencesStore } from '@/stores/preferences'
+import { t } from '@/i18n'
 
 const editor = useEditorStore()
 const project = useProjectStore()
@@ -44,16 +45,16 @@ defineExpose({ open })
   <el-dialog v-model="visible" width="640px" align-center :show-close="true">
     <template #header>
       <div class="recent-header">
-        <h3>Recent</h3>
+        <h3>{{ t('recent.title') }}</h3>
         <el-button v-if="prefs.recentFiles.length || prefs.recentFolders.length" size="small" link @click="clear">
-          <el-icon><Delete /></el-icon> Clear
+          <el-icon><Delete /></el-icon> {{ t('recent.clear') }}
         </el-button>
       </div>
     </template>
     <div class="recent-body">
       <div class="section">
-        <div class="section-header">Folders</div>
-        <div v-if="!prefs.recentFolders.length" class="empty">No recent folders.</div>
+        <div class="section-header">{{ t('recent.folders') }}</div>
+        <div v-if="!prefs.recentFolders.length" class="empty">{{ t('recent.noFolders') }}</div>
         <div v-for="path in prefs.recentFolders" :key="path" class="row" @click="openFolder(path)">
           <el-icon class="row-icon folder"><Folder /></el-icon>
           <div class="path-col">
@@ -63,8 +64,8 @@ defineExpose({ open })
         </div>
       </div>
       <div class="section">
-        <div class="section-header">Files</div>
-        <div v-if="!prefs.recentFiles.length" class="empty">No recent files.</div>
+        <div class="section-header">{{ t('recent.files') }}</div>
+        <div v-if="!prefs.recentFiles.length" class="empty">{{ t('recent.noFiles') }}</div>
         <div v-for="path in prefs.recentFiles" :key="path" class="row" @click="openFile(path)">
           <el-icon class="row-icon"><Document /></el-icon>
           <div class="path-col">

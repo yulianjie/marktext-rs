@@ -7,14 +7,16 @@ import { computed } from 'vue'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { useEditorStore } from '@/stores/editor'
 import { usePreferencesStore } from '@/stores/preferences'
+import { useI18n } from '@/i18n'
 
 const editor = useEditorStore()
 const prefs = usePreferencesStore()
 const win = getCurrentWindow()
+const { t } = useI18n()
 
 const titleText = computed(() => {
   const f = editor.currentFile
-  if (!f) return 'MarkText'
+  if (!f) return t('app.name')
   const star = f.isSaved ? '' : '● '
   return star + (f.pathname || f.filename)
 })
@@ -35,16 +37,16 @@ async function close() { await win.close() }
   <header class="title-bar" :class="{ 'custom-chrome': useCustomChrome }" data-tauri-drag-region>
     <div class="title-content" data-tauri-drag-region>
       <span class="title-text" data-tauri-drag-region>{{ titleText }}</span>
-      <span class="word-count" data-tauri-drag-region>{{ wordCount }} words</span>
+      <span class="word-count" data-tauri-drag-region>{{ wordCount }} {{ t('titleBar.words') }}</span>
     </div>
     <div v-if="useCustomChrome" class="window-controls">
-      <button class="ctl" aria-label="Minimize" @click="minimize">
+      <button class="ctl" :aria-label="t('titleBar.minimize')" @click="minimize">
         <svg width="10" height="10" viewBox="0 0 10 10"><path d="M0 5 L10 5" stroke="currentColor" stroke-width="1" /></svg>
       </button>
-      <button class="ctl" aria-label="Maximize" @click="toggleMax">
+      <button class="ctl" :aria-label="t('titleBar.maximize')" @click="toggleMax">
         <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" stroke="currentColor" stroke-width="1" fill="none" /></svg>
       </button>
-      <button class="ctl close" aria-label="Close" @click="close">
+      <button class="ctl close" :aria-label="t('titleBar.close')" @click="close">
         <svg width="10" height="10" viewBox="0 0 10 10"><path d="M0 0 L10 10 M10 0 L0 10" stroke="currentColor" stroke-width="1" /></svg>
       </button>
     </div>

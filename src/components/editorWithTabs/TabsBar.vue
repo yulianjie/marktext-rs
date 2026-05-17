@@ -9,6 +9,7 @@
 import { ref } from 'vue'
 import { useEditorStore } from '@/stores/editor'
 import { Close, Plus } from '@element-plus/icons-vue'
+import { t } from '@/i18n'
 
 const editor = useEditorStore()
 
@@ -99,12 +100,12 @@ function onDragEnd() {
       >
         <span class="dot" v-if="!tab.isSaved" />
         <span class="label">{{ tab.filename }}</span>
-        <button class="close" @click="close(tab.id, $event)" aria-label="Close tab">
+        <button class="close" @click="close(tab.id, $event)" :aria-label="t('tabs.closeTab')">
           <el-icon :size="12"><Close /></el-icon>
         </button>
       </div>
     </div>
-    <button class="new-tab" @click="newTab" aria-label="New tab">
+    <button class="new-tab" @click="newTab" :aria-label="t('tabs.newTab')">
       <el-icon :size="14"><Plus /></el-icon>
     </button>
   </div>

@@ -97,7 +97,6 @@ async function doExportHtml() {
     return
   }
   try {
-    // @ts-expect-error Muya helper is plain JS with no .d.ts.
     const { default: ExportHtml } = await import('muya/lib/utils/exportHtml')
     const exporter = new ExportHtml(tab.markdown, muya)
     const html = await exporter.generate({

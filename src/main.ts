@@ -7,6 +7,7 @@ import App from './App.vue'
 import router from './router'
 import { initTauriBridge } from './services/tauri-bridge'
 import { installDebugBridge } from './services/debug-bridge'
+import { t } from './i18n'
 
 import './assets/styles/global.css'
 
@@ -20,6 +21,9 @@ app.config.errorHandler = (err, _instance, info) => {
   const error = err instanceof Error ? err : new Error(String(err))
   console.error(`[vue:${info}]`, error)
 }
+
+// Expose `$t` so templates can call it without an extra import per SFC.
+app.config.globalProperties.$t = t
 
 app.use(createPinia())
 app.use(router)

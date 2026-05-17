@@ -222,7 +222,8 @@ export const usePreferencesStore = defineStore('preferences', {
     },
 
     async set<K extends keyof State>(key: K, value: State[K]) {
-      this[key] = value as State[K]
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(this as any)[key] = value
       await setPreference(key as string, value as unknown as Pref)
     },
 

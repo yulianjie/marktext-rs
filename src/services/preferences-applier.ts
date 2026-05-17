@@ -19,6 +19,7 @@
  */
 import { watchEffect, onScopeDispose } from 'vue'
 import { usePreferencesStore } from '@/stores/preferences'
+import { setLocale, type LocaleId } from '@/i18n'
 
 let mediaQuery: MediaQueryList | null = null
 let mediaQueryListener: ((ev: MediaQueryListEvent) => void) | null = null
@@ -49,6 +50,11 @@ export function applyPreferencesToDom(): void {
     if (typeof document !== 'undefined') {
       document.documentElement.dataset.theme = theme
       setBodyClass('dark', theme === 'dark' || theme.includes('dark'))
+    }
+
+    // Locale.
+    if (prefs.language === 'zh-CN' || prefs.language === 'en') {
+      setLocale(prefs.language as LocaleId)
     }
 
     // Editor display

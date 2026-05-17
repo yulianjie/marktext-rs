@@ -5,6 +5,7 @@
 import { computed } from 'vue'
 import { useEditorStore } from '@/stores/editor'
 import type { TocItem } from '@/stores/editor'
+import { t } from '@/i18n'
 
 const editor = useEditorStore()
 
@@ -34,7 +35,7 @@ function scrollTo(item: FlatItem) {
 
 <template>
   <div class="toc-pane">
-    <div class="toc-header">Outline</div>
+    <div class="toc-header">{{ t('sideBar.toc') }}</div>
     <div class="toc-list">
       <div
         v-for="(item, idx) in flat"
@@ -46,7 +47,7 @@ function scrollTo(item: FlatItem) {
       >
         {{ item.content }}
       </div>
-      <div v-if="!flat.length" class="empty">No headings.</div>
+      <div v-if="!flat.length" class="empty">{{ t('sideBar.noHeadings') }}</div>
     </div>
   </div>
 </template>

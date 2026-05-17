@@ -10,6 +10,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { Close, Search, ArrowDown, ArrowUp, Refresh } from '@element-plus/icons-vue'
 import { useEditorStore } from '@/stores/editor'
 import { bus, type SearchOpt } from '@/bus'
+import { t } from '@/i18n'
 
 const editor = useEditorStore()
 const visible = computed(() => editor.findReplaceOpen)
@@ -83,28 +84,28 @@ onBeforeUnmount(() => { /* nothing to clean — listeners are inline */ })
         ref="findInput"
         v-model="findText"
         class="input"
-        placeholder="Find"
+        :placeholder="t('find.findPlaceholder')"
         spellcheck="false"
       />
       <span class="match-info">{{ matchInfo }}</span>
-      <button class="btn" :title="'Previous (Shift+Enter)'" @click="prev"><el-icon :size="14"><ArrowUp /></el-icon></button>
-      <button class="btn" :title="'Next (Enter)'" @click="next"><el-icon :size="14"><ArrowDown /></el-icon></button>
-      <button class="btn toggle" :class="{ on: opts.caseSensitive }" title="Case sensitive" @click="opts.caseSensitive = !opts.caseSensitive">Aa</button>
-      <button class="btn toggle" :class="{ on: opts.wholeWord }" title="Whole word" @click="opts.wholeWord = !opts.wholeWord">ab</button>
-      <button class="btn toggle" :class="{ on: opts.regex }" title="Regex" @click="opts.regex = !opts.regex">.*</button>
-      <button class="btn toggle" :class="{ on: showReplace }" title="Toggle replace" @click="showReplace = !showReplace">↳</button>
-      <button class="btn close" title="Close (Esc)" @click="close"><el-icon :size="14"><Close /></el-icon></button>
+      <button class="btn" :title="t('find.previous')" @click="prev"><el-icon :size="14"><ArrowUp /></el-icon></button>
+      <button class="btn" :title="t('find.next')" @click="next"><el-icon :size="14"><ArrowDown /></el-icon></button>
+      <button class="btn toggle" :class="{ on: opts.caseSensitive }" :title="t('find.caseSensitive')" @click="opts.caseSensitive = !opts.caseSensitive">Aa</button>
+      <button class="btn toggle" :class="{ on: opts.wholeWord }" :title="t('find.wholeWord')" @click="opts.wholeWord = !opts.wholeWord">ab</button>
+      <button class="btn toggle" :class="{ on: opts.regex }" :title="t('find.regex')" @click="opts.regex = !opts.regex">.*</button>
+      <button class="btn toggle" :class="{ on: showReplace }" :title="t('find.toggleReplace')" @click="showReplace = !showReplace">↳</button>
+      <button class="btn close" :title="t('find.closeEsc')" @click="close"><el-icon :size="14"><Close /></el-icon></button>
     </div>
     <div v-if="showReplace" class="row">
       <el-icon class="row-icon"><Refresh /></el-icon>
       <input
         v-model="replaceText"
         class="input"
-        placeholder="Replace"
+        :placeholder="t('find.replacePlaceholder')"
         spellcheck="false"
       />
-      <button class="btn" title="Replace next" @click="performReplace">Replace</button>
-      <button class="btn" title="Replace all" @click="performReplaceAll">All</button>
+      <button class="btn" :title="t('find.replace')" @click="performReplace">{{ t('find.replace') }}</button>
+      <button class="btn" :title="t('find.replaceAll')" @click="performReplaceAll">{{ t('find.replaceAll') }}</button>
     </div>
   </div>
 </template>
