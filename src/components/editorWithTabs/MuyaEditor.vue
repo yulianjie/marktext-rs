@@ -214,13 +214,22 @@ onBeforeUnmount(() => {
 .muya-host {
   flex: 1;
   overflow: auto;
-  background: #fff;
+  background: var(--mt-bg, #fff);
   padding: 32px 0;
+  font-family: var(--mt-editor-font);
+  font-size: var(--mt-font-size);
+  line-height: var(--mt-line-height);
+  color: var(--mt-fg);
 }
 .muya-container {
-  max-width: 860px;
+  max-width: var(--mt-editor-line-width, 860px);
   margin: 0 auto;
   padding: 0 64px;
   outline: none;
+}
+.muya-host :deep(code),
+.muya-host :deep(pre) {
+  font-family: var(--mt-code-font);
+  font-size: var(--mt-code-font-size);
 }
 </style>

@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use parking_lot::RwLock;
-use tauri::App;
+use tauri::{App, Emitter, Manager};
 
 use crate::error::AppResult;
 use crate::filesystem::watcher::WatcherHandle;
@@ -69,10 +69,45 @@ impl AppState {
     }
 }
 
-/// Called once on Tauri `setup`. Handles CLI args, file associations, and any
-/// other "open this file/folder on launch" handoff to the renderer.
-pub fn on_startup(_app: &mut App) -> AppResult<()> {
-    // TODO: parse CLI args (see crate::cli) and emit `mt://open-on-startup`.
+/// Called once on Tauri `setup`. Inspects `std::env::args` for any positional
+/// file arguments and, after the main webview is up, emits an
+/// `mt://window/open-file` event for each. This is also the path
+/// file-association launches take on Windows / Linux (the OS hands the path
+/// in as argv[1]).
+pub fn on_startup(app: &mut App) -> AppResult<()> {
     tracing::info!("MarkText starting up");
+
+    let argv: Vec<String> = std::env::args().skip(1).collect();
+    let files: Vec<PathBuf> = argv
+        .into_iter()
+        .filter(|a| !a.starts_with("--") && !a.starts_with('-'))
+        .map(PathBuf::from)
+        .filter(|p| p.exists() && p.is_file())
+        .collect();
+
+    if files.is_empty() {
+        return Ok(());
+    }
+
+    // The webview hasn't fully initialised yet at this point; queue the
+    // opens for after `WebviewWindow::on_webview_ready` fires. Tauri 2's
+    // `webview_windows()` already returns the main window, but emitting now
+    // races the renderer's listener install — so spawn a slight delay.
+    let handle = app.handle().clone();
+    tauri::async_runtime::spawn(async move {
+        // Give the renderer a generous window to install listeners. 250ms is
+        // empirically enough on cold starts; the user-visible latency is
+        // dominated by webview boot anyway.
+        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+        for file in files {
+            tracing::info!(?file, "forwarding file-association launch to renderer");
+            if let Some(win) = handle.get_webview_window("main") {
+                let _ = win.emit("mt://window/open-file", serde_json::json!({ "path": file }));
+            } else {
+                let _ = handle.emit("mt://window/open-file", serde_json::json!({ "path": file }));
+            }
+        }
+    });
+
     Ok(())
 }

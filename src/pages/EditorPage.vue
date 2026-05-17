@@ -25,6 +25,7 @@ import { useCommandCenterStore } from '@/stores/commandCenter'
 import { useNotificationStore } from '@/stores/notification'
 import { openFiles, saveAsDialog, exportHtml } from '@/services/tauri-invoke'
 import { listenTyped } from '@/services/tauri-bridge'
+import { applyPreferencesToDom } from '@/services/preferences-applier'
 import { bus } from '@/bus'
 
 const editor = useEditorStore()
@@ -146,10 +147,24 @@ const MENU_ACTIONS: Record<string, () => void | Promise<void>> = {
   'view.toggleSidebar': () => layout.toggleSideBar(),
   'view.toggleTabBar': () => layout.toggleTabBar(),
   'view.toggleSourceCode': () => editor.toggleSourceCode(),
+  'view.toggleTypewriter': () => { prefs.typewriter = !prefs.typewriter },
+  'view.toggleFocus': () => { prefs.focus = !prefs.focus },
   'view.commandPalette': () => bus.emit('show-command-palette', undefined),
   'view.zoomIn': () => { void prefs.set('zoom', Math.min(prefs.zoom + 0.1, 2)) },
   'view.zoomOut': () => { void prefs.set('zoom', Math.max(prefs.zoom - 0.1, 0.5)) },
   'view.zoomReset': () => { void prefs.set('zoom', 1) },
+  'window.alwaysOnTop': async () => {
+    const win = await import('@tauri-apps/api/window')
+    const w = win.getCurrentWindow()
+    const cur = await w.isAlwaysOnTop()
+    await w.setAlwaysOnTop(!cur)
+  },
+  'window.fullscreen': async () => {
+    const win = await import('@tauri-apps/api/window')
+    const w = win.getCurrentWindow()
+    const cur = await w.isFullscreen()
+    await w.setFullscreen(!cur)
+  },
   'help.openSettings': async () => { const { openSettings } = await import('@/services/tauri-invoke'); await openSettings() },
   'help.about': () => bus.emit('aboutDialog', undefined),
   'help.openDocs': async () => { const sh = await import('@tauri-apps/plugin-shell'); await sh.open('https://github.com/marktext/marktext') },
@@ -180,6 +195,8 @@ function registerBuiltinCommands() {
   reg('file.recent', 'File: Open Recent…', () => bus.emit('show-recent', undefined))
   reg('view.toggleSidebar', 'View: Toggle Sidebar', () => layout.toggleSideBar(), ['Ctrl+B'])
   reg('view.toggleSourceCode', 'View: Toggle Source Code Mode', () => editor.toggleSourceCode(), ['Ctrl+Alt+S'])
+  reg('view.toggleTypewriter', 'View: Toggle Typewriter Mode', () => { prefs.typewriter = !prefs.typewriter })
+  reg('view.toggleFocus', 'View: Toggle Focus Mode', () => { prefs.focus = !prefs.focus })
   reg('view.commandPalette', 'View: Command Palette', () => bus.emit('show-command-palette', undefined), ['Ctrl+Shift+P'])
   reg('edit.find', 'Edit: Find', () => { editor.findReplaceOpen = true }, ['Ctrl+F'])
   reg('edit.replace', 'Edit: Find & Replace', () => { editor.findReplaceOpen = true }, ['Ctrl+H'])
@@ -192,6 +209,7 @@ let unsubDrop: (() => void) | null = null
 onMounted(async () => {
   await prefs.load()
   layout.syncFromPreferences()
+  applyPreferencesToDom()
   await listener.install()
   registerBuiltinCommands()
   window.addEventListener('keydown', onKey)
@@ -208,6 +226,11 @@ onMounted(async () => {
 
   // Native menu actions.
   void listenTyped('mt://menu/action', id => routeMenuAction(id))
+
+  // Print request — Rust's cmd_export_pdf emits this when the user picks
+  // "Export PDF" / "Print" from the menu. We invoke the browser's native
+  // print dialog so the OS handles "Save as PDF".
+  void listenTyped('mt://export/print', () => { window.print() })
 
   // Drag-and-drop files onto the webview.
   try {

@@ -40,6 +40,15 @@ pub fn run() {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_focus();
             }
+            // Open any file paths from the second instance's argv. Same
+            // shape as the on-startup handler in `app::on_startup`.
+            for arg in argv.iter().skip(1) {
+                if arg.starts_with("--") || arg.starts_with('-') { continue; }
+                let p = std::path::PathBuf::from(arg);
+                if p.exists() && p.is_file() {
+                    let _ = app.emit("mt://window/open-file", serde_json::json!({ "path": p }));
+                }
+            }
             let payload = ipc::events::SecondInstance { argv, cwd: cwd.into() };
             let _ = app.emit("mt://second-instance", payload);
         }));

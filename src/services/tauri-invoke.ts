@@ -119,8 +119,8 @@ export const setUserData = (patch: Record<string, unknown>) =>
 export const exportHtml = (path: string, html: string) =>
   invoke<void>('cmd_export_html', { path, html })
 
-export const exportPdf = (windowLabel: string, path: string) =>
-  invoke<void>('cmd_export_pdf', { windowLabel, path })
+export const exportPdf = (windowLabel: string) =>
+  invoke<void>('cmd_export_pdf', { windowLabel })
 
 /* ─── image ──────────────────────────────────────────────────── */
 

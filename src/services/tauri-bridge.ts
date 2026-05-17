@@ -46,6 +46,7 @@ export interface EventRegistry {
   'mt://palette/show': null
   'mt://view/toggle': { entry: string }
   'mt://window/open-file': { path: string }
+  'mt://export/print': null
   'mt://updater/available': UpdaterAvailable
 }
 

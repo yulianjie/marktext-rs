@@ -1,11 +1,14 @@
 //! Export commands — HTML / PDF.
 //!
 //! HTML export is a thin file-write wrapper; the renderer produces the HTML
-//! string. PDF export uses the webview's built-in `print_to_pdf` API.
+//! string. PDF export is delivered by emitting a request to the renderer to
+//! call `window.print()`. The OS print dialog supports "Save as PDF" on every
+//! supported platform — there is no Tauri-native `printToPDF` equivalent,
+//! and the renderer already has all the styling context needed.
 
 use std::path::PathBuf;
 
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 
 use crate::error::{AppError, AppResult};
 
@@ -18,18 +21,16 @@ pub async fn cmd_export_html(path: PathBuf, html: String) -> AppResult<()> {
     Ok(())
 }
 
+/// Triggers a print dialog in the target window. The renderer is responsible
+/// for actually invoking `window.print()` after styling itself for print —
+/// we just nudge it via an event. Keeps Rust ignorant of webview print
+/// internals (which Tauri 2 does not expose programmatically).
 #[tauri::command]
-pub async fn cmd_export_pdf(
-    app: AppHandle,
-    window_label: String,
-    _path: PathBuf,
-) -> AppResult<()> {
-    // TODO: Tauri 2 doesn't expose webview `print_to_pdf` directly; we'll
-    // either drive it via a JS helper that returns a base64 PDF or fall back
-    // to a Pandoc subprocess. For now this is a stub so `commands::all()`
-    // compiles end-to-end.
-    let _win = app
+pub async fn cmd_export_pdf(app: AppHandle, window_label: String) -> AppResult<()> {
+    let win = app
         .get_webview_window(&window_label)
         .ok_or_else(|| AppError::NotFound(format!("window {window_label}")))?;
-    Err(AppError::Other("PDF export not implemented yet".into()))
+    win.emit("mt://export/print", ())
+        .map_err(|e| AppError::Other(e.to_string()))?;
+    Ok(())
 }

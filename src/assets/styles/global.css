@@ -1,24 +1,95 @@
-/* Global styles. Kept lean — per-component styling lives in SFCs. */
+/* Global styles. Kept lean — per-component styling lives in SFCs.
+ *
+ * Theme variables expose a small palette consumed by every component.
+ * Switch theme by setting `data-theme="dark"` (etc.) on <html>.
+ *
+ * The default values below are the "light" theme; dark variants override
+ * each var inside the corresponding selector. Auxiliary themes
+ * (graphite / one-dark / material-dark / ulysses) reuse one of the two
+ * base palettes — they're cosmetic accent swaps until full theme files land.
+ */
 
 :root {
   --mt-bg: #ffffff;
   --mt-fg: #24292e;
+  --mt-fg-muted: #586069;
   --mt-border: #eaecef;
   --mt-accent: #0366d6;
-  font-family: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
-    'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
-  font-size: 14px;
+  --mt-sidebar-bg: #fafbfc;
+  --mt-row-hover: #ebedef;
+  --mt-row-active: #e3eaef;
+  --mt-tab-bg: #f5f6f7;
+  --mt-tab-bg-active: #ffffff;
+  --mt-code-bg: #fafbfc;
+  --mt-shadow: rgba(27, 31, 35, 0.10);
+
+  /* Live-applied editor display vars (defaults match preferences defaults). */
+  --mt-zoom: 1;
+  --mt-base-font-size: 14px;
+  --mt-font-size: 16px;
+  --mt-line-height: 1.6;
+  --mt-editor-font: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  --mt-code-font: 'DejaVu Sans Mono', ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, Consolas, monospace;
+  --mt-code-font-size: 14px;
+  --mt-editor-line-width: 860px;
+  --mt-text-direction: ltr;
+
+  font-family: var(--mt-editor-font);
+  font-size: var(--mt-base-font-size);
   color: var(--mt-fg);
   background: var(--mt-bg);
   -webkit-font-smoothing: antialiased;
 }
 
-body {
-  margin: 0;
+[data-theme='dark'],
+[data-theme='material-dark'],
+[data-theme='one-dark'] {
+  --mt-bg: #1e1e1e;
+  --mt-fg: #d4d4d4;
+  --mt-fg-muted: #9da5ad;
+  --mt-border: #333333;
+  --mt-accent: #4ea1ff;
+  --mt-sidebar-bg: #252526;
+  --mt-row-hover: #2d2d2e;
+  --mt-row-active: #37373d;
+  --mt-tab-bg: #2d2d2e;
+  --mt-tab-bg-active: #1e1e1e;
+  --mt-code-bg: #2a2a2a;
+  --mt-shadow: rgba(0, 0, 0, 0.5);
 }
 
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
+[data-theme='material-dark'] { --mt-accent: #80cbc4; }
+[data-theme='one-dark']      { --mt-accent: #61afef; }
+[data-theme='graphite-light'] { --mt-accent: #7e57c2; }
+[data-theme='ulysses-light']  { --mt-accent: #c0392b; }
+
+body {
+  margin: 0;
+  background: var(--mt-bg);
+  color: var(--mt-fg);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+/* Hide scrollbars option (preferences `hideScrollbar`). */
+body.mt-no-scrollbar ::-webkit-scrollbar { width: 0; height: 0; }
+body.mt-no-scrollbar { scrollbar-width: none; }
+
+/* Typewriter mode — keeps the active line vertically centered. */
+body.mt-typewriter .muya-host { display: flex; align-items: center; }
+body.mt-typewriter .muya-container {
+  padding-top: 50vh;
+  padding-bottom: 50vh;
+}
+
+/* Focus mode — fade non-active paragraphs. Muya marks active blocks with
+ * `.ag-active` (see `marktext/src/muya/lib/index.js`). */
+body.mt-focus .muya-host *:not(.ag-active):not(.ag-active *) {
+  opacity: 0.35;
+  transition: opacity 200ms;
+}
+
+body.mt-rtl .muya-container,
+body.mt-rtl .source-pane {
+  direction: rtl;
 }
