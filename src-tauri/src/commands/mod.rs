@@ -16,6 +16,7 @@ pub mod image;
 pub mod prefs;
 pub mod search;
 pub mod spellcheck;
+pub mod theme;
 pub mod window;
 pub mod workspace;
 
@@ -55,6 +56,7 @@ macro_rules! marktext_handler {
             // export
             $crate::commands::export::cmd_export_html,
             $crate::commands::export::cmd_export_pdf,
+            $crate::commands::export::cmd_pandoc_convert,
             // image
             $crate::commands::image::cmd_save_image_local,
             $crate::commands::image::cmd_upload_image_github,
@@ -66,6 +68,9 @@ macro_rules! marktext_handler {
             $crate::commands::spellcheck::cmd_spellcheck_add_word,
             $crate::commands::spellcheck::cmd_spellcheck_remove_word,
             $crate::commands::spellcheck::cmd_spellcheck_available_dictionaries,
+            // theme
+            $crate::commands::theme::cmd_list_themes,
+            $crate::commands::theme::cmd_read_theme_css,
         ]
     };
 }

@@ -11,7 +11,7 @@
 
 use tauri::{
     menu::{Menu, MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder},
-    App, AppHandle, Emitter, Runtime, Wry,
+    App, AppHandle, Emitter, Manager, Runtime, Wry,
 };
 
 use crate::error::AppResult;
@@ -22,7 +22,20 @@ pub fn install(app: &mut App) -> AppResult<()> {
     app.set_menu(menu)?;
     app.on_menu_event(move |app, event| {
         let id = event.id().0.as_str();
-        // The renderer subscribes to a single channel and switches on the id.
+        // Send menu events ONLY to the focused window — otherwise a "Save"
+        // click would trigger a save in every open window simultaneously.
+        let target = app
+            .webview_windows()
+            .into_iter()
+            .find(|(_, w)| w.is_focused().unwrap_or(false))
+            .map(|(label, _)| label);
+        if let Some(label) = target {
+            if let Some(win) = app.get_webview_window(&label) {
+                let _ = win.emit("mt://menu/action", id.to_string());
+                return;
+            }
+        }
+        // Fallback: broadcast (e.g. macOS menu fired with no window focused).
         let _ = app.emit("mt://menu/action", id.to_string());
     });
     Ok(())
@@ -44,6 +57,9 @@ fn build_menu(app: &AppHandle<Wry>) -> tauri::Result<Menu<Wry>> {
             &mi(app, "file.saveAll", "Save All", None)?,
             &PredefinedMenuItem::separator(app)?,
             &mi(app, "file.exportHtml", "Export HTML…", None)?,
+            &mi(app, "file.exportDocx", "Export Word (.docx) via Pandoc…", None)?,
+            &mi(app, "file.exportOdt", "Export OpenDocument (.odt) via Pandoc…", None)?,
+            &mi(app, "file.exportEpub", "Export EPUB via Pandoc…", None)?,
             &mi(app, "file.print", "Print / Export PDF…", Some(&format!("{cmd_or_ctrl}+P")))?,
             &PredefinedMenuItem::separator(app)?,
             &mi(app, "file.closeTab", "Close Tab", Some(&format!("{cmd_or_ctrl}+W")))?,

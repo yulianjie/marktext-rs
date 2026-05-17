@@ -64,6 +64,11 @@ export default {
   tabs: {
     newTab: 'New tab',
     closeTab: 'Close tab',
+    closeOthers: 'Close other tabs',
+    closeAll: 'Close all tabs',
+    rename: 'Rename',
+    copyPath: 'Copy path',
+    showInFolder: 'Show in folder',
   },
   titleBar: {
     minimize: 'Minimize',
@@ -85,6 +90,10 @@ export default {
     caseSensitive: 'Case sensitive',
     wholeWord: 'Whole word',
     regex: 'Regex',
+  },
+  tree: {
+    openFile: 'Open',
+    deleteFile: 'Move to trash',
   },
   find: {
     findPlaceholder: 'Find',

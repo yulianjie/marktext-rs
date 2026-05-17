@@ -62,6 +62,11 @@ export default {
   tabs: {
     newTab: '新建标签',
     closeTab: '关闭标签',
+    closeOthers: '关闭其他标签',
+    closeAll: '关闭全部标签',
+    rename: '重命名',
+    copyPath: '复制路径',
+    showInFolder: '在文件夹中显示',
   },
   titleBar: {
     minimize: '最小化',
@@ -83,6 +88,10 @@ export default {
     caseSensitive: '区分大小写',
     wholeWord: '全词匹配',
     regex: '正则',
+  },
+  tree: {
+    openFile: '打开',
+    deleteFile: '移动到回收站',
   },
   find: {
     findPlaceholder: '查找',

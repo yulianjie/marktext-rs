@@ -81,6 +81,9 @@ export interface BusEventMap {
 
   // TOC scroll
   'scroll-to-header': string
+
+  // Context menu (one global handler in ContextMenu.vue subscribes here)
+  'openContextMenu': { x: number; y: number; items: import('./components/contextMenu/ContextMenu.vue').ContextMenuItem[] }
 }
 
 export interface SearchOpt {

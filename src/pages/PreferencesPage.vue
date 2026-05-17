@@ -11,10 +11,48 @@
 import { computed, onMounted, ref } from 'vue'
 import { usePreferencesStore } from '@/stores/preferences'
 import { useListenForMainStore } from '@/stores/listenForMain'
-import { applyPreferencesToDom } from '@/services/preferences-applier'
+import { useKeybindingsStore, eventAccel } from '@/stores/keybindings'
+import { applyPreferencesToDom, invalidateUserThemes } from '@/services/preferences-applier'
+import { listThemes, getPreference, type UserTheme } from '@/services/tauri-invoke'
 
 const prefs = usePreferencesStore()
 const listener = useListenForMainStore()
+const keys = useKeybindingsStore()
+const userThemes = ref<UserTheme[]>([])
+
+/* ── keybindings UI state ─────────────────────────────────────── */
+const editingAccel = ref<string | null>(null)   // action id currently being recorded
+const recordedAccel = ref<string>('')
+
+function startEdit(actionId: string) {
+  editingAccel.value = actionId
+  recordedAccel.value = ''
+}
+
+function onAccelKey(ev: KeyboardEvent) {
+  if (!editingAccel.value) return
+  ev.preventDefault()
+  // Ignore lone modifier keys — wait for the user to press the actual key.
+  if (['Control', 'Shift', 'Alt', 'Meta'].includes(ev.key)) return
+  recordedAccel.value = eventAccel(ev)
+}
+
+function cancelEdit() {
+  editingAccel.value = null
+  recordedAccel.value = ''
+}
+
+async function applyAccel() {
+  if (!editingAccel.value || !recordedAccel.value) return
+  await keys.set(editingAccel.value, recordedAccel.value)
+  editingAccel.value = null
+  recordedAccel.value = ''
+}
+
+async function reloadUserThemes() {
+  invalidateUserThemes()
+  try { userThemes.value = await listThemes() } catch { userThemes.value = [] }
+}
 
 type SectionId =
   | 'general'
@@ -25,6 +63,7 @@ type SectionId =
   | 'spellchecker'
   | 'view'
   | 'search'
+  | 'keybindings'
 
 const sections: { id: SectionId; label: string }[] = [
   { id: 'general', label: 'General' },
@@ -35,6 +74,7 @@ const sections: { id: SectionId; label: string }[] = [
   { id: 'spellchecker', label: 'Spellchecker' },
   { id: 'view', label: 'View' },
   { id: 'search', label: 'Search' },
+  { id: 'keybindings', label: 'Keybindings' },
 ]
 
 const active = ref<SectionId>('general')
@@ -48,6 +88,11 @@ onMounted(async () => {
   await prefs.load()
   applyPreferencesToDom()
   await listener.install()
+  await reloadUserThemes()
+  try {
+    const persisted = await getPreference<Record<string, string>>('keybindings')
+    if (persisted) keys.hydrate(persisted)
+  } catch { /* ignore */ }
 })
 </script>
 
@@ -374,13 +419,26 @@ onMounted(async () => {
               style="width: 240px"
               @update:model-value="v => prefs.set('theme', v as string)"
             >
-              <el-option label="Light" value="light" />
-              <el-option label="Dark" value="dark" />
-              <el-option label="Graphite Light" value="graphite-light" />
-              <el-option label="Material Dark" value="material-dark" />
-              <el-option label="One Dark" value="one-dark" />
-              <el-option label="Ulysses Light" value="ulysses-light" />
+              <el-option-group label="Built-in">
+                <el-option label="Light" value="light" />
+                <el-option label="Dark" value="dark" />
+                <el-option label="Graphite Light" value="graphite-light" />
+                <el-option label="Material Dark" value="material-dark" />
+                <el-option label="One Dark" value="one-dark" />
+                <el-option label="Ulysses Light" value="ulysses-light" />
+              </el-option-group>
+              <el-option-group v-if="userThemes.length" label="User themes">
+                <el-option
+                  v-for="ut in userThemes"
+                  :key="ut.id"
+                  :label="ut.name"
+                  :value="ut.id"
+                />
+              </el-option-group>
             </el-select>
+            <el-button size="small" link style="margin-left: 12px" @click="reloadUserThemes">
+              Refresh user themes
+            </el-button>
           </el-form-item>
           <el-form-item label="Auto-switch theme">
             <el-select
@@ -550,6 +608,48 @@ onMounted(async () => {
           </el-form-item>
         </el-form>
       </section>
+
+      <!-- ── Keybindings ────────────────────────────────── -->
+      <section v-show="active === 'keybindings'" class="prefs-section">
+        <h3>Keybindings</h3>
+        <p class="hint">Click a binding to record a new shortcut. Press Esc to cancel.</p>
+        <table class="kb-table">
+          <thead>
+            <tr><th>Action</th><th>Shortcut</th><th></th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="(accel, id) in keys.map" :key="id">
+              <td class="kb-id">{{ id }}</td>
+              <td class="kb-accel">
+                <button
+                  v-if="editingAccel !== id"
+                  class="kb-button"
+                  @click="startEdit(id)"
+                >
+{{ accel || '—' }}
+</button>
+                <input
+                  v-else
+                  type="text"
+                  class="kb-input"
+                  autofocus
+                  :value="recordedAccel || 'Press keys…'"
+                  readonly
+                  @keydown="onAccelKey"
+                  @blur="cancelEdit"
+                />
+              </td>
+              <td>
+                <template v-if="editingAccel === id">
+                  <el-button size="small" type="primary" :disabled="!recordedAccel" @click="applyAccel">Set</el-button>
+                  <el-button size="small" @click="cancelEdit">Cancel</el-button>
+                </template>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <el-button size="small" style="margin-top: 16px" @click="keys.resetAll()">Reset all to defaults</el-button>
+      </section>
     </main>
   </div>
 </template>
@@ -607,4 +707,40 @@ onMounted(async () => {
 .prefs-section :deep(.el-form-item) {
   margin-bottom: 18px;
 }
+.hint {
+  color: var(--mt-fg-muted, #6a737d);
+  font-size: 12px;
+  margin: -12px 0 16px;
+}
+.kb-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.kb-table th, .kb-table td {
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--mt-border, #eaecef);
+}
+.kb-table th {
+  font-weight: 600;
+  color: var(--mt-fg-muted, #586069);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.kb-id { font-family: ui-monospace, monospace; font-size: 12px; color: var(--mt-fg, #24292e); }
+.kb-button, .kb-input {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  padding: 4px 10px;
+  border: 1px solid var(--mt-border, #d1d5da);
+  border-radius: 4px;
+  background: var(--mt-tab-bg, #f5f6f7);
+  color: var(--mt-fg, #24292e);
+  cursor: pointer;
+  min-width: 160px;
+}
+.kb-button:hover { background: var(--mt-row-hover, #ebedef); }
+.kb-input { background: #fff8dc; cursor: text; }
 </style>

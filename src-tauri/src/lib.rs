@@ -37,16 +37,25 @@ pub fn run() {
     {
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
             tracing::info!(?argv, ?cwd, "second instance launched, forwarding to main");
-            if let Some(window) = app.get_webview_window("main") {
+            // Pick a target: the focused window if any, else "main".
+            // We target events at one window so a second instance's file
+            // doesn't get opened in every editor window simultaneously.
+            let target = app
+                .webview_windows()
+                .into_iter()
+                .find(|(_, w)| w.is_focused().unwrap_or(false))
+                .map(|(label, _)| label)
+                .unwrap_or_else(|| "main".into());
+            if let Some(window) = app.get_webview_window(&target) {
                 let _ = window.set_focus();
             }
-            // Open any file paths from the second instance's argv. Same
-            // shape as the on-startup handler in `app::on_startup`.
             for arg in argv.iter().skip(1) {
                 if arg.starts_with("--") || arg.starts_with('-') { continue; }
                 let p = std::path::PathBuf::from(arg);
                 if p.exists() && p.is_file() {
-                    let _ = app.emit("mt://window/open-file", serde_json::json!({ "path": p }));
+                    if let Some(win) = app.get_webview_window(&target) {
+                        let _ = win.emit("mt://window/open-file", serde_json::json!({ "path": p }));
+                    }
                 }
             }
             let payload = ipc::events::SecondInstance { argv, cwd: cwd.into() };

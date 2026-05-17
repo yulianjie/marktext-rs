@@ -122,6 +122,9 @@ export const exportHtml = (path: string, html: string) =>
 export const exportPdf = (windowLabel: string) =>
   invoke<void>('cmd_export_pdf', { windowLabel })
 
+export const pandocConvert = (markdown: string, outputPath: string, outputFormat: string) =>
+  invoke<void>('cmd_pandoc_convert', { markdown, outputPath, outputFormat })
+
 /* ─── image ──────────────────────────────────────────────────── */
 
 export interface LocalSaveArgs {
@@ -175,3 +178,16 @@ export const spellcheckRemoveWord = (word: string) =>
 
 export const spellcheckAvailableDictionaries = () =>
   invoke<string[]>('cmd_spellcheck_available_dictionaries')
+
+/* ─── theme ──────────────────────────────────────────────────── */
+
+export interface UserTheme {
+  id: string
+  name: string
+  path: string
+}
+
+export const listThemes = () => invoke<UserTheme[]>('cmd_list_themes')
+
+export const readThemeCss = (path: string) =>
+  invoke<string>('cmd_read_theme_css', { path })

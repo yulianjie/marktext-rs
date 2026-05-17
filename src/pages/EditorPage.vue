@@ -17,13 +17,15 @@ import AboutDialog from '@/components/about/AboutDialog.vue'
 import RenameDialog from '@/components/rename/RenameDialog.vue'
 import RecentDialog from '@/components/recent/RecentDialog.vue'
 import FindReplaceBar from '@/components/search/FindReplaceBar.vue'
+import ContextMenu from '@/components/contextMenu/ContextMenu.vue'
 import { useEditorStore } from '@/stores/editor'
 import { useLayoutStore } from '@/stores/layout'
 import { usePreferencesStore } from '@/stores/preferences'
 import { useListenForMainStore } from '@/stores/listenForMain'
 import { useCommandCenterStore } from '@/stores/commandCenter'
 import { useNotificationStore } from '@/stores/notification'
-import { openFiles, saveAsDialog, exportHtml } from '@/services/tauri-invoke'
+import { useKeybindingsStore, eventAccel } from '@/stores/keybindings'
+import { openFiles, saveAsDialog, exportHtml, getPreference, pandocConvert } from '@/services/tauri-invoke'
 import { listenTyped } from '@/services/tauri-bridge'
 import { applyPreferencesToDom } from '@/services/preferences-applier'
 import { bus } from '@/bus'
@@ -34,37 +36,17 @@ const prefs = usePreferencesStore()
 const listener = useListenForMainStore()
 const cc = useCommandCenterStore()
 const notify = useNotificationStore()
+const keys = useKeybindingsStore()
 
 const dragOver = ref(false)
 
 /* ── shortcuts ───────────────────────────────────────────────── */
 function onKey(ev: KeyboardEvent) {
-  const cmd = ev.ctrlKey || ev.metaKey
-  if (!cmd) return
-  if (ev.key === 's' && !ev.shiftKey) {
-    ev.preventDefault(); void editor.saveCurrent()
-  } else if (ev.key === 'S' && ev.shiftKey) {
-    ev.preventDefault(); void editor.saveAllTabs()
-  } else if (ev.key === 'o' && !ev.shiftKey) {
-    ev.preventDefault(); void doOpen()
-  } else if (ev.key === 'O' && ev.shiftKey) {
-    ev.preventDefault(); void doOpenFolder()
-  } else if (ev.key === 't') {
-    ev.preventDefault(); editor.newUntitledTab()
-  } else if (ev.key === 'w') {
-    ev.preventDefault()
-    if (editor.currentFileId) editor.closeTab(editor.currentFileId)
-  } else if (ev.key === 'P' && ev.shiftKey) {
-    ev.preventDefault(); bus.emit('show-command-palette', undefined)
-  } else if (ev.key === 'b') {
-    ev.preventDefault(); layout.toggleSideBar()
-  } else if (ev.key === 'f' && !ev.shiftKey) {
-    ev.preventDefault(); editor.findReplaceOpen = true
-  } else if (ev.key === 'h') {
-    ev.preventDefault(); editor.findReplaceOpen = true
-  } else if (ev.key === 'p' && !ev.shiftKey) {
-    ev.preventDefault(); doPrint()
-  }
+  const accel = eventAccel(ev)
+  const actionId = keys.byAccel[accel]
+  if (!actionId) return
+  ev.preventDefault()
+  routeMenuAction(actionId)
 }
 
 async function doOpen() {
@@ -114,6 +96,22 @@ async function doExportHtml() {
 
 function doPrint() { window.print() }
 
+async function doExportPandoc(format: 'docx' | 'odt' | 'epub') {
+  const tab = editor.currentFile
+  if (!tab) return
+  const target = await saveAsDialog((tab.filename.replace(/\.md$/i, '') || 'untitled') + '.' + format)
+  if (!target) return
+  try {
+    await pandocConvert(tab.markdown, target, format)
+    notify.pushToast({ type: 'success', message: `Exported to ${target}` })
+  } catch (err) {
+    notify.pushToast({
+      type: 'error', title: 'Export failed',
+      message: err instanceof Error ? err.message : String(err),
+    })
+  }
+}
+
 /* ── menu action router ─────────────────────────────────────── */
 const MENU_ACTIONS: Record<string, () => void | Promise<void>> = {
   'file.new': () => { editor.newUntitledTab() },
@@ -132,6 +130,9 @@ const MENU_ACTIONS: Record<string, () => void | Promise<void>> = {
   },
   'file.saveAll': () => { void editor.saveAllTabs() },
   'file.exportHtml': doExportHtml,
+  'file.exportDocx': () => doExportPandoc('docx'),
+  'file.exportOdt': () => doExportPandoc('odt'),
+  'file.exportEpub': () => doExportPandoc('epub'),
   'file.print': doPrint,
   'file.closeTab': () => { if (editor.currentFileId) editor.closeTab(editor.currentFileId) },
   'file.closeWindow': async () => { const win = await import('@tauri-apps/api/window'); await win.getCurrentWindow().close() },
@@ -210,6 +211,11 @@ onMounted(async () => {
   layout.syncFromPreferences()
   applyPreferencesToDom()
   await listener.install()
+  // Hydrate user keybindings if any.
+  try {
+    const persisted = await getPreference<Record<string, string>>('keybindings')
+    if (persisted) keys.hydrate(persisted)
+  } catch { /* ignore */ }
   registerBuiltinCommands()
   window.addEventListener('keydown', onKey)
 
@@ -280,6 +286,7 @@ onBeforeUnmount(() => {
     <AboutDialog />
     <RenameDialog />
     <RecentDialog />
+    <ContextMenu />
     <div v-if="dragOver" class="drop-veil">Drop to open</div>
   </div>
 </template>

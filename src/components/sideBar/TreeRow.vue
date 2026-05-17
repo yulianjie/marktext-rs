@@ -7,6 +7,13 @@ import { computed } from 'vue'
 import type { TreeFile, TreeFolder } from '@/stores/treeCtrl'
 import { CaretRight, Document, Folder } from '@element-plus/icons-vue'
 import { useProjectStore } from '@/stores/project'
+import { useEditorStore } from '@/stores/editor'
+import { useNotificationStore } from '@/stores/notification'
+import { trashFile } from '@/services/tauri-invoke'
+import { writeText } from '@tauri-apps/plugin-clipboard-manager'
+import { open as shellOpen } from '@tauri-apps/plugin-shell'
+import { bus } from '@/bus'
+import { t } from '@/i18n'
 
 interface Props {
   node: TreeFolder | TreeFile
@@ -16,6 +23,8 @@ const props = defineProps<Props>()
 const emit = defineEmits<{ (e: 'select', file: TreeFile): void }>()
 
 const project = useProjectStore()
+const editor = useEditorStore()
+const notify = useNotificationStore()
 
 const isFolder = computed(() => props.node.isDirectory)
 const folder = computed(() => (isFolder.value ? (props.node as TreeFolder) : null))
@@ -29,11 +38,60 @@ function pickFile(file: TreeFile) {
   project.setActiveItem({ pathname: file.pathname, isDirectory: false })
   emit('select', file)
 }
+
+function parentDirOf(p: string): string {
+  const idx = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\'))
+  return idx >= 0 ? p.slice(0, idx) : p
+}
+
+async function trashAndCloseTab(path: string) {
+  try {
+    await trashFile(path)
+    const tab = editor.tabs.find(t => t.pathname === path)
+    if (tab) editor.closeTab(tab.id)
+  } catch (err) {
+    notify.pushToast({
+      type: 'error',
+      title: t('toast.openFailed'),
+      message: err instanceof Error ? err.message : String(err),
+    })
+  }
+}
+
+function fileMenu(file: TreeFile, ev: MouseEvent) {
+  ev.preventDefault()
+  ev.stopPropagation()
+  bus.emit('openContextMenu', {
+    x: ev.clientX,
+    y: ev.clientY,
+    items: [
+      { label: t('tree.openFile'), action: () => pickFile(file) },
+      { divider: true },
+      { label: t('tabs.copyPath'), action: () => { void writeText(file.pathname) } },
+      { label: t('tabs.showInFolder'), action: () => { void shellOpen(parentDirOf(file.pathname)) } },
+      { divider: true },
+      { label: t('tree.deleteFile'), action: () => { void trashAndCloseTab(file.pathname) } },
+    ],
+  })
+}
+
+function folderMenu(f: TreeFolder, ev: MouseEvent) {
+  ev.preventDefault()
+  ev.stopPropagation()
+  bus.emit('openContextMenu', {
+    x: ev.clientX,
+    y: ev.clientY,
+    items: [
+      { label: t('tabs.copyPath'), action: () => { void writeText(f.pathname) } },
+      { label: t('tabs.showInFolder'), action: () => { void shellOpen(f.pathname) } },
+    ],
+  })
+}
 </script>
 
 <template>
   <div v-if="isFolder">
-    <div class="row" :style="{ paddingLeft: padding }" @click="toggle">
+    <div class="row" :style="{ paddingLeft: padding }" @click="toggle" @contextmenu="folderMenu(folder!, $event)">
       <el-icon class="caret" :class="{ open: !folder!.isCollapsed }"><CaretRight /></el-icon>
       <el-icon class="icon folder"><Folder /></el-icon>
       <span class="name">{{ folder!.name }}</span>
@@ -60,8 +118,9 @@ function pickFile(file: TreeFile) {
     class="row file"
     :class="{ active: project.activeItem?.pathname === (node as TreeFile).pathname }"
     :style="{ paddingLeft: padding }"
-    @click="pickFile(node as TreeFile)"
     :title="(node as TreeFile).pathname"
+    @click="pickFile(node as TreeFile)"
+    @contextmenu="fileMenu(node as TreeFile, $event)"
   >
     <span class="caret-spacer" />
     <el-icon class="icon file-icon"><Document /></el-icon>

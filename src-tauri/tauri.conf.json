@@ -83,6 +83,13 @@
           "description": "Enable debug logging"
         }
       ]
+    },
+    "updater": {
+      "active": false,
+      "endpoints": [
+        "https://github.com/marktext/marktext/releases/latest/download/latest.json"
+      ],
+      "pubkey": ""
     }
   }
 }

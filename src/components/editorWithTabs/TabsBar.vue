@@ -10,6 +10,9 @@ import { ref } from 'vue'
 import { useEditorStore } from '@/stores/editor'
 import { Close, Plus } from '@element-plus/icons-vue'
 import { t } from '@/i18n'
+import { bus } from '@/bus'
+import { writeText } from '@tauri-apps/plugin-clipboard-manager'
+import { open as shellOpen } from '@tauri-apps/plugin-shell'
 
 const editor = useEditorStore()
 
@@ -34,6 +37,40 @@ function onMiddleClick(id: string, ev: MouseEvent) {
 
 function newTab() {
   editor.newUntitledTab()
+}
+
+/* ── context menu ─────────────────────────────────────────────── */
+function parentDirOf(p: string): string {
+  const idx = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\'))
+  return idx >= 0 ? p.slice(0, idx) : p
+}
+
+function onTabContextMenu(id: string, ev: MouseEvent) {
+  ev.preventDefault()
+  ev.stopPropagation()
+  const tab = editor.tabs.find(x => x.id === id)
+  if (!tab) return
+  bus.emit('openContextMenu', {
+    x: ev.clientX,
+    y: ev.clientY,
+    items: [
+      { label: t('tabs.closeTab'), action: () => editor.closeTab(id) },
+      { label: t('tabs.closeOthers'), action: () => {
+        for (const t of [...editor.tabs]) if (t.id !== id) editor.closeTab(t.id)
+      } },
+      { label: t('tabs.closeAll'), action: () => {
+        for (const t of [...editor.tabs]) editor.closeTab(t.id)
+      } },
+      { divider: true },
+      { label: t('tabs.rename'), action: () => { editor.setCurrent(id); bus.emit('rename', undefined) } },
+      { label: t('tabs.copyPath'), disabled: !tab.pathname, action: async () => {
+        if (tab.pathname) await writeText(tab.pathname)
+      } },
+      { label: t('tabs.showInFolder'), disabled: !tab.pathname, action: async () => {
+        if (tab.pathname) await shellOpen(parentDirOf(tab.pathname))
+      } },
+    ],
+  })
 }
 
 /* ── drag-and-drop reordering ─────────────────────────────────── */
@@ -91,6 +128,7 @@ function onDragEnd() {
         :title="tab.pathname || tab.filename"
         draggable="true"
         @click="activate(tab.id)"
+        @contextmenu="onTabContextMenu(tab.id, $event)"
         @mousedown.middle="onMiddleClick(tab.id, $event)"
         @dragstart="onDragStart(tab.id, $event)"
         @dragover="onDragOver(tab.id, $event)"

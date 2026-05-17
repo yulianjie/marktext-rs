@@ -20,9 +20,69 @@
 import { watchEffect, onScopeDispose } from 'vue'
 import { usePreferencesStore } from '@/stores/preferences'
 import { setLocale, type LocaleId } from '@/i18n'
+import { listThemes, readThemeCss, type UserTheme } from './tauri-invoke'
 
 let mediaQuery: MediaQueryList | null = null
 let mediaQueryListener: ((ev: MediaQueryListEvent) => void) | null = null
+
+/** IDs of themes the global stylesheet already handles natively. */
+const BUILTIN_THEMES = new Set([
+  'light',
+  'dark',
+  'graphite-light',
+  'material-dark',
+  'one-dark',
+  'ulysses-light',
+])
+
+const USER_THEME_STYLE_ID = 'mt-user-theme-css'
+
+/** Cached lookup of user theme id → on-disk path. Populated lazily. */
+let userThemesIndex: Map<string, UserTheme> | null = null
+
+async function ensureUserThemes(): Promise<Map<string, UserTheme>> {
+  if (userThemesIndex) return userThemesIndex
+  try {
+    const list = await listThemes()
+    userThemesIndex = new Map(list.map(t => [t.id, t]))
+  } catch {
+    userThemesIndex = new Map()
+  }
+  return userThemesIndex
+}
+
+/** Re-fetch the user theme list from disk. Call after the user adds files. */
+export function invalidateUserThemes() {
+  userThemesIndex = null
+}
+
+async function applyUserTheme(themeId: string): Promise<void> {
+  if (typeof document === 'undefined') return
+  const tag = document.getElementById(USER_THEME_STYLE_ID) as HTMLStyleElement | null
+  if (BUILTIN_THEMES.has(themeId)) {
+    // Built-in theme — wipe any injected user CSS.
+    if (tag) tag.textContent = ''
+    return
+  }
+  const index = await ensureUserThemes()
+  const meta = index.get(themeId)
+  if (!meta) {
+    if (tag) tag.textContent = ''
+    return
+  }
+  try {
+    const css = await readThemeCss(meta.path)
+    let el = tag
+    if (!el) {
+      el = document.createElement('style')
+      el.id = USER_THEME_STYLE_ID
+      document.head.appendChild(el)
+    }
+    el.textContent = css
+  } catch {
+    if (tag) tag.textContent = ''
+  }
+}
 
 function effectiveTheme(theme: string, autoSwitchMode: number): string {
   if (autoSwitchMode === 1 && typeof window !== 'undefined' && window.matchMedia) {
@@ -51,6 +111,8 @@ export function applyPreferencesToDom(): void {
       document.documentElement.dataset.theme = theme
       setBodyClass('dark', theme === 'dark' || theme.includes('dark'))
     }
+    // Off-builtin user themes: read & inject the .css.
+    void applyUserTheme(theme)
 
     // Locale.
     if (prefs.language === 'zh-CN' || prefs.language === 'en') {
