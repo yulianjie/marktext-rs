@@ -1,20 +1,14 @@
 <script setup lang="ts">
 /**
- * Title bar — shows the active file path, dirty indicator, and window
- * controls. Replaces the Electron `BrowserWindow` chrome (custom frame).
+ * Title bar — shows the active file path, dirty indicator, and word count.
+ * Window controls (min/max/close) come from the native OS chrome
+ * (tauri.conf.json `decorations: true`); no custom buttons here.
  */
 import { computed } from 'vue'
-import { getCurrentWindow } from '@tauri-apps/api/window'
 import { useEditorStore } from '@/stores/editor'
-import { usePreferencesStore } from '@/stores/preferences'
 import { useI18n } from '@/i18n'
 
 const editor = useEditorStore()
-const prefs = usePreferencesStore()
-// Guard for Vite-only browser dev mode (no Tauri shell). Same pattern as
-// src/services/tauri-bridge.ts and src/services/debug-bridge.ts.
-const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
-const win = isTauri ? getCurrentWindow() : null
 const { t } = useI18n()
 
 const titleText = computed(() => {
@@ -25,34 +19,13 @@ const titleText = computed(() => {
 })
 
 const wordCount = computed(() => editor.currentFile?.wordCount.word ?? 0)
-const useCustomChrome = computed(() => prefs.titleBarStyle === 'custom')
-
-async function minimize() { await win?.minimize() }
-async function toggleMax() {
-  if (!win) return
-  const m = await win.isMaximized()
-  if (m) await win.unmaximize()
-  else await win.maximize()
-}
-async function close() { await win?.close() }
 </script>
 
 <template>
-  <header class="title-bar" :class="{ 'custom-chrome': useCustomChrome }" data-tauri-drag-region>
+  <header class="title-bar" data-tauri-drag-region>
     <div class="title-content" data-tauri-drag-region>
       <span class="title-text" data-tauri-drag-region>{{ titleText }}</span>
       <span class="word-count" data-tauri-drag-region>{{ wordCount }} {{ t('titleBar.words') }}</span>
-    </div>
-    <div v-if="useCustomChrome" class="window-controls">
-      <button class="ctl" :aria-label="t('titleBar.minimize')" @click="minimize">
-        <svg width="10" height="10" viewBox="0 0 10 10"><path d="M0 5 L10 5" stroke="currentColor" stroke-width="1" /></svg>
-      </button>
-      <button class="ctl" :aria-label="t('titleBar.maximize')" @click="toggleMax">
-        <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" stroke="currentColor" stroke-width="1" fill="none" /></svg>
-      </button>
-      <button class="ctl close" :aria-label="t('titleBar.close')" @click="close">
-        <svg width="10" height="10" viewBox="0 0 10 10"><path d="M0 0 L10 10 M10 0 L0 10" stroke="currentColor" stroke-width="1" /></svg>
-      </button>
     </div>
   </header>
 </template>
@@ -88,20 +61,4 @@ async function close() { await win?.close() }
   font-size: 11px;
   margin-left: auto;
 }
-.window-controls {
-  display: flex;
-}
-.ctl {
-  width: 46px;
-  height: 32px;
-  border: none;
-  background: transparent;
-  color: #586069;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.ctl:hover { background: #eaecef; }
-.ctl.close:hover { background: #e81123; color: #fff; }
 </style>
