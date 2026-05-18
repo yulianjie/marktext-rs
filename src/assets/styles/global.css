@@ -14,14 +14,16 @@
   --mt-fg: #24292e;
   --mt-fg-muted: #586069;
   --mt-border: #eaecef;
-  --mt-accent: #0366d6;
+  --mt-accent: #21b56f;
   --mt-sidebar-bg: #fafbfc;
-  --mt-row-hover: #ebedef;
+  --mt-row-hover: rgba(0, 0, 0, 0.03);
   --mt-row-active: #e3eaef;
+  --mt-active-bar: var(--mt-accent);
   --mt-tab-bg: #f5f6f7;
   --mt-tab-bg-active: #ffffff;
   --mt-code-bg: #fafbfc;
   --mt-shadow: rgba(27, 31, 35, 0.10);
+  --mt-shadow-tabs: 0 0 9px 2px rgba(0, 0, 0, 0.1);
 
   /* Live-applied editor display vars (defaults match preferences defaults). */
   --mt-zoom: 1;
@@ -48,9 +50,9 @@
   --mt-fg: #d4d4d4;
   --mt-fg-muted: #9da5ad;
   --mt-border: #333333;
-  --mt-accent: #4ea1ff;
+  --mt-accent: #409eff;
   --mt-sidebar-bg: #252526;
-  --mt-row-hover: #2d2d2e;
+  --mt-row-hover: rgba(255, 255, 255, 0.03);
   --mt-row-active: #37373d;
   --mt-tab-bg: #2d2d2e;
   --mt-tab-bg-active: #1e1e1e;
@@ -62,6 +64,7 @@
 [data-theme='one-dark']      { --mt-accent: #61afef; }
 [data-theme='graphite-light'] { --mt-accent: #7e57c2; }
 [data-theme='ulysses-light']  { --mt-accent: #c0392b; }
+[data-theme='github-blue']    { --mt-accent: #0366d6; }
 
 body {
   margin: 0;

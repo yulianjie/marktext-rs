@@ -28,7 +28,7 @@ const notify = useNotificationStore()
 
 const isFolder = computed(() => props.node.isDirectory)
 const folder = computed(() => (isFolder.value ? (props.node as TreeFolder) : null))
-const padding = computed(() => 4 + props.depth * 14 + 'px')
+const padding = computed(() => 8 + props.depth * 20 + 'px')
 
 function toggle() {
   if (folder.value) folder.value.isCollapsed = !folder.value.isCollapsed
@@ -133,26 +133,29 @@ function folderMenu(f: TreeFolder, ev: MouseEvent) {
   display: flex;
   align-items: center;
   gap: 4px;
-  height: 24px;
+  height: 30px;
   padding-right: 8px;
   cursor: pointer;
   font-size: 13px;
-  color: #24292e;
+  color: var(--mt-fg);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.row:hover { background: #f1f3f5; }
-.row.active { background: #e1ecf4; }
+.row:hover { background: var(--mt-row-hover); }
+.row.active {
+  box-shadow: inset 2px 0 0 var(--mt-accent);
+  color: var(--mt-accent);
+}
 .caret {
   transition: transform 100ms;
-  color: #6a737d;
+  color: var(--mt-fg-muted);
   font-size: 10px;
 }
 .caret.open { transform: rotate(90deg); }
 .caret-spacer { width: 10px; display: inline-block; }
 .icon {
-  color: #6a737d;
+  color: var(--mt-fg-muted);
   font-size: 14px;
   flex-shrink: 0;
 }

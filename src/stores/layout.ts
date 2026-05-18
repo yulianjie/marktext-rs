@@ -11,7 +11,7 @@ import { computed, ref } from 'vue'
 import { usePreferencesStore } from './preferences'
 
 const SIDEBAR_DEFAULT = 280
-const SIDEBAR_MIN = 200
+const SIDEBAR_MIN = 220
 const SIDEBAR_MAX = 800
 const STORAGE_KEY = 'mt:sideBarWidth'
 

@@ -136,11 +136,13 @@ function onDragEnd() {
         @drop="onDrop(tab.id, $event)"
         @dragend="onDragEnd"
       >
-        <span class="dot" v-if="!tab.isSaved" />
+        <span class="indicator">
+          <span class="dot" />
+          <button class="close" @click="close(tab.id, $event)" :aria-label="t('tabs.closeTab')">
+            <el-icon :size="12"><Close /></el-icon>
+          </button>
+        </span>
         <span class="label">{{ tab.filename }}</span>
-        <button class="close" @click="close(tab.id, $event)" :aria-label="t('tabs.closeTab')">
-          <el-icon :size="12"><Close /></el-icon>
-        </button>
       </div>
     </div>
     <button class="new-tab" @click="newTab" :aria-label="t('tabs.newTab')">
@@ -152,10 +154,13 @@ function onDragEnd() {
 <style scoped>
 .tabs-bar {
   display: flex;
-  height: 34px;
-  background: #f5f6f7;
-  border-bottom: 1px solid #eaecef;
+  height: 35px;
+  background: var(--mt-tab-bg);
+  border-bottom: 1px solid var(--mt-border);
+  box-shadow: var(--mt-shadow-tabs);
   flex-shrink: 0;
+  position: relative;
+  z-index: 2;
 }
 .tabs-scroll {
   display: flex;
@@ -169,63 +174,83 @@ function onDragEnd() {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 0 12px;
+  padding: 0 8px;
   height: 100%;
-  border-right: 1px solid #eaecef;
+  border-right: 1px solid var(--mt-border);
   cursor: pointer;
   font-size: 12px;
-  color: #586069;
+  color: var(--mt-fg-muted);
   white-space: nowrap;
   min-width: 100px;
-  max-width: 240px;
+  max-width: 280px;
   position: relative;
   transition: background-color 100ms;
 }
-.tab:hover { background: #ebedef; }
+.tab:hover { background: var(--mt-row-hover); }
 .tab.active {
-  background: #fff;
-  color: #24292e;
-  border-bottom: 2px solid var(--mt-accent, #0366d6);
+  background: var(--mt-tab-bg-active);
+  color: var(--mt-fg);
+  border-bottom: 2px solid var(--mt-accent);
 }
 .tab.dragging { opacity: 0.5; }
-.tab.drop-target { box-shadow: inset 3px 0 0 var(--mt-accent, #0366d6); }
+.tab.drop-target { box-shadow: inset 3px 0 0 var(--mt-accent); }
 .tab .label {
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.indicator {
+  width: 12px;
+  height: 12px;
+  position: relative;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
 .tab .dot {
-  width: 6px;
-  height: 6px;
-  background: #fb8c00;
+  display: none;
+  width: 7px;
+  height: 7px;
+  background: var(--mt-accent);
   border-radius: 50%;
 }
 .tab .close {
+  display: none;
   border: none;
   background: transparent;
-  color: #959da5;
+  color: var(--mt-fg-muted);
   cursor: pointer;
-  padding: 2px;
-  display: flex;
+  padding: 0;
+  width: 14px;
+  height: 14px;
   align-items: center;
   justify-content: center;
   border-radius: 3px;
-  opacity: 0;
-  transition: opacity 100ms;
 }
-.tab:hover .close,
-.tab.active .close { opacity: 1; }
-.tab .close:hover { background: #d1d5da; color: #24292e; }
+.tab .close:hover { background: #d1d5da; color: var(--mt-fg); }
+
+/* Saved tabs: show close on hover (also when active). */
+.tab:not(.dirty):hover .close,
+.tab:not(.dirty).active .close { display: inline-flex; }
+
+/* Dirty tabs: dot by default, close on hover. */
+.tab.dirty .dot { display: inline-block; }
+.tab.dirty:hover .dot { display: none; }
+.tab.dirty:hover .close { display: inline-flex; }
 
 .new-tab {
   border: none;
   background: transparent;
-  color: #586069;
+  color: var(--mt-fg-muted);
   cursor: pointer;
-  width: 34px;
+  width: 35px;
   display: flex;
   align-items: center;
   justify-content: center;
+  opacity: 0;
+  transition: opacity 100ms;
 }
-.new-tab:hover { background: #ebedef; }
+.tabs-bar:hover .new-tab { opacity: 1; }
+.new-tab:hover { background: var(--mt-row-hover); color: var(--mt-fg); }
 </style>

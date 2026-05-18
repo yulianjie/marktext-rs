@@ -422,6 +422,7 @@ onMounted(async () => {
               <el-option-group label="Built-in">
                 <el-option label="Light" value="light" />
                 <el-option label="Dark" value="dark" />
+                <el-option label="GitHub Blue" value="github-blue" />
                 <el-option label="Graphite Light" value="graphite-light" />
                 <el-option label="Material Dark" value="material-dark" />
                 <el-option label="One Dark" value="one-dark" />

@@ -1,11 +1,13 @@
 <script setup lang="ts">
 /**
- * Muya host — mounts one Muya instance per active tab and pipes its
- * `change` events into the editor store.
+ * Muya host — one Muya instance for the lifetime of this component;
+ * tab switches swap content via setMarkdown rather than destroying and
+ * rebuilding (mirrors the original Electron marktext editor.vue).
  *
- * Rebuilds the instance when the active tab id changes (Muya's setMarkdown
- * preserves cursor/history within a doc, but cross-doc switches need a
- * fresh instance to wipe internal state).
+ * Having both onMounted and watch(currentFileId) call a destroy/recreate
+ * `mount()` produced a microtask race where two Muya instances were
+ * constructed for the initial Untitled tab, leaving the DOM half-built
+ * and breaking the first inline conversion (e.g. `## hi` → H2).
  */
 import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useEditorStore } from '@/stores/editor'
@@ -58,25 +60,15 @@ async function loadMuya() {
   return Muya
 }
 
-async function mount(initialMarkdown: string, id: string) {
-  if (!editorRoot.value) return
-  // Wipe any prior Muya. Construction is heavy; rebuilds only happen on tab change.
-  if (muyaRef.value) {
-    try { muyaRef.value.destroy?.() } catch { /* noop */ }
-    muyaRef.value = null
-    // Muya leaves children behind — reset the host.
-    editorRoot.value.innerHTML = '<div></div>'
-  }
+/** Build the single Muya instance. Idempotent: subsequent calls no-op. */
+async function construct() {
+  if (muyaRef.value || !editorRoot.value) return
   const Muya = await loadMuya()
-  // Muya choke on empty input — its cursor has no block to attach to and the
-  // first keypress crashes inside `inputCtrl`. Seed with a single newline so
-  // there's always an empty paragraph block to land in.
-  const seeded = initialMarkdown.length === 0 ? '\n' : initialMarkdown
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let muya: any
   try {
     muya = new Muya(editorRoot.value, {
-      markdown: seeded,
+      markdown: '',
       focusMode: false,
       bulletListMarker: '-',
       orderListMarker: '.',
@@ -101,7 +93,12 @@ async function mount(initialMarkdown: string, id: string) {
     console.error('[Muya constructor failed]', err)
     return
   }
+  // Resolve the active tab at event-fire time, not closure time — the single
+  // instance survives tab switches so the listener must always write into
+  // whichever tab is currently mounted.
   muya.on('change', (changes: { markdown: string; wordCount?: unknown; cursor?: unknown; toc?: unknown }) => {
+    const id = activeBoundId.value
+    if (!id) return
     editor.applyContentChange(id, changes.markdown, {
       wordCount: changes.wordCount as never,
       cursor: changes.cursor,
@@ -110,23 +107,34 @@ async function mount(initialMarkdown: string, id: string) {
   })
   muyaRef.value = muya
   editor.setMuyaInstance(muya)
-  activeBoundId.value = id
-  console.info('[Muya] mounted for tab', id, 'len=', initialMarkdown.length)
+  console.info('[Muya] constructed')
 }
 
-// React to current-tab changes — mount once on first activation, then
-// `setMarkdown` for in-place document swaps.
+/** Swap the displayed document. Mirrors the original setMarkdownToEditor. */
+function loadFile(tab: { id: string; markdown: string; cursor?: unknown }) {
+  const muya = muyaRef.value
+  if (!muya) return
+  // Suspend `change` writes until the new tab is bound — otherwise the
+  // setMarkdown round-trip's dispatchChange fires under the *old* tab id.
+  activeBoundId.value = null
+  muya.clearHistory()
+  if (tab.cursor) {
+    muya.setMarkdown(tab.markdown, tab.cursor, true)
+  } else {
+    muya.setMarkdown(tab.markdown)
+  }
+  activeBoundId.value = tab.id
+}
+
+// React to current-tab changes — content swap only, never destroy/recreate.
 watch(
   () => editor.currentFileId,
-  async (id) => {
+  (id) => {
     if (!id) return
     const tab = editor.tabs.find(t => t.id === id)
     if (!tab) return
-    if (!muyaRef.value || activeBoundId.value !== id) {
-      await mount(tab.markdown, id)
-    } else if (muyaRef.value && muyaRef.value.getMarkdown && muyaRef.value.getMarkdown() !== tab.markdown) {
-      muyaRef.value.setMarkdown(tab.markdown)
-    }
+    if (activeBoundId.value === id) return
+    loadFile(tab)
   },
   { immediate: false },
 )
@@ -188,10 +196,13 @@ function scrollToHighlight() {
 }
 
 onMounted(async () => {
-  // Bootstrap an Untitled tab if no tabs exist yet.
+  // Construct the single Muya instance BEFORE touching the store. If we
+  // bootstrapped first, the watch(currentFileId) microtask would fire while
+  // construct() was awaiting Muya's dynamic imports, racing this path.
+  await construct()
   editor.bootstrap()
   const active = editor.currentFile
-  if (active) await mount(active.markdown, active.id)
+  if (active) loadFile(active)
   installBusHandlers()
 })
 

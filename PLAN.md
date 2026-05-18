@@ -74,3 +74,76 @@
 ## 执行顺序
 
 Phase 5～8 已合入。拼写检查留作最后压轴。其余按列表优先级挑选。
+
+---
+
+## Bugfix（进行中）— 首次输入 `## hi` 不解析为 H2
+
+### 现象
+
+新建（Untitled）标签页首次点入编辑器输入 `## hi`，**不转换为 H2 标题**，停留在 paragraph。全选删除后重输则正常变 H2。后续输入也都正常。
+
+### 既试无效的方案
+
+1. `muya.focus()` 挂载后立刻调用（[MuyaEditor.vue:118](src/components/editorWithTabs/MuyaEditor.vue#L118)）。
+2. 给空 `paragraphContent`/`atxLine` span 注入 `<br>` 占位（[renderLeafBlock.js:118-124](src/muya/lib/parser/render/renderBlock/renderLeafBlock.js#L118)）。
+
+两者都在治症状，没动根因。
+
+### 根因（与原版 Electron marktext 对照）
+
+参照 [C:/Users/jack/Desktop/github/marktext/src/renderer/components/editorWithTabs/editor.vue](C:/Users/jack/Desktop/github/marktext/src/renderer/components/editorWithTabs/editor.vue)：
+
+1. **空文档种子差异。** 原版 `markdown: ''`（从 `getBlankFileState` 来），我们 [MuyaEditor.vue:74](src/components/editorWithTabs/MuyaEditor.vue#L74) 用了 `'\n'` 作为 workaround。原版用 `''` 不崩，说明所谓"空输入崩溃"是别的 bug 的症状（极可能是下面的 race），不是真的需要这个 seed。
+
+2. **双重挂载 race（致命）。** 我们的 [MuyaEditor.vue](src/components/editorWithTabs/MuyaEditor.vue) 同时有两条路径调 `mount()`：
+   - [line 199](src/components/editorWithTabs/MuyaEditor.vue#L199) `onMounted` 里直接 `await mount(...)`
+   - [line 124-137](src/components/editorWithTabs/MuyaEditor.vue#L124) `watch(currentFileId, ...)` 也调 `mount(...)`
+
+   `onMounted` 同步执行 `editor.bootstrap()` 把 `currentFileId.value` 从 null 写成 file.id —— Vue 把 watcher 入队成 microtask。然后 `await mount(...)` 在 `await loadMuya()` 处让出控制权，microtask 队列跑 watcher，此时 `muyaRef.value` 还没赋值（第一次 mount 还在 await 中），watcher 也走进 mount 分支再调一次 `mount(...)`。两次 mount 交错跑 destroy / new Muya / setMuyaInstance，最终 DOM 处于半构造状态：用户点入空 span 时插入符落在 `<p>` 外面，第一个 `#` 写到 Muya 追踪不到的位置，`inputHandler` 读到的 `block.text` 仍是 `""`，`checkInlineUpdate` 永远拿不到 `##` → 不触发 heading 转换。
+
+   全选删除时，`backspaceCtrl` 用 `setCursor` 把光标重新放回 span 内部 → 之后重输就正常。
+
+   原版没有这个 race —— Muya 在 `created() { $nextTick(...) }` 里只 new 一次，**永不 destroy/recreate**；切 tab / 加载文件走 bus 事件 → `setMarkdownToEditor` → `editor.setMarkdown(markdown, cursor, true)`（[editor.vue:1096-1106](C:/Users/jack/Desktop/github/marktext/src/renderer/components/editorWithTabs/editor.vue#L1096)）。
+
+### 修复方案 — 镜像原版架构
+
+把 [MuyaEditor.vue](src/components/editorWithTabs/MuyaEditor.vue) 改成"一个 Muya 实例 + setMarkdown 切内容"：
+
+1. **拆分 `mount()` 为 `construct()` 和 `loadFile(tab)` 两步。**
+   - `construct()`：`onMounted` 里只调一次。`new Muya(..., { markdown: '', ...})`，**移除 `'\n'` seed**，**移除 `muya.focus()`**。
+   - `loadFile(tab)`：`muyaRef.value.clearHistory()` → `muyaRef.value.setMarkdown(tab.markdown, tab.cursor, true)`，更新 `activeBoundId`。
+
+2. **`change` 事件闭包改成动态读取 tab id。**
+   原代码闭包捕获了 mount 时的 `id`，单实例下会把所有 tab 的修改都写到第一个 tab。改成：
+   ```ts
+   muya.on('change', (changes) => {
+     const id = editor.currentFileId
+     if (!id) return
+     editor.applyContentChange(id, changes.markdown, { ... })
+   })
+   ```
+   对应原版 `id: 'muya'` placeholder + Vuex 解析当前 tab 的做法（[editor.vue:596-599](C:/Users/jack/Desktop/github/marktext/src/renderer/components/editorWithTabs/editor.vue#L596)）。
+
+3. **`watch(currentFileId)` 只调 `loadFile`，不调 `mount`。**
+   `if (activeBoundId.value !== id) loadFile(tab)`。彻底消除 race。
+
+4. **回滚 [renderLeafBlock.js:118-124](src/muya/lib/parser/render/renderBlock/renderLeafBlock.js#L118) 的 `<br>` 占位**。原版没有，架构修好后也用不到。
+
+5. **`onBeforeUnmount`** destroy 这一个 Muya 实例（已经在做了，保留）。
+
+### 不在本次范围
+
+- 切 tab 时保留每 tab 的 history（原版有 [editor.vue:1109-1124](C:/Users/jack/Desktop/github/marktext/src/renderer/components/editorWithTabs/editor.vue#L1109) 的 `setHistory` 链路，但需要在 store 里加 history 持久化字段，先放后面）。
+
+### 验证
+
+1. `npm run tauri:build`（旧 `marktext-rs.exe` 要先关掉，否则 cargo 链接失败）。
+2. 跑出来的二进制：打开 Untitled tab，点入编辑器，**立即**输入 `## hi` → 期望出现 H2。
+3. 同位置 `### sub` → H3；新行 `- bullet` → 列表；`**bold**` → 行内粗体。
+4. 打开一个已有 md 文件，编辑一个字符，切回 Untitled tab → 内容互不丢失。
+5. 打开两个文件，tab 间切换 → 每个 tab 内容正确保留。
+6. 输入 → Ctrl+Z → Ctrl+Y → undo/redo 仍工作。
+7. `npm run test:unit`、`npm run test:e2e` 不引入 regression。
+
+3-6 全部通过且 7 无回归即视为修复完成。
