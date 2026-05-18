@@ -11,7 +11,10 @@ import { useI18n } from '@/i18n'
 
 const editor = useEditorStore()
 const prefs = usePreferencesStore()
-const win = getCurrentWindow()
+// Guard for Vite-only browser dev mode (no Tauri shell). Same pattern as
+// src/services/tauri-bridge.ts and src/services/debug-bridge.ts.
+const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
+const win = isTauri ? getCurrentWindow() : null
 const { t } = useI18n()
 
 const titleText = computed(() => {
@@ -24,13 +27,14 @@ const titleText = computed(() => {
 const wordCount = computed(() => editor.currentFile?.wordCount.word ?? 0)
 const useCustomChrome = computed(() => prefs.titleBarStyle === 'custom')
 
-async function minimize() { await win.minimize() }
+async function minimize() { await win?.minimize() }
 async function toggleMax() {
+  if (!win) return
   const m = await win.isMaximized()
   if (m) await win.unmaximize()
   else await win.maximize()
 }
-async function close() { await win.close() }
+async function close() { await win?.close() }
 </script>
 
 <template>

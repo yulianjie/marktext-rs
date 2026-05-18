@@ -14,7 +14,7 @@ pub mod ipc;
 pub mod menu;
 pub mod preferences;
 
-use tauri::{Emitter, Manager};
+use tauri::{Emitter, LogicalSize, Manager, Size};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -69,6 +69,38 @@ pub fn run() {
         .manage(app::AppState::default())
         .invoke_handler(marktext_handler!())
         .setup(|app| {
+            // First-launch HiDPI-aware clamp: if window-state plugin has no
+            // saved geometry and the configured 1200x900 would overflow the
+            // primary monitor's work area, scale down preserving 4:3. On
+            // monitors that fit comfortably we leave the config defaults
+            // alone — Tauri's logical-pixel sizing already preserves the
+            // perceived physical size across DPIs.
+            if let Some(window) = app.get_webview_window("main") {
+                let state_path = app
+                    .path()
+                    .app_data_dir()
+                    .ok()
+                    .map(|d| d.join(".window-state.json"));
+                let first_launch = state_path.as_ref().map_or(true, |p| !p.exists());
+
+                if first_launch {
+                    if let Ok(Some(monitor)) = window.primary_monitor() {
+                        let scale = monitor.scale_factor();
+                        let logical_w = monitor.size().width as f64 / scale;
+                        let logical_h = monitor.size().height as f64 / scale;
+                        if logical_h < 950.0 || logical_w < 1250.0 {
+                            let target_h = (logical_h * 0.9).min(900.0);
+                            let target_w = (target_h * 4.0 / 3.0).min(logical_w * 0.95);
+                            let _ = window.set_size(Size::Logical(LogicalSize {
+                                width: target_w,
+                                height: target_h,
+                            }));
+                            let _ = window.center();
+                        }
+                    }
+                }
+            }
+
             menu::install(app)?;
             app::on_startup(app)?;
             Ok(())

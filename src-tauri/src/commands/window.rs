@@ -9,7 +9,8 @@ pub async fn cmd_new_window(app: AppHandle, label: Option<String>) -> AppResult<
     let label = label.unwrap_or_else(|| format!("editor-{}", uuid::Uuid::new_v4()));
     WebviewWindowBuilder::new(&app, &label, WebviewUrl::App("index.html".into()))
         .title("MarkText")
-        .inner_size(1200.0, 800.0)
+        .inner_size(1200.0, 900.0)
+        .center()
         .build()
         .map_err(|e| AppError::Other(e.to_string()))?;
     Ok(())

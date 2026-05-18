@@ -60,6 +60,12 @@ export async function listenTyped<K extends EventName>(
   name: K,
   handler: (payload: EventRegistry[K]) => void,
 ): Promise<UnlistenFn> {
+  if (typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window)) {
+    // Vite-only browser dev mode: no Tauri event bus available. Return a
+    // no-op unlisten so callers (e.g. listenForMain.install) can await
+    // without throwing and downstream setup keeps running.
+    return () => {}
+  }
   const fn = await listen<EventRegistry[K]>(name, e => handler(e.payload))
   unlisteners.push(fn)
   return fn
