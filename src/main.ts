@@ -2,6 +2,7 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
+import { getCurrentWindow } from '@tauri-apps/api/window'
 
 import App from './App.vue'
 import router from './router'
@@ -34,3 +35,13 @@ app.use(ElementPlus)
 initTauriBridge(app)
 
 app.mount('#app')
+
+// Window starts hidden (tauri.conf.json visible:false) so the user never sees
+// the unpainted webview or the window-state plugin restoring geometry.
+// Reveal after the first paint.
+if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+  requestAnimationFrame(() => {
+    const win = getCurrentWindow()
+    void win.show().then(() => win.setFocus())
+  })
+}
