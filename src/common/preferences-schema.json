@@ -18,6 +18,15 @@
     ],
     "default": "custom"
   },
+  "appIcon": {
+    "description": "General--The application icon used for runtime windows and in-app branding.",
+    "enum": [
+      "ios26",
+      "ios26-alt",
+      "default"
+    ],
+    "default": "ios26"
+  },
   "openFilesInNewWindow": {
     "description": "General--Open files in a new window.",
     "type": "boolean",

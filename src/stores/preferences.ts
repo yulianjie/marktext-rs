@@ -8,6 +8,7 @@
  */
 
 import { defineStore } from 'pinia'
+import type { AppIconId } from '@/services/app-icon'
 import {
   getPreferences,
   setPreference,
@@ -23,6 +24,7 @@ interface State {
   autoSave: boolean
   autoSaveDelay: number
   titleBarStyle: 'custom' | 'native'
+  appIcon: AppIconId
   openFilesInNewWindow: boolean
   openFolderInNewWindow: boolean
   zoom: number
@@ -119,6 +121,7 @@ const defaults: State = {
   autoSave: false,
   autoSaveDelay: 5000,
   titleBarStyle: 'custom',
+  appIcon: 'ios26',
   openFilesInNewWindow: false,
   openFolderInNewWindow: false,
   zoom: 1.0,

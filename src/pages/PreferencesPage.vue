@@ -14,6 +14,7 @@ import { useListenForMainStore } from '@/stores/listenForMain'
 import { useKeybindingsStore, eventAccel } from '@/stores/keybindings'
 import { applyPreferencesToDom, invalidateUserThemes } from '@/services/preferences-applier'
 import { listThemes, getPreference, type UserTheme } from '@/services/tauri-invoke'
+import { appIconOptions, type AppIconId } from '@/services/app-icon'
 
 const prefs = usePreferencesStore()
 const listener = useListenForMainStore()
@@ -137,6 +138,22 @@ onMounted(async () => {
               <el-option label="Custom" value="custom" />
               <el-option label="Native" value="native" />
             </el-select>
+          </el-form-item>
+          <el-form-item label="App icon">
+            <div class="icon-choices">
+              <button
+                v-for="icon in appIconOptions"
+                :key="icon.id"
+                type="button"
+                class="icon-choice"
+                :class="{ selected: prefs.appIcon === icon.id }"
+                @click="prefs.set('appIcon', icon.id as AppIconId)"
+              >
+                <img :src="icon.src" :alt="icon.label" />
+                <span class="icon-choice-title">{{ icon.label }}</span>
+                <span class="icon-choice-desc">{{ icon.description }}</span>
+              </button>
+            </div>
           </el-form-item>
           <el-form-item label="Open files in new window">
             <el-switch :model-value="prefs.openFilesInNewWindow" @update:model-value="v => prefs.set('openFilesInNewWindow', !!v)" />
@@ -744,4 +761,43 @@ onMounted(async () => {
 }
 .kb-button:hover { background: var(--mt-row-hover, #ebedef); }
 .kb-input { background: #fff8dc; cursor: text; }
+.icon-choices {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.icon-choice {
+  width: 128px;
+  min-height: 142px;
+  padding: 12px;
+  border: 1px solid var(--mt-border, #d1d5da);
+  border-radius: 8px;
+  background: var(--mt-tab-bg, #f5f6f7);
+  color: var(--mt-fg, #24292e);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.icon-choice:hover { background: var(--mt-row-hover, #ebedef); }
+.icon-choice.selected {
+  border-color: var(--mt-accent, #0366d6);
+  box-shadow: 0 0 0 2px rgba(3, 102, 214, 0.16);
+  background: var(--mt-row-active, #fff);
+}
+.icon-choice img {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.icon-choice-title { font-size: 13px; font-weight: 600; line-height: 1.2; }
+.icon-choice-desc {
+  font-size: 11px;
+  color: var(--mt-fg-muted, #586069);
+  line-height: 1.2;
+  text-align: center;
+}
+
 </style>

@@ -11,6 +11,7 @@
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
+    "icons:bundle": "tauri icon src/assets/app-icons/ios26.png",
     "lint": "eslint src",
     "lint:fix": "eslint --fix src",
     "test:unit": "vitest run",

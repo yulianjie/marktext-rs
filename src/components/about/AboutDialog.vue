@@ -2,10 +2,15 @@
 /**
  * About dialog. Triggered by the `aboutDialog` bus event.
  */
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { bus } from '@/bus'
 import { getVersion } from '@tauri-apps/api/app'
 import { t } from '@/i18n'
+import { usePreferencesStore } from '@/stores/preferences'
+import { getAppIconOption } from '@/services/app-icon'
+
+const prefs = usePreferencesStore()
+const currentIcon = computed(() => getAppIconOption(prefs.appIcon))
 
 const visible = ref(false)
 const appVersion = ref('0.1.0')
@@ -26,6 +31,7 @@ onBeforeUnmount(() => { unsub?.() })
       <h3 class="about-title">{{ t('app.name') }}</h3>
     </template>
     <div class="about-body">
+      <img class="about-icon" :src="currentIcon.src" :alt="currentIcon.label" />
       <p class="version">{{ t('about.version', { version: appVersion }) }}</p>
       <p class="tagline">{{ t('about.tagline') }}</p>
       <p class="meta">{{ t('about.copyright') }}</p>
@@ -41,6 +47,13 @@ onBeforeUnmount(() => { unsub?.() })
   color: #24292e;
 }
 .about-body { text-align: center; padding: 0 16px 8px; }
+.about-icon {
+  width: 88px;
+  height: 88px;
+  object-fit: contain;
+  margin: 2px auto 14px;
+  display: block;
+}
 .version {
   font-size: 14px;
   color: #586069;

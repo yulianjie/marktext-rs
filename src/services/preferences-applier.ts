@@ -21,6 +21,7 @@ import { watchEffect, onScopeDispose } from 'vue'
 import { usePreferencesStore } from '@/stores/preferences'
 import { setLocale, type LocaleId } from '@/i18n'
 import { listThemes, readThemeCss, type UserTheme } from './tauri-invoke'
+import { applyWindowIcon } from './app-icon'
 
 let mediaQuery: MediaQueryList | null = null
 let mediaQueryListener: ((ev: MediaQueryListEvent) => void) | null = null
@@ -118,6 +119,9 @@ export function applyPreferencesToDom(): void {
     if (prefs.language === 'zh-CN' || prefs.language === 'en') {
       setLocale(prefs.language as LocaleId)
     }
+
+    // Runtime app icon.
+    void applyWindowIcon(prefs.appIcon)
 
     // Editor display
     setRootProp('--mt-zoom', String(prefs.zoom))
