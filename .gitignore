@@ -20,3 +20,10 @@
 src/auto-imports.d.ts
 src/components.d.ts
 *.lock
+
+# Claude Code local settings (machine-specific)
+.claude/settings.local.json
+
+# Playwright test artefacts
+/test-results
+/playwright-report
