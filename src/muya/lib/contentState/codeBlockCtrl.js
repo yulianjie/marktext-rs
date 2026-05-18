@@ -7,6 +7,25 @@ const CODE_UPDATE_REP = /^`{3,}(.*)/
 
 const codeBlockCtrl = ContentState => {
   /**
+   * Kick off async prism language loading and re-render once a brand-new
+   * grammar lands. partialRender runs synchronously before the dynamic
+   * import resolves; without this hop, the first render after typing the
+   * fence shows raw text and only a later edit triggers highlighting.
+   */
+  ContentState.prototype.loadAndRehighlightLanguage = function (lang) {
+    loadLanguage(lang)
+      .then(infoList => {
+        if (!Array.isArray(infoList)) return
+        if (infoList.some(({ status }) => status === 'loaded')) {
+          this.render()
+        }
+      })
+      .catch(err => {
+        console.warn('[muya] loadLanguage failed for', lang, err)
+      })
+  }
+
+  /**
   * check edit language
   */
   ContentState.prototype.checkEditLanguage = function () {
@@ -59,7 +78,7 @@ const codeBlockCtrl = ContentState => {
     // Prevent possible XSS on language input when using lang attribute later on. The input is also sanitized before rendering.
     lang = escapeHTML(lang)
     if (lang !== '') {
-      loadLanguage(lang)
+      this.loadAndRehighlightLanguage(lang)
     }
 
     if (block.functionType === 'languageInput') {
@@ -119,7 +138,7 @@ const codeBlockCtrl = ContentState => {
       })
 
       if (language) {
-        loadLanguage(language)
+        this.loadAndRehighlightLanguage(language)
       }
 
       block.type = 'pre'

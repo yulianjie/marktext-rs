@@ -13,6 +13,10 @@ import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useEditorStore } from '@/stores/editor'
 import { muyaImageAction } from '@/services/muya-image-action'
 import { bus } from '@/bus'
+// Prism token colors — the editor renders highlighted code as <span class="token …">,
+// but Muya's own stylesheet doesn't ship the prism theme. Without this import the
+// token spans are emitted but render in the default text color.
+import 'muya/themes/prismjs/light.theme.css'
 
 const editor = useEditorStore()
 
