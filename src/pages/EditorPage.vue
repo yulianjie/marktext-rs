@@ -29,6 +29,7 @@ import { openFiles, saveAsDialog, exportHtml, getPreference, pandocConvert } fro
 import { listenTyped } from '@/services/tauri-bridge'
 import { applyPreferencesToDom } from '@/services/preferences-applier'
 import { bus } from '@/bus'
+import { t } from '@/i18n'
 
 const editor = useEditorStore()
 const layout = useLayoutStore()
@@ -55,7 +56,7 @@ async function doOpen() {
   for (const p of paths) {
     try { await editor.openFile(p) }
     catch (err) {
-      notify.pushToast({ type: 'error', title: 'Open failed', message: err instanceof Error ? err.message : String(err) })
+      notify.pushToast({ type: 'error', title: t('toast.openFailed'), message: err instanceof Error ? err.message : String(err) })
     }
   }
 }
@@ -75,7 +76,7 @@ async function doExportHtml() {
   if (!target) return
   const muya = editor.getMuyaInstance()
   if (!muya) {
-    notify.pushToast({ type: 'error', title: 'Export failed', message: 'Editor not ready.' })
+    notify.pushToast({ type: 'error', title: t('toast.exportFailed'), message: t('toast.editorNotReady') })
     return
   }
   try {
@@ -88,9 +89,9 @@ async function doExportHtml() {
       extraCss: '',
     })
     await exportHtml(target, html)
-    notify.pushToast({ type: 'success', message: `Exported to ${target}` })
+    notify.pushToast({ type: 'success', message: t('toast.exportedTo', { path: target }) })
   } catch (err) {
-    notify.pushToast({ type: 'error', title: 'Export failed', message: err instanceof Error ? err.message : String(err) })
+    notify.pushToast({ type: 'error', title: t('toast.exportFailed'), message: err instanceof Error ? err.message : String(err) })
   }
 }
 
@@ -103,10 +104,10 @@ async function doExportPandoc(format: 'docx' | 'odt' | 'epub') {
   if (!target) return
   try {
     await pandocConvert(tab.markdown, target, format)
-    notify.pushToast({ type: 'success', message: `Exported to ${target}` })
+    notify.pushToast({ type: 'success', message: t('toast.exportedTo', { path: target }) })
   } catch (err) {
     notify.pushToast({
-      type: 'error', title: 'Export failed',
+      type: 'error', title: t('toast.exportFailed'),
       message: err instanceof Error ? err.message : String(err),
     })
   }
@@ -223,7 +224,7 @@ onMounted(async () => {
   const handler = (e: Event) => {
     const detail = (e as CustomEvent<{ path: string }>).detail
     void editor.openFile(detail.path).catch(err => {
-      notify.pushToast({ type: 'error', title: 'Open failed', message: err instanceof Error ? err.message : String(err) })
+      notify.pushToast({ type: 'error', title: t('toast.openFailed'), message: err instanceof Error ? err.message : String(err) })
     })
   }
   window.addEventListener('mt:open-file', handler)
@@ -251,7 +252,7 @@ onMounted(async () => {
         for (const file of p.paths) {
           try { await editor.openFile(file) }
           catch (err) {
-            notify.pushToast({ type: 'error', title: 'Open failed', message: err instanceof Error ? err.message : String(err) })
+            notify.pushToast({ type: 'error', title: t('toast.openFailed'), message: err instanceof Error ? err.message : String(err) })
           }
         }
       }

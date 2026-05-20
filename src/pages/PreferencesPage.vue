@@ -15,11 +15,13 @@ import { useKeybindingsStore, eventAccel } from '@/stores/keybindings'
 import { applyPreferencesToDom, invalidateUserThemes } from '@/services/preferences-applier'
 import { listThemes, getPreference, type UserTheme } from '@/services/tauri-invoke'
 import { appIconOptions, type AppIconId } from '@/services/app-icon'
+import { useI18n } from '@/i18n'
 
 const prefs = usePreferencesStore()
 const listener = useListenForMainStore()
 const keys = useKeybindingsStore()
 const userThemes = ref<UserTheme[]>([])
+const { t } = useI18n()
 
 /* ── keybindings UI state ─────────────────────────────────────── */
 const editingAccel = ref<string | null>(null)   // action id currently being recorded
@@ -66,17 +68,17 @@ type SectionId =
   | 'search'
   | 'keybindings'
 
-const sections: { id: SectionId; label: string }[] = [
-  { id: 'general', label: 'General' },
-  { id: 'editor', label: 'Editor' },
-  { id: 'markdown', label: 'Markdown' },
-  { id: 'theme', label: 'Theme' },
-  { id: 'image', label: 'Image' },
-  { id: 'spellchecker', label: 'Spellchecker' },
-  { id: 'view', label: 'View' },
-  { id: 'search', label: 'Search' },
-  { id: 'keybindings', label: 'Keybindings' },
-]
+const sections = computed<{ id: SectionId; label: string }[]>(() => [
+  { id: 'general', label: t('prefs.sections.general') },
+  { id: 'editor', label: t('prefs.sections.editor') },
+  { id: 'markdown', label: t('prefs.sections.markdown') },
+  { id: 'theme', label: t('prefs.sections.theme') },
+  { id: 'image', label: t('prefs.sections.image') },
+  { id: 'spellchecker', label: t('prefs.sections.spellchecker') },
+  { id: 'view', label: t('prefs.sections.view') },
+  { id: 'search', label: t('prefs.sections.search') },
+  { id: 'keybindings', label: t('prefs.sections.keybindings') },
+])
 
 const active = ref<SectionId>('general')
 
@@ -100,7 +102,7 @@ onMounted(async () => {
 <template>
   <div class="prefs-page">
     <aside class="prefs-nav">
-      <h2 class="prefs-title">Preferences</h2>
+      <h2 class="prefs-title">{{ t('prefs.title') }}</h2>
       <ul>
         <li
           v-for="sec in sections"
@@ -116,12 +118,12 @@ onMounted(async () => {
     <main class="prefs-body">
       <!-- ── General ─────────────────────────────────────── -->
       <section v-show="active === 'general'" class="prefs-section">
-        <h3>General</h3>
+        <h3>{{ t('prefs.sections.general') }}</h3>
         <el-form label-width="220px" label-position="left">
-          <el-form-item label="Auto save">
+          <el-form-item :label="t('prefs.general.autoSave')">
             <el-switch :model-value="prefs.autoSave" @update:model-value="v => prefs.set('autoSave', !!v)" />
           </el-form-item>
-          <el-form-item label="Auto-save delay (ms)">
+          <el-form-item :label="t('prefs.general.autoSaveDelay')">
             <el-input-number
               :model-value="prefs.autoSaveDelay"
               :min="1000"
@@ -129,27 +131,26 @@ onMounted(async () => {
               @update:model-value="v => prefs.set('autoSaveDelay', Number(v))"
             />
           </el-form-item>
-          <el-form-item label="Title bar style">
+          <el-form-item :label="t('prefs.general.titleBarStyle')">
             <el-select
               :model-value="prefs.titleBarStyle"
               style="width: 200px"
               @update:model-value="v => prefs.set('titleBarStyle', v as 'custom' | 'native')"
             >
-              <el-option label="Custom" value="custom" />
-              <el-option label="Native" value="native" />
+              <el-option :label="t('prefs.general.titleBarStyleCustom')" value="custom" />
+              <el-option :label="t('prefs.general.titleBarStyleNative')" value="native" />
             </el-select>
           </el-form-item>
-          <el-form-item label="Remember window size">
+          <el-form-item :label="t('prefs.general.rememberWindowSize')">
             <el-switch
               :model-value="prefs.rememberWindowSize"
               @update:model-value="v => prefs.set('rememberWindowSize', !!v)"
             />
             <span class="hint inline-hint">
-              Off (default): every launch opens at the default 4:3 size.
-              On: the previous size is restored. Takes effect after the next launch.
+              {{ t('prefs.general.rememberWindowSizeHint') }}
             </span>
           </el-form-item>
-          <el-form-item label="App icon">
+          <el-form-item :label="t('prefs.general.appIcon')">
             <div class="icon-choices">
               <button
                 v-for="icon in appIconOptions"
@@ -165,13 +166,13 @@ onMounted(async () => {
               </button>
             </div>
           </el-form-item>
-          <el-form-item label="Open files in new window">
+          <el-form-item :label="t('prefs.general.openFilesNewWindow')">
             <el-switch :model-value="prefs.openFilesInNewWindow" @update:model-value="v => prefs.set('openFilesInNewWindow', !!v)" />
           </el-form-item>
-          <el-form-item label="Open folder in new window">
+          <el-form-item :label="t('prefs.general.openFolderNewWindow')">
             <el-switch :model-value="prefs.openFolderInNewWindow" @update:model-value="v => prefs.set('openFolderInNewWindow', !!v)" />
           </el-form-item>
-          <el-form-item label="Zoom level">
+          <el-form-item :label="t('prefs.general.zoom')">
             <el-slider
               :model-value="prefs.zoom"
               :min="0.5"
@@ -181,35 +182,35 @@ onMounted(async () => {
               @update:model-value="v => prefs.set('zoom', Number(v))"
             />
           </el-form-item>
-          <el-form-item label="Hide scrollbar">
+          <el-form-item :label="t('prefs.general.hideScrollbar')">
             <el-switch :model-value="prefs.hideScrollbar" @update:model-value="v => prefs.set('hideScrollbar', !!v)" />
           </el-form-item>
-          <el-form-item label="Word wrap in TOC">
+          <el-form-item :label="t('prefs.general.wordWrapInToc')">
             <el-switch :model-value="prefs.wordWrapInToc" @update:model-value="v => prefs.set('wordWrapInToc', !!v)" />
           </el-form-item>
-          <el-form-item label="Sort files by">
+          <el-form-item :label="t('prefs.general.sortBy')">
             <el-select
               :model-value="prefs.fileSortBy"
               style="width: 200px"
               @update:model-value="v => prefs.set('fileSortBy', v as 'created' | 'modified' | 'title')"
             >
-              <el-option label="Modified" value="modified" />
-              <el-option label="Created" value="created" />
-              <el-option label="Title" value="title" />
+              <el-option :label="t('prefs.general.sortByModified')" value="modified" />
+              <el-option :label="t('prefs.general.sortByCreated')" value="created" />
+              <el-option :label="t('prefs.general.sortByTitle')" value="title" />
             </el-select>
           </el-form-item>
-          <el-form-item label="On startup">
+          <el-form-item :label="t('prefs.general.onStartup')">
             <el-select
               :model-value="prefs.startUpAction"
               style="width: 200px"
               @update:model-value="v => prefs.set('startUpAction', v as 'folder' | 'lastState' | 'blank')"
             >
-              <el-option label="Blank document" value="blank" />
-              <el-option label="Restore last state" value="lastState" />
-              <el-option label="Open folder" value="folder" />
+              <el-option :label="t('prefs.general.startupBlank')" value="blank" />
+              <el-option :label="t('prefs.general.startupLastState')" value="lastState" />
+              <el-option :label="t('prefs.general.startupFolder')" value="folder" />
             </el-select>
           </el-form-item>
-          <el-form-item label="Language">
+          <el-form-item :label="t('prefs.general.language')">
             <el-select
               :model-value="prefs.language"
               style="width: 200px"
@@ -217,6 +218,7 @@ onMounted(async () => {
             >
               <el-option label="English" value="en" />
               <el-option label="简体中文" value="zh-CN" />
+              <el-option label="日本語" value="ja" />
             </el-select>
           </el-form-item>
         </el-form>
@@ -224,12 +226,12 @@ onMounted(async () => {
 
       <!-- ── Editor ─────────────────────────────────────── -->
       <section v-show="active === 'editor'" class="prefs-section">
-        <h3>Editor</h3>
+        <h3>{{ t('prefs.sections.editor') }}</h3>
         <el-form label-width="220px" label-position="left">
-          <el-form-item label="Font size (px)">
+          <el-form-item :label="t('prefs.editor.fontSize')">
             <el-input-number v-model="fontSize" :min="12" :max="32" />
           </el-form-item>
-          <el-form-item label="Line height">
+          <el-form-item :label="t('prefs.editor.lineHeight')">
             <el-input-number
               :model-value="prefs.lineHeight"
               :min="1.2"
@@ -239,22 +241,22 @@ onMounted(async () => {
               @update:model-value="v => prefs.set('lineHeight', Number(v))"
             />
           </el-form-item>
-          <el-form-item label="Editor font family">
+          <el-form-item :label="t('prefs.editor.fontFamily')">
             <el-input
               :model-value="prefs.editorFontFamily"
               style="width: 240px"
               @update:model-value="v => prefs.set('editorFontFamily', String(v))"
             />
           </el-form-item>
-          <el-form-item label="Editor max width">
+          <el-form-item :label="t('prefs.editor.lineWidth')">
             <el-input
               :model-value="prefs.editorLineWidth"
-              placeholder="e.g. 860px / 80ch / 70%"
+              :placeholder="t('prefs.editor.lineWidthPlaceholder')"
               style="width: 200px"
               @update:model-value="v => prefs.set('editorLineWidth', String(v))"
             />
           </el-form-item>
-          <el-form-item label="Code font size (px)">
+          <el-form-item :label="t('prefs.editor.codeFontSize')">
             <el-input-number
               :model-value="prefs.codeFontSize"
               :min="12"
@@ -262,40 +264,40 @@ onMounted(async () => {
               @update:model-value="v => prefs.set('codeFontSize', Number(v))"
             />
           </el-form-item>
-          <el-form-item label="Code font family">
+          <el-form-item :label="t('prefs.editor.codeFontFamily')">
             <el-input
               :model-value="prefs.codeFontFamily"
               style="width: 240px"
               @update:model-value="v => prefs.set('codeFontFamily', String(v))"
             />
           </el-form-item>
-          <el-form-item label="Show code-block line numbers">
+          <el-form-item :label="t('prefs.editor.codeLineNumbers')">
             <el-switch :model-value="prefs.codeBlockLineNumbers" @update:model-value="v => prefs.set('codeBlockLineNumbers', !!v)" />
           </el-form-item>
-          <el-form-item label="Trim empty lines in code blocks">
+          <el-form-item :label="t('prefs.editor.trimEmpty')">
             <el-switch :model-value="prefs.trimUnnecessaryCodeBlockEmptyLines" @update:model-value="v => prefs.set('trimUnnecessaryCodeBlockEmptyLines', !!v)" />
           </el-form-item>
-          <el-form-item label="Auto pair brackets">
+          <el-form-item :label="t('prefs.editor.autoPairBracket')">
             <el-switch :model-value="prefs.autoPairBracket" @update:model-value="v => prefs.set('autoPairBracket', !!v)" />
           </el-form-item>
-          <el-form-item label="Auto pair markdown syntax">
+          <el-form-item :label="t('prefs.editor.autoPairMd')">
             <el-switch :model-value="prefs.autoPairMarkdownSyntax" @update:model-value="v => prefs.set('autoPairMarkdownSyntax', !!v)" />
           </el-form-item>
-          <el-form-item label="Auto pair quotes">
+          <el-form-item :label="t('prefs.editor.autoPairQuote')">
             <el-switch :model-value="prefs.autoPairQuote" @update:model-value="v => prefs.set('autoPairQuote', !!v)" />
           </el-form-item>
-          <el-form-item label="End of line">
+          <el-form-item :label="t('prefs.editor.eol')">
             <el-select
               :model-value="prefs.endOfLine"
               style="width: 200px"
               @update:model-value="v => prefs.set('endOfLine', v as 'default' | 'lf' | 'crlf')"
             >
-              <el-option label="System default" value="default" />
-              <el-option label="LF (Unix)" value="lf" />
-              <el-option label="CRLF (Windows)" value="crlf" />
+              <el-option :label="t('prefs.editor.eolDefault')" value="default" />
+              <el-option :label="t('prefs.editor.eolLf')" value="lf" />
+              <el-option :label="t('prefs.editor.eolCrlf')" value="crlf" />
             </el-select>
           </el-form-item>
-          <el-form-item label="Default encoding">
+          <el-form-item :label="t('prefs.editor.encoding')">
             <el-select
               :model-value="prefs.defaultEncoding"
               style="width: 200px"
@@ -314,26 +316,26 @@ onMounted(async () => {
               <el-option label="Latin-1" value="iso885915" />
             </el-select>
           </el-form-item>
-          <el-form-item label="Auto-guess encoding">
+          <el-form-item :label="t('prefs.editor.autoGuessEncoding')">
             <el-switch :model-value="prefs.autoGuessEncoding" @update:model-value="v => prefs.set('autoGuessEncoding', !!v)" />
           </el-form-item>
-          <el-form-item label="Text direction">
+          <el-form-item :label="t('prefs.editor.textDirection')">
             <el-select
               :model-value="prefs.textDirection"
               style="width: 200px"
               @update:model-value="v => prefs.set('textDirection', v as 'ltr' | 'rtl')"
             >
-              <el-option label="Left to right" value="ltr" />
-              <el-option label="Right to left" value="rtl" />
+              <el-option :label="t('prefs.editor.textDirectionLtr')" value="ltr" />
+              <el-option :label="t('prefs.editor.textDirectionRtl')" value="rtl" />
             </el-select>
           </el-form-item>
-          <el-form-item label="Hide quick-insert hint">
+          <el-form-item :label="t('prefs.editor.hideQuickInsert')">
             <el-switch :model-value="prefs.hideQuickInsertHint" @update:model-value="v => prefs.set('hideQuickInsertHint', !!v)" />
           </el-form-item>
-          <el-form-item label="Hide link popup on hover">
+          <el-form-item :label="t('prefs.editor.hideLinkPopup')">
             <el-switch :model-value="prefs.hideLinkPopup" @update:model-value="v => prefs.set('hideLinkPopup', !!v)" />
           </el-form-item>
-          <el-form-item label="Auto-check task items">
+          <el-form-item :label="t('prefs.editor.autoCheck')">
             <el-switch :model-value="prefs.autoCheck" @update:model-value="v => prefs.set('autoCheck', !!v)" />
           </el-form-item>
         </el-form>
@@ -341,12 +343,12 @@ onMounted(async () => {
 
       <!-- ── Markdown ───────────────────────────────────── -->
       <section v-show="active === 'markdown'" class="prefs-section">
-        <h3>Markdown</h3>
+        <h3>{{ t('prefs.sections.markdown') }}</h3>
         <el-form label-width="220px" label-position="left">
-          <el-form-item label="Prefer loose list items">
+          <el-form-item :label="t('prefs.markdown.preferLooseListItem')">
             <el-switch :model-value="prefs.preferLooseListItem" @update:model-value="v => prefs.set('preferLooseListItem', !!v)" />
           </el-form-item>
-          <el-form-item label="Bullet list marker">
+          <el-form-item :label="t('prefs.markdown.bulletListMarker')">
             <el-select
               :model-value="prefs.bulletListMarker"
               style="width: 120px"
@@ -357,7 +359,7 @@ onMounted(async () => {
               <el-option label="+" value="+" />
             </el-select>
           </el-form-item>
-          <el-form-item label="Ordered list delimiter">
+          <el-form-item :label="t('prefs.markdown.orderListDelimiter')">
             <el-select
               :model-value="prefs.orderListDelimiter"
               style="width: 120px"
@@ -367,17 +369,17 @@ onMounted(async () => {
               <el-option label=")" value=")" />
             </el-select>
           </el-form-item>
-          <el-form-item label="Preferred heading style">
+          <el-form-item :label="t('prefs.markdown.preferHeadingStyle')">
             <el-select
               :model-value="prefs.preferHeadingStyle"
               style="width: 200px"
               @update:model-value="v => prefs.set('preferHeadingStyle', v as 'atx' | 'setext')"
             >
-              <el-option label="ATX (# Heading)" value="atx" />
-              <el-option label="Setext (Heading\\n===)" value="setext" />
+              <el-option :label="t('prefs.markdown.headingAtx')" value="atx" />
+              <el-option :label="t('prefs.markdown.headingSetext')" value="setext" />
             </el-select>
           </el-form-item>
-          <el-form-item label="Tab size">
+          <el-form-item :label="t('prefs.markdown.tabSize')">
             <el-input-number
               :model-value="prefs.tabSize"
               :min="1"
@@ -385,52 +387,52 @@ onMounted(async () => {
               @update:model-value="v => prefs.set('tabSize', Number(v))"
             />
           </el-form-item>
-          <el-form-item label="List indentation">
+          <el-form-item :label="t('prefs.markdown.listIndentation')">
             <el-select
               :model-value="prefs.listIndentation"
               style="width: 200px"
               @update:model-value="v => prefs.set('listIndentation', v as never)"
             >
-              <el-option label="DFM" value="dfm" />
-              <el-option label="Tab" value="tab" />
-              <el-option label="1 space" :value="1" />
-              <el-option label="2 spaces" :value="2" />
-              <el-option label="3 spaces" :value="3" />
-              <el-option label="4 spaces" :value="4" />
+              <el-option :label="t('prefs.markdown.listIndentDfm')" value="dfm" />
+              <el-option :label="t('prefs.markdown.listIndentTab')" value="tab" />
+              <el-option :label="t('prefs.markdown.listIndent1')" :value="1" />
+              <el-option :label="t('prefs.markdown.listIndent2')" :value="2" />
+              <el-option :label="t('prefs.markdown.listIndent3')" :value="3" />
+              <el-option :label="t('prefs.markdown.listIndent4')" :value="4" />
             </el-select>
           </el-form-item>
-          <el-form-item label="Frontmatter type">
+          <el-form-item :label="t('prefs.markdown.frontmatterType')">
             <el-select
               :model-value="prefs.frontmatterType"
               style="width: 200px"
               @update:model-value="v => prefs.set('frontmatterType', v as '-' | '+' | ';' | '{')"
             >
-              <el-option label="YAML (---)" value="-" />
-              <el-option label="TOML (+++)" value="+" />
-              <el-option label="JSON ({})" value="{" />
-              <el-option label="ezhil (;;;)" value=";" />
+              <el-option :label="t('prefs.markdown.frontmatterYaml')" value="-" />
+              <el-option :label="t('prefs.markdown.frontmatterToml')" value="+" />
+              <el-option :label="t('prefs.markdown.frontmatterJson')" value="{" />
+              <el-option :label="t('prefs.markdown.frontmatterEzhil')" value=";" />
             </el-select>
           </el-form-item>
-          <el-form-item label="Sequence diagram theme">
+          <el-form-item :label="t('prefs.markdown.sequenceTheme')">
             <el-select
               :model-value="prefs.sequenceTheme"
               style="width: 200px"
               @update:model-value="v => prefs.set('sequenceTheme', String(v))"
             >
-              <el-option label="Hand" value="hand" />
-              <el-option label="Simple" value="simple" />
+              <el-option :label="t('prefs.markdown.sequenceHand')" value="hand" />
+              <el-option :label="t('prefs.markdown.sequenceSimple')" value="simple" />
             </el-select>
           </el-form-item>
-          <el-form-item label="Superscript / Subscript">
+          <el-form-item :label="t('prefs.markdown.superSubScript')">
             <el-switch :model-value="prefs.superSubScript" @update:model-value="v => prefs.set('superSubScript', !!v)" />
           </el-form-item>
-          <el-form-item label="Footnote">
+          <el-form-item :label="t('prefs.markdown.footnote')">
             <el-switch :model-value="prefs.footnote" @update:model-value="v => prefs.set('footnote', !!v)" />
           </el-form-item>
-          <el-form-item label="Allow inline HTML">
+          <el-form-item :label="t('prefs.markdown.isHtmlEnabled')">
             <el-switch :model-value="prefs.isHtmlEnabled" @update:model-value="v => prefs.set('isHtmlEnabled', !!v)" />
           </el-form-item>
-          <el-form-item label="GitLab compatibility">
+          <el-form-item :label="t('prefs.markdown.isGitlabCompatibilityEnabled')">
             <el-switch :model-value="prefs.isGitlabCompatibilityEnabled" @update:model-value="v => prefs.set('isGitlabCompatibilityEnabled', !!v)" />
           </el-form-item>
         </el-form>
@@ -438,24 +440,24 @@ onMounted(async () => {
 
       <!-- ── Theme ──────────────────────────────────────── -->
       <section v-show="active === 'theme'" class="prefs-section">
-        <h3>Theme</h3>
+        <h3>{{ t('prefs.sections.theme') }}</h3>
         <el-form label-width="220px" label-position="left">
-          <el-form-item label="Theme">
+          <el-form-item :label="t('prefs.theme.theme')">
             <el-select
               :model-value="prefs.theme"
               style="width: 240px"
               @update:model-value="v => prefs.set('theme', v as string)"
             >
-              <el-option-group label="Built-in">
-                <el-option label="Light" value="light" />
-                <el-option label="Dark" value="dark" />
-                <el-option label="GitHub Blue" value="github-blue" />
-                <el-option label="Graphite Light" value="graphite-light" />
-                <el-option label="Material Dark" value="material-dark" />
-                <el-option label="One Dark" value="one-dark" />
-                <el-option label="Ulysses Light" value="ulysses-light" />
+              <el-option-group :label="t('prefs.theme.groupBuiltin')">
+                <el-option :label="t('prefs.theme.themeLight')" value="light" />
+                <el-option :label="t('prefs.theme.themeDark')" value="dark" />
+                <el-option :label="t('prefs.theme.themeGithubBlue')" value="github-blue" />
+                <el-option :label="t('prefs.theme.themeGraphiteLight')" value="graphite-light" />
+                <el-option :label="t('prefs.theme.themeMaterialDark')" value="material-dark" />
+                <el-option :label="t('prefs.theme.themeOneDark')" value="one-dark" />
+                <el-option :label="t('prefs.theme.themeUlyssesLight')" value="ulysses-light" />
               </el-option-group>
-              <el-option-group v-if="userThemes.length" label="User themes">
+              <el-option-group v-if="userThemes.length" :label="t('prefs.theme.groupUser')">
                 <el-option
                   v-for="ut in userThemes"
                   :key="ut.id"
@@ -465,18 +467,18 @@ onMounted(async () => {
               </el-option-group>
             </el-select>
             <el-button size="small" link style="margin-left: 12px" @click="reloadUserThemes">
-              Refresh user themes
+              {{ t('prefs.theme.refreshUserThemes') }}
             </el-button>
           </el-form-item>
-          <el-form-item label="Auto-switch theme">
+          <el-form-item :label="t('prefs.theme.autoSwitch')">
             <el-select
               :model-value="prefs.autoSwitchTheme"
               style="width: 240px"
               @update:model-value="v => prefs.set('autoSwitchTheme', Number(v))"
             >
-              <el-option label="Disabled" :value="0" />
-              <el-option label="Follow OS" :value="1" />
-              <el-option label="Use selected theme" :value="2" />
+              <el-option :label="t('prefs.theme.autoSwitchDisabled')" :value="0" />
+              <el-option :label="t('prefs.theme.autoSwitchFollowOs')" :value="1" />
+              <el-option :label="t('prefs.theme.autoSwitchUseSelected')" :value="2" />
             </el-select>
           </el-form-item>
         </el-form>
@@ -484,48 +486,48 @@ onMounted(async () => {
 
       <!-- ── Image ──────────────────────────────────────── -->
       <section v-show="active === 'image'" class="prefs-section">
-        <h3>Image</h3>
+        <h3>{{ t('prefs.sections.image') }}</h3>
         <el-form label-width="220px" label-position="left">
-          <el-form-item label="Insert action">
+          <el-form-item :label="t('prefs.image.insertAction')">
             <el-select
               :model-value="prefs.imageInsertAction"
               style="width: 220px"
               @update:model-value="v => prefs.set('imageInsertAction', v as 'upload' | 'folder' | 'path')"
             >
-              <el-option label="Use absolute path" value="path" />
-              <el-option label="Copy to image folder" value="folder" />
-              <el-option label="Upload to remote" value="upload" />
+              <el-option :label="t('prefs.image.insertActionPath')" value="path" />
+              <el-option :label="t('prefs.image.insertActionFolder')" value="folder" />
+              <el-option :label="t('prefs.image.insertActionUpload')" value="upload" />
             </el-select>
           </el-form-item>
-          <el-form-item label="Prefer relative directory">
+          <el-form-item :label="t('prefs.image.preferRelativeDirectory')">
             <el-switch :model-value="prefs.imagePreferRelativeDirectory" @update:model-value="v => prefs.set('imagePreferRelativeDirectory', !!v)" />
           </el-form-item>
-          <el-form-item label="Relative image folder name">
+          <el-form-item :label="t('prefs.image.relativeDirectoryName')">
             <el-input
               :model-value="prefs.imageRelativeDirectoryName"
               style="width: 220px"
               @update:model-value="v => prefs.set('imageRelativeDirectoryName', String(v))"
             />
           </el-form-item>
-          <el-form-item label="Image folder (absolute)">
+          <el-form-item :label="t('prefs.image.folderAbsolute')">
             <el-input
               :model-value="prefs.imageFolderPath"
               style="width: 320px"
               @update:model-value="v => prefs.patchUserData({ imageFolderPath: String(v) })"
             />
           </el-form-item>
-          <el-form-item label="Current uploader">
+          <el-form-item :label="t('prefs.image.currentUploader')">
             <el-select
               :model-value="prefs.currentUploader"
               style="width: 220px"
               @update:model-value="v => prefs.patchUserData({ currentUploader: v as 'none' | 'github' | 's3' })"
             >
-              <el-option label="None" value="none" />
-              <el-option label="GitHub" value="github" />
-              <el-option label="S3" value="s3" />
+              <el-option :label="t('prefs.image.uploaderNone')" value="none" />
+              <el-option :label="t('prefs.image.uploaderGithub')" value="github" />
+              <el-option :label="t('prefs.image.uploaderS3')" value="s3" />
             </el-select>
           </el-form-item>
-          <el-form-item v-show="prefs.currentUploader === 'github'" label="GitHub token">
+          <el-form-item v-show="prefs.currentUploader === 'github'" :label="t('prefs.image.githubToken')">
             <el-input
               :model-value="prefs.githubToken"
               type="password"
@@ -534,21 +536,21 @@ onMounted(async () => {
               @update:model-value="v => prefs.patchUserData({ githubToken: String(v) })"
             />
           </el-form-item>
-          <el-form-item v-show="prefs.currentUploader === 'github'" label="GitHub owner">
+          <el-form-item v-show="prefs.currentUploader === 'github'" :label="t('prefs.image.githubOwner')">
             <el-input
               :model-value="prefs.imageBed.github.owner"
               style="width: 220px"
               @update:model-value="v => prefs.patchUserData({ imageBed: { github: { ...prefs.imageBed.github, owner: String(v) } } })"
             />
           </el-form-item>
-          <el-form-item v-show="prefs.currentUploader === 'github'" label="GitHub repo">
+          <el-form-item v-show="prefs.currentUploader === 'github'" :label="t('prefs.image.githubRepo')">
             <el-input
               :model-value="prefs.imageBed.github.repo"
               style="width: 220px"
               @update:model-value="v => prefs.patchUserData({ imageBed: { github: { ...prefs.imageBed.github, repo: String(v) } } })"
             />
           </el-form-item>
-          <el-form-item v-show="prefs.currentUploader === 'github'" label="GitHub branch">
+          <el-form-item v-show="prefs.currentUploader === 'github'" :label="t('prefs.image.githubBranch')">
             <el-input
               :model-value="prefs.imageBed.github.branch"
               placeholder="main"
@@ -561,41 +563,39 @@ onMounted(async () => {
 
       <!-- ── Spellchecker ───────────────────────────────── -->
       <section v-show="active === 'spellchecker'" class="prefs-section">
-        <h3>Spellchecker</h3>
+        <h3>{{ t('prefs.sections.spellchecker') }}</h3>
         <el-form label-width="220px" label-position="left">
-          <el-form-item label="Enable spellchecker">
+          <el-form-item :label="t('prefs.spellchecker.enabled')">
             <el-switch :model-value="prefs.spellcheckerEnabled" @update:model-value="v => prefs.set('spellcheckerEnabled', !!v)" />
           </el-form-item>
-          <el-form-item label="Don't underline mistakes">
+          <el-form-item :label="t('prefs.spellchecker.noUnderline')">
             <el-switch :model-value="prefs.spellcheckerNoUnderline" @update:model-value="v => prefs.set('spellcheckerNoUnderline', !!v)" />
           </el-form-item>
-          <el-form-item label="Language">
+          <el-form-item :label="t('prefs.spellchecker.language')">
             <el-input
               :model-value="prefs.spellcheckerLanguage"
-              placeholder="en-US"
+              :placeholder="t('prefs.spellchecker.languagePlaceholder')"
               style="width: 220px"
               @update:model-value="v => prefs.set('spellcheckerLanguage', String(v))"
             />
           </el-form-item>
           <el-alert type="info" :closable="false" show-icon>
-            Spellchecker dictionaries are loaded via the Rust backend
-            (<code>cmd_spellcheck_available_dictionaries</code>). Hunspell
-            integration is stubbed pending Phase 7.
+            {{ t('prefs.spellchecker.info', { cmd: 'cmd_spellcheck_available_dictionaries' }) }}
           </el-alert>
         </el-form>
       </section>
 
       <!-- ── View ───────────────────────────────────────── -->
       <section v-show="active === 'view'" class="prefs-section">
-        <h3>View</h3>
+        <h3>{{ t('prefs.sections.view') }}</h3>
         <el-form label-width="220px" label-position="left">
-          <el-form-item label="Sidebar visible by default">
+          <el-form-item :label="t('prefs.view.sidebarVisibility')">
             <el-switch :model-value="prefs.sideBarVisibility" @update:model-value="v => prefs.set('sideBarVisibility', !!v)" />
           </el-form-item>
-          <el-form-item label="Tab bar visible by default">
+          <el-form-item :label="t('prefs.view.tabBarVisibility')">
             <el-switch :model-value="prefs.tabBarVisibility" @update:model-value="v => prefs.set('tabBarVisibility', !!v)" />
           </el-form-item>
-          <el-form-item label="Start in source-code mode">
+          <el-form-item :label="t('prefs.view.sourceCodeMode')">
             <el-switch :model-value="prefs.sourceCodeModeEnabled" @update:model-value="v => prefs.set('sourceCodeModeEnabled', !!v)" />
           </el-form-item>
         </el-form>
@@ -603,9 +603,9 @@ onMounted(async () => {
 
       <!-- ── Search ─────────────────────────────────────── -->
       <section v-show="active === 'search'" class="prefs-section">
-        <h3>Search</h3>
+        <h3>{{ t('prefs.sections.search') }}</h3>
         <el-form label-width="220px" label-position="left">
-          <el-form-item label="Exclusions (glob patterns)">
+          <el-form-item :label="t('prefs.search.exclusions')">
             <el-input
               type="textarea"
               :rows="4"
@@ -615,23 +615,23 @@ onMounted(async () => {
               @update:model-value="v => prefs.set('searchExclusions', String(v).split(/\r?\n/).map(s => s.trim()).filter(Boolean))"
             />
           </el-form-item>
-          <el-form-item label="Max file size (e.g. 1M)">
+          <el-form-item :label="t('prefs.search.maxFileSize')">
             <el-input
               :model-value="prefs.searchMaxFileSize"
               style="width: 200px"
               @update:model-value="v => prefs.set('searchMaxFileSize', String(v))"
             />
           </el-form-item>
-          <el-form-item label="Include hidden files">
+          <el-form-item :label="t('prefs.search.includeHidden')">
             <el-switch :model-value="prefs.searchIncludeHidden" @update:model-value="v => prefs.set('searchIncludeHidden', !!v)" />
           </el-form-item>
-          <el-form-item label="Disregard ignore files">
+          <el-form-item :label="t('prefs.search.noIgnore')">
             <el-switch :model-value="prefs.searchNoIgnore" @update:model-value="v => prefs.set('searchNoIgnore', !!v)" />
           </el-form-item>
-          <el-form-item label="Follow symlinks">
+          <el-form-item :label="t('prefs.search.followSymlinks')">
             <el-switch :model-value="prefs.searchFollowSymlinks" @update:model-value="v => prefs.set('searchFollowSymlinks', !!v)" />
           </el-form-item>
-          <el-form-item label="Watcher uses polling">
+          <el-form-item :label="t('prefs.search.watcherUsePolling')">
             <el-switch :model-value="prefs.watcherUsePolling" @update:model-value="v => prefs.set('watcherUsePolling', !!v)" />
           </el-form-item>
         </el-form>
@@ -639,11 +639,11 @@ onMounted(async () => {
 
       <!-- ── Keybindings ────────────────────────────────── -->
       <section v-show="active === 'keybindings'" class="prefs-section">
-        <h3>Keybindings</h3>
-        <p class="hint">Click a binding to record a new shortcut. Press Esc to cancel.</p>
+        <h3>{{ t('prefs.sections.keybindings') }}</h3>
+        <p class="hint">{{ t('prefs.keybindings.hint') }}</p>
         <table class="kb-table">
           <thead>
-            <tr><th>Action</th><th>Shortcut</th><th></th></tr>
+            <tr><th>{{ t('prefs.keybindings.action') }}</th><th>{{ t('prefs.keybindings.shortcut') }}</th><th></th></tr>
           </thead>
           <tbody>
             <tr v-for="(accel, id) in keys.map" :key="id">
@@ -661,7 +661,7 @@ onMounted(async () => {
                   type="text"
                   class="kb-input"
                   autofocus
-                  :value="recordedAccel || 'Press keys…'"
+                  :value="recordedAccel || t('prefs.keybindings.pressKeys')"
                   readonly
                   @keydown="onAccelKey"
                   @blur="cancelEdit"
@@ -669,14 +669,14 @@ onMounted(async () => {
               </td>
               <td>
                 <template v-if="editingAccel === id">
-                  <el-button size="small" type="primary" :disabled="!recordedAccel" @click="applyAccel">Set</el-button>
-                  <el-button size="small" @click="cancelEdit">Cancel</el-button>
+                  <el-button size="small" type="primary" :disabled="!recordedAccel" @click="applyAccel">{{ t('common.set') }}</el-button>
+                  <el-button size="small" @click="cancelEdit">{{ t('common.cancel') }}</el-button>
                 </template>
               </td>
             </tr>
           </tbody>
         </table>
-        <el-button size="small" style="margin-top: 16px" @click="keys.resetAll()">Reset all to defaults</el-button>
+        <el-button size="small" style="margin-top: 16px" @click="keys.resetAll()">{{ t('prefs.keybindings.resetAll') }}</el-button>
       </section>
     </main>
   </div>

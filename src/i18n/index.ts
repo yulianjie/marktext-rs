@@ -10,19 +10,21 @@
  *
  * Implementation: a ref<locale> + nested-key lookup. ~40 LOC, no deps.
  *
- * To add a string: put it in BOTH `en.ts` and `zh-CN.ts` under the same
- * dotted path. Untranslated keys fall back to the key itself, which makes
- * gaps loud at runtime instead of silent.
+ * To add a string: put it in `en.ts`, `zh-CN.ts`, AND `ja.ts` under the same
+ * dotted path. Untranslated keys fall back to English, which makes gaps loud
+ * at runtime instead of silent.
  */
 import { computed, ref } from 'vue'
 import en from './en'
 import zhCN from './zh-CN'
+import ja from './ja'
 
-export type LocaleId = 'en' | 'zh-CN'
+export type LocaleId = 'en' | 'zh-CN' | 'ja'
 
 const messages: Record<LocaleId, Record<string, unknown>> = {
   en,
   'zh-CN': zhCN,
+  ja,
 }
 
 const currentLocale = ref<LocaleId>('en')

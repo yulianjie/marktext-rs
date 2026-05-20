@@ -116,7 +116,7 @@ export function applyPreferencesToDom(): void {
     void applyUserTheme(theme)
 
     // Locale.
-    if (prefs.language === 'zh-CN' || prefs.language === 'en') {
+    if (prefs.language === 'zh-CN' || prefs.language === 'en' || prefs.language === 'ja') {
       setLocale(prefs.language as LocaleId)
     }
 
