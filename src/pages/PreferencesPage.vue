@@ -139,6 +139,16 @@ onMounted(async () => {
               <el-option label="Native" value="native" />
             </el-select>
           </el-form-item>
+          <el-form-item label="Remember window size">
+            <el-switch
+              :model-value="prefs.rememberWindowSize"
+              @update:model-value="v => prefs.set('rememberWindowSize', !!v)"
+            />
+            <span class="hint inline-hint">
+              Off (default): every launch opens at the default 4:3 size.
+              On: the previous size is restored. Takes effect after the next launch.
+            </span>
+          </el-form-item>
           <el-form-item label="App icon">
             <div class="icon-choices">
               <button
@@ -729,6 +739,12 @@ onMounted(async () => {
   color: var(--mt-fg-muted, #6a737d);
   font-size: 12px;
   margin: -12px 0 16px;
+}
+.inline-hint {
+  margin: 0 0 0 12px;
+  display: inline-block;
+  max-width: 360px;
+  line-height: 1.4;
 }
 .kb-table {
   width: 100%;

@@ -15,10 +15,43 @@ pub mod menu;
 pub mod preferences;
 
 use tauri::{Emitter, LogicalSize, Manager, Size};
+use tauri_plugin_window_state::StateFlags;
+
+/// Bundle identifier — kept in sync with `tauri.conf.json` `identifier`.
+/// Used to locate `preferences.json` before any Tauri plugin is initialised
+/// (we need to know whether to restore the window's saved size *before* the
+/// window-state plugin is built, but at that point the store plugin isn't
+/// available yet).
+const BUNDLE_IDENTIFIER: &str = "com.marktext.rs";
+
+/// Reads the `rememberWindowSize` preference straight off disk. Falls back
+/// to `false` (don't restore size — every launch uses the conf default) if
+/// anything fails. This mirrors `tauri-plugin-store`'s on-disk layout:
+/// `app_config_dir() / "preferences.json"`.
+fn load_remember_window_size_pref() -> bool {
+    let Some(config_dir) = dirs::config_dir() else { return false; };
+    let path = config_dir.join(BUNDLE_IDENTIFIER).join("preferences.json");
+    let Ok(content) = std::fs::read_to_string(&path) else { return false; };
+    let Ok(v): Result<serde_json::Value, _> = serde_json::from_str(&content) else { return false; };
+    v.get("rememberWindowSize")
+        .and_then(|x| x.as_bool())
+        .unwrap_or(false)
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     init_logging();
+
+    let remember_window_size = load_remember_window_size_pref();
+    // When the user hasn't opted in, drop SIZE from the restored state set so
+    // every launch uses the conf-default 1200×900 (4:3). Position and the
+    // maximized/fullscreen flags are still restored so the window opens
+    // where the user left it.
+    let window_state_flags = if remember_window_size {
+        StateFlags::all()
+    } else {
+        StateFlags::all() - StateFlags::SIZE
+    };
 
     #[allow(unused_mut)]
     let mut builder = tauri::Builder::default()
@@ -31,7 +64,11 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_cli::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
-        .plugin(tauri_plugin_window_state::Builder::default().build());
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(window_state_flags)
+                .build(),
+        );
 
     #[cfg(desktop)]
     {
@@ -68,29 +105,45 @@ pub fn run() {
     builder
         .manage(app::AppState::default())
         .invoke_handler(marktext_handler!())
-        .setup(|app| {
-            // First-launch HiDPI-aware clamp: if window-state plugin has no
-            // saved geometry and the configured 1200x900 would overflow the
-            // primary monitor's work area, scale down preserving 4:3. On
-            // monitors that fit comfortably we leave the config defaults
-            // alone — Tauri's logical-pixel sizing already preserves the
-            // perceived physical size across DPIs.
+        .setup(move |app| {
+            // HiDPI-aware 4:3 clamp. Runs every launch when the user hasn't
+            // opted in to remembering window size — the conf-default 1200×900
+            // is in effect, and on smaller monitors it needs to scale down.
+            // When `rememberWindowSize` IS on, only run on first launch (no
+            // saved geometry yet); subsequent launches restore whatever the
+            // user last had.
             if let Some(window) = app.get_webview_window("main") {
-                let state_path = app
-                    .path()
-                    .app_data_dir()
-                    .ok()
-                    .map(|d| d.join(".window-state.json"));
-                let first_launch = state_path.as_ref().map_or(true, |p| !p.exists());
+                // tauri-plugin-window-state saves to `app_config_dir()`, so
+                // detect first launch against the same path. (On Windows
+                // app_config_dir == app_data_dir, but they diverge on
+                // macOS/Linux — the old code looked at the wrong dir.)
+                let should_clamp = if remember_window_size {
+                    let state_path = app
+                        .path()
+                        .app_config_dir()
+                        .ok()
+                        .map(|d| d.join(".window-state.json"));
+                    state_path.as_ref().map_or(true, |p| !p.exists())
+                } else {
+                    true
+                };
 
-                if first_launch {
+                if should_clamp {
                     if let Ok(Some(monitor)) = window.primary_monitor() {
                         let scale = monitor.scale_factor();
                         let logical_w = monitor.size().width as f64 / scale;
                         let logical_h = monitor.size().height as f64 / scale;
                         if logical_h < 950.0 || logical_w < 1250.0 {
-                            let target_h = (logical_h * 0.9).min(900.0);
-                            let target_w = (target_h * 4.0 / 3.0).min(logical_w * 0.95);
+                            let mut target_h = (logical_h * 0.9).min(900.0);
+                            let mut target_w = target_h * 4.0 / 3.0;
+                            // Re-derive height from width when width is the
+                            // binding constraint, so the resulting box stays
+                            // 4:3 instead of squashing to ~1.29:1.
+                            let max_w = logical_w * 0.95;
+                            if target_w > max_w {
+                                target_w = max_w;
+                                target_h = target_w * 3.0 / 4.0;
+                            }
                             let _ = window.set_size(Size::Logical(LogicalSize {
                                 width: target_w,
                                 height: target_h,

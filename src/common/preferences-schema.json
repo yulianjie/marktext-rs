@@ -18,6 +18,11 @@
     ],
     "default": "custom"
   },
+  "rememberWindowSize": {
+    "description": "General--Restore the previous window size on startup. When off, every launch uses the default 4:3 size (position is still remembered).",
+    "type": "boolean",
+    "default": false
+  },
   "appIcon": {
     "description": "General--The application icon used for runtime windows and in-app branding.",
     "enum": [

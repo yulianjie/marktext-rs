@@ -24,6 +24,7 @@ interface State {
   autoSave: boolean
   autoSaveDelay: number
   titleBarStyle: 'custom' | 'native'
+  rememberWindowSize: boolean
   appIcon: AppIconId
   openFilesInNewWindow: boolean
   openFolderInNewWindow: boolean
@@ -121,6 +122,7 @@ const defaults: State = {
   autoSave: false,
   autoSaveDelay: 5000,
   titleBarStyle: 'custom',
+  rememberWindowSize: false,
   appIcon: 'ios26',
   openFilesInNewWindow: false,
   openFolderInNewWindow: false,
