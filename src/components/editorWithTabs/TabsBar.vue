@@ -25,13 +25,13 @@ function activate(id: string) {
 
 function close(id: string, ev: MouseEvent) {
   ev.stopPropagation()
-  editor.closeTab(id)
+  void editor.closeTab(id)
 }
 
 function onMiddleClick(id: string, ev: MouseEvent) {
   if (ev.button === 1) {
     ev.preventDefault()
-    editor.closeTab(id)
+    void editor.closeTab(id)
   }
 }
 
@@ -54,12 +54,12 @@ function onTabContextMenu(id: string, ev: MouseEvent) {
     x: ev.clientX,
     y: ev.clientY,
     items: [
-      { label: t('tabs.closeTab'), action: () => editor.closeTab(id) },
-      { label: t('tabs.closeOthers'), action: () => {
-        for (const t of [...editor.tabs]) if (t.id !== id) editor.closeTab(t.id)
+      { label: t('tabs.closeTab'), action: () => { void editor.closeTab(id) } },
+      { label: t('tabs.closeOthers'), action: async () => {
+        for (const t of [...editor.tabs]) if (t.id !== id) await editor.closeTab(t.id)
       } },
-      { label: t('tabs.closeAll'), action: () => {
-        for (const t of [...editor.tabs]) editor.closeTab(t.id)
+      { label: t('tabs.closeAll'), action: async () => {
+        for (const t of [...editor.tabs]) await editor.closeTab(t.id)
       } },
       { divider: true },
       { label: t('tabs.rename'), action: () => { editor.setCurrent(id); bus.emit('rename', undefined) } },

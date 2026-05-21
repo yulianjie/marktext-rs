@@ -135,7 +135,7 @@ const MENU_ACTIONS: Record<string, () => void | Promise<void>> = {
   'file.exportOdt': () => doExportPandoc('odt'),
   'file.exportEpub': () => doExportPandoc('epub'),
   'file.print': doPrint,
-  'file.closeTab': () => { if (editor.currentFileId) editor.closeTab(editor.currentFileId) },
+  'file.closeTab': () => { if (editor.currentFileId) void editor.closeTab(editor.currentFileId) },
   'file.closeWindow': async () => { const win = await import('@tauri-apps/api/window'); await win.getCurrentWindow().close() },
   'edit.find': () => { editor.findReplaceOpen = true },
   'edit.replace': () => { editor.findReplaceOpen = true },

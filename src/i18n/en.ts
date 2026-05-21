@@ -144,7 +144,14 @@ export default {
     renameFailed: 'Rename failed',
     editorNotReady: 'Editor not ready.',
     exportedTo: 'Exported to {path}',
-    unsavedWarning: '{filename} has unsaved changes — save or discard first.',
+  },
+  closeConfirm: {
+    title: 'Unsaved changes',
+    message: 'Do you want to save the changes you made to {filename}?',
+    detail: 'Your changes will be lost if you don\'t save them.',
+    save: 'Save',
+    dontSave: 'Don\'t Save',
+    cancel: 'Cancel',
   },
   prefs: {
     title: 'Preferences',

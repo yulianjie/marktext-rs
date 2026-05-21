@@ -16,8 +16,8 @@ const props = defineProps<Props>()
 const editor = useEditorStore()
 
 function activate() { editor.setCurrent(props.tab.id) }
-function close(ev: MouseEvent) { ev.stopPropagation(); editor.closeTab(props.tab.id) }
-function onMiddle(ev: MouseEvent) { if (ev.button === 1) { ev.preventDefault(); editor.closeTab(props.tab.id) } }
+function close(ev: MouseEvent) { ev.stopPropagation(); void editor.closeTab(props.tab.id) }
+function onMiddle(ev: MouseEvent) { if (ev.button === 1) { ev.preventDefault(); void editor.closeTab(props.tab.id) } }
 
 function parentDirOf(p: string): string {
   const idx = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\'))
@@ -32,12 +32,12 @@ function onContextMenu(ev: MouseEvent) {
     x: ev.clientX,
     y: ev.clientY,
     items: [
-      { label: t('tabs.closeTab'), action: () => editor.closeTab(id) },
-      { label: t('tabs.closeOthers'), action: () => {
-        for (const tt of [...editor.tabs]) if (tt.id !== id) editor.closeTab(tt.id)
+      { label: t('tabs.closeTab'), action: () => { void editor.closeTab(id) } },
+      { label: t('tabs.closeOthers'), action: async () => {
+        for (const tt of [...editor.tabs]) if (tt.id !== id) await editor.closeTab(tt.id)
       } },
-      { label: t('tabs.closeAll'), action: () => {
-        for (const tt of [...editor.tabs]) editor.closeTab(tt.id)
+      { label: t('tabs.closeAll'), action: async () => {
+        for (const tt of [...editor.tabs]) await editor.closeTab(tt.id)
       } },
       { divider: true },
       { label: t('tabs.rename'), action: () => { editor.setCurrent(id); bus.emit('rename', undefined) } },

@@ -142,7 +142,14 @@ export default {
     renameFailed: '名前の変更に失敗',
     editorNotReady: 'エディターが準備できていません。',
     exportedTo: '{path} にエクスポートしました',
-    unsavedWarning: '{filename} に未保存の変更があります — 先に保存または破棄してください。',
+  },
+  closeConfirm: {
+    title: '未保存の変更',
+    message: '{filename} への変更を保存しますか？',
+    detail: '保存しない場合、変更は失われます。',
+    save: '保存',
+    dontSave: '保存しない',
+    cancel: 'キャンセル',
   },
   prefs: {
     title: '環境設定',

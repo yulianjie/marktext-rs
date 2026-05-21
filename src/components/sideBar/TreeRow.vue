@@ -48,7 +48,7 @@ async function trashAndCloseTab(path: string) {
   try {
     await trashFile(path)
     const tab = editor.tabs.find(t => t.pathname === path)
-    if (tab) editor.closeTab(tab.id)
+    if (tab) void editor.closeTab(tab.id, true)
   } catch (err) {
     notify.pushToast({
       type: 'error',

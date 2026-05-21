@@ -142,7 +142,14 @@ export default {
     renameFailed: '重命名失败',
     editorNotReady: '编辑器尚未就绪。',
     exportedTo: '已导出到 {path}',
-    unsavedWarning: '{filename} 有未保存的更改 — 请先保存或放弃。',
+  },
+  closeConfirm: {
+    title: '未保存的更改',
+    message: '是否保存对 {filename} 所做的更改？',
+    detail: '如果不保存，更改将会丢失。',
+    save: '保存',
+    dontSave: '不保存',
+    cancel: '取消',
   },
   prefs: {
     title: '偏好设置',

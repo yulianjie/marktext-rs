@@ -16,6 +16,7 @@
 
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
+import { ElMessageBox } from 'element-plus'
 import {
   defaultFileState,
   getBlankFileState,
@@ -31,6 +32,7 @@ import {
   saveAsDialog,
   renameFile as renameFileCmd,
 } from '@/services/tauri-invoke'
+import { t } from '@/i18n'
 import { v4 as uuid } from '@/util/uuid'
 
 export interface TocItem {
@@ -123,17 +125,55 @@ export const useEditorStore = defineStore('editor', () => {
     return file
   }
 
-  function closeTab(id: string) {
+  /**
+   * Close a tab. If the tab has unsaved changes (and `force` is not set),
+   * prompt the user with Save / Don't Save / Cancel:
+   *   - Save     → save the tab, then close (aborts close if the save fails
+   *                or the Save-As dialog is dismissed for an untitled tab)
+   *   - Don't Save → close, discarding changes
+   *   - Cancel   → keep the tab open
+   * Returns `true` if the tab was closed.
+   */
+  async function closeTab(id: string, force = false): Promise<boolean> {
+    const tab = tabs.value.find(t => t.id === id)
+    if (!tab) return false
+
+    if (!force && !tab.isSaved) {
+      let choice: 'save' | 'dontSave' | 'cancel'
+      try {
+        await ElMessageBox.confirm(
+          t('closeConfirm.detail'),
+          t('closeConfirm.message', { filename: tab.filename }),
+          {
+            confirmButtonText: t('closeConfirm.save'),
+            cancelButtonText: t('closeConfirm.dontSave'),
+            distinguishCancelAndClose: true,
+            type: 'warning',
+            closeOnClickModal: false,
+          },
+        )
+        choice = 'save'
+      } catch (action) {
+        // ElMessageBox rejects with 'cancel' (cancel button) or 'close' (X / Esc).
+        choice = action === 'cancel' ? 'dontSave' : 'cancel'
+      }
+
+      if (choice === 'cancel') return false
+      if (choice === 'save') {
+        const ok = await saveTab(tab)
+        if (!ok) return false
+      }
+      // 'dontSave' falls through to removal.
+    }
+
+    removeTab(id)
+    return true
+  }
+
+  /** Remove a tab from the list and pick a sensible next active tab. */
+  function removeTab(id: string) {
     const idx = tabs.value.findIndex(t => t.id === id)
     if (idx === -1) return
-    const tab = tabs.value[idx]
-    if (!tab.isSaved) {
-      notify.pushToast({
-        type: 'warning',
-        message: `${tab.filename} has unsaved changes — save or discard first.`,
-      })
-      return
-    }
     tabs.value.splice(idx, 1)
     if (currentFileId.value === id) {
       const next = tabs.value[idx] || tabs.value[idx - 1] || null
