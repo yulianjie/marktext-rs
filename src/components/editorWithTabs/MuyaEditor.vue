@@ -8,22 +8,49 @@
  * `mount()` produced a microtask race where two Muya instances were
  * constructed for the initial Untitled tab, leaving the DOM half-built
  * and breaking the first inline conversion (e.g. `## hi` → H2).
+ *
+ * Layered services this host wires together (Step 1–6 of the
+ * "对齐 marktext 编辑效果" plan):
+ *
+ *   1. Constructor options come straight from `usePreferencesStore` —
+ *      no hardcoded defaults; the Muya engine reads what the user has
+ *      configured.
+ *   2. `applyPreferencesToMuya(muya)` installs 24 reactive watchers so
+ *      every later prefs change is pushed into the live instance.
+ *   3. Subscribes to Muya's `selectionChange` / `selectionFormats` /
+ *      `format-click` events for typewriter scroll, native-menu ✓ marks,
+ *      and Ctrl/Cmd-click on links/images.
+ *   4. Image-picker / autocomplete / clipboard-path callbacks are routed
+ *      through `muya-image-picker.ts` (Tauri dialog + listDirectory).
+ *   5. Prism light/dark CSS is hot-swapped from `muya-preferences-applier.ts`'s
+ *      `theme` watcher — no static `import`.
+ *   6. Extra bus handlers (`duplicate`, `insertParagraph`, `insert-image`,
+ *      `invalidate-image-cache`, `switch-spellchecker-language`, …) are
+ *      installed in `installBusHandlers()`.
  */
 import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { open as openExternal } from '@tauri-apps/plugin-shell'
 import { useEditorStore } from '@/stores/editor'
+import { usePreferencesStore } from '@/stores/preferences'
 import { muyaImageAction } from '@/services/muya-image-action'
+import {
+  muyaImagePathPicker,
+  muyaImagePathAutoComplete,
+  muyaClipboardFilePath,
+} from '@/services/muya-image-picker'
+import { applyPreferencesToMuya } from '@/services/muya-preferences-applier'
+import { setFormatMenuState } from '@/services/tauri-invoke'
+import { spellchecker } from '@/services/spellchecker'
 import { bus } from '@/bus'
-// Prism token colors — the editor renders highlighted code as <span class="token …">,
-// but Muya's own stylesheet doesn't ship the prism theme. Without this import the
-// token spans are emitted but render in the default text color.
-import 'muya/themes/prismjs/light.theme.css'
 
 const editor = useEditorStore()
+const prefs = usePreferencesStore()
 
 const editorRoot = ref<HTMLDivElement | null>(null)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const muyaRef = shallowRef<any>(null)
 const activeBoundId = ref<string | null>(null)
+let disposePrefsApplier: (() => void) | null = null
 
 async function loadMuya() {
   const { default: Muya } = await import('muya/lib')
@@ -51,12 +78,20 @@ async function loadMuya() {
     Muya.use(CodePicker)
     Muya.use(EmojiPicker)
     Muya.use(ImagePathPicker)
-    Muya.use(ImageSelector, { unsplashAccessKey: '', photoCreatorClick: () => {} })
+    Muya.use(ImageSelector, {
+      unsplashAccessKey: '',
+      photoCreatorClick: (url: string) => { void openExternal(url) },
+    })
     Muya.use(Transformer)
     Muya.use(ImageToolbar)
     Muya.use(FormatPicker)
     Muya.use(FrontMenu)
-    Muya.use(LinkTools, { jumpClick: () => {} })
+    Muya.use(LinkTools, {
+      jumpClick: (linkInfo: { href?: string }) => {
+        const href = linkInfo?.href
+        if (href) void openExternal(href)
+      },
+    })
     Muya.use(FootnoteTool)
     Muya.use(TableBarTools)
     Muya.__pluginsRegistered = true
@@ -68,35 +103,61 @@ async function loadMuya() {
 async function construct() {
   if (muyaRef.value || !editorRoot.value) return
   const Muya = await loadMuya()
+  const isDark = /dark/i.test(prefs.theme)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let muya: any
   try {
     muya = new Muya(editorRoot.value, {
+      // ── content / focus ───────────────────────────────────────
       markdown: '',
-      focusMode: false,
-      bulletListMarker: '-',
-      orderListMarker: '.',
-      preferLooseListItem: true,
-      autoPairBracket: true,
-      autoPairMarkdownSyntax: true,
-      autoPairQuote: true,
-      tabSize: 4,
-      listIndentation: 1,
-      frontmatterType: '-',
-      isHtmlEnabled: true,
-      sequenceTheme: 'hand',
-      hideQuickInsertHint: false,
-      hideLinkPopup: false,
-      autoCheck: false,
-      // Muya calls this whenever it materialises an image (drag/paste/local
-      // picker). The service routes the file/path through the preference-
-      // driven path/folder/upload strategies.
+      focusMode: prefs.focus,
+      // ── typography ────────────────────────────────────────────
+      fontSize: prefs.fontSize,
+      lineHeight: prefs.lineHeight,
+      // ── lists / indentation ───────────────────────────────────
+      bulletListMarker: prefs.bulletListMarker,
+      // Muya's actual option key is `orderListDelimiter` — the old code
+      // passed `orderListMarker`, which Muya silently ignored.
+      orderListDelimiter: prefs.orderListDelimiter,
+      preferLooseListItem: prefs.preferLooseListItem,
+      tabSize: prefs.tabSize,
+      listIndentation: prefs.listIndentation,
+      // ── auto-pair ─────────────────────────────────────────────
+      autoPairBracket: prefs.autoPairBracket,
+      autoPairMarkdownSyntax: prefs.autoPairMarkdownSyntax,
+      autoPairQuote: prefs.autoPairQuote,
+      // ── Markdown extensions ───────────────────────────────────
+      frontmatterType: prefs.frontmatterType,
+      superSubScript: prefs.superSubScript,
+      footnote: prefs.footnote,
+      isGitlabCompatibilityEnabled: prefs.isGitlabCompatibilityEnabled,
+      // Muya reads `disableHtml`; the prefs flag is the opposite ("is HTML
+      // enabled?") so invert. Previously the wrapper passed the original
+      // pref key which Muya didn't recognise → HTML render permanently off.
+      disableHtml: !prefs.isHtmlEnabled,
+      trimUnnecessaryCodeBlockEmptyLines: prefs.trimUnnecessaryCodeBlockEmptyLines,
+      codeBlockLineNumbers: prefs.codeBlockLineNumbers,
+      // ── behaviour ─────────────────────────────────────────────
+      hideQuickInsertHint: prefs.hideQuickInsertHint,
+      hideLinkPopup: prefs.hideLinkPopup,
+      autoCheck: prefs.autoCheck,
+      spellcheckEnabled: prefs.spellcheckerEnabled,
+      // ── diagram themes ────────────────────────────────────────
+      sequenceTheme: prefs.sequenceTheme,
+      mermaidTheme: isDark ? 'dark' : 'default',
+      vegaTheme: isDark ? 'dark' : 'latimes',
+      // ── host callbacks ────────────────────────────────────────
       imageAction: muyaImageAction,
+      imagePathPicker: muyaImagePathPicker,
+      imagePathAutoComplete: muyaImagePathAutoComplete,
+      clipboardFilePath: muyaClipboardFilePath,
     })
   } catch (err) {
     console.error('[Muya constructor failed]', err)
     return
   }
+
+  // ── content change ──────────────────────────────────────────
   // Resolve the active tab at event-fire time, not closure time — the single
   // instance survives tab switches so the listener must always write into
   // whichever tab is currently mounted.
@@ -109,9 +170,75 @@ async function construct() {
       toc: changes.toc as { lvl: number; content: string; slug?: string }[] | undefined,
     })
   })
+
+  // ── selectionChange: typewriter scroll + cursor-stay-in-view ───
+  muya.on('selectionChange', (changes: { cursorCoords?: { y: number } }) => {
+    const container = editorRoot.value?.parentElement
+    const y = changes?.cursorCoords?.y
+    if (!container || typeof y !== 'number') return
+    if (prefs.typewriter) {
+      const target = container.scrollTop + y - container.clientHeight / 2
+      if (Math.abs(container.scrollTop - target) > 2) {
+        animatedScrollTo(container, target, 100)
+      }
+    }
+    // Mirror upstream fix #628: keep cursor visible when it sinks below the
+    // last 100px of the viewport.
+    if (container.clientHeight - y < 100) {
+      const editableHeight = container.clientHeight - 100
+      animatedScrollTo(container, container.scrollTop + (y - editableHeight), 0)
+    }
+  })
+
+  // ── selectionFormats: drive native-menu ✓ marks + future toolbar ──
+  // Muya hands us an array of `{ type, … }` tokens. We strip down to the
+  // type names so both the renderer toolbar and the Rust menu see a flat
+  // list of strings.
+  muya.on('selectionFormats', (formats: Array<{ type: string }>) => {
+    const types = Array.isArray(formats) ? formats.map(f => f?.type).filter(Boolean) : []
+    editor.setSelectionFormats(types)
+    void setFormatMenuState(types).catch(() => {
+      // Settings window doesn't have a menu — invocations from there will
+      // fail; not a real error.
+    })
+  })
+
+  // ── format-click: Ctrl/Cmd+click on link / image ──────────────
+  muya.on('format-click', ({ event, formatType, data }: {
+    event: MouseEvent
+    formatType: string
+    data: string | { text: string; href: string }
+  }) => {
+    const isOsx = navigator.platform.toLowerCase().includes('mac')
+    const ctrlOrMeta = (isOsx && event.metaKey) || (!isOsx && event.ctrlKey)
+    if (!ctrlOrMeta) return
+    if (formatType === 'link' && typeof data === 'object' && data.href) {
+      void openExternal(data.href)
+    } else if (formatType === 'image' && typeof data === 'string' && data) {
+      bus.emit('image-preview/open', { src: data })
+    }
+  })
+
   muyaRef.value = muya
   editor.setMuyaInstance(muya)
+  disposePrefsApplier = applyPreferencesToMuya(muya)
   console.info('[Muya] constructed')
+}
+
+/** Lightweight ease-out scroll-to-y. Used for typewriter mode. */
+function animatedScrollTo(el: HTMLElement, to: number, durationMs: number) {
+  if (durationMs <= 0) { el.scrollTop = to; return }
+  const start = el.scrollTop
+  const delta = to - start
+  const startTime = performance.now()
+  function step(now: number) {
+    const t = Math.min(1, (now - startTime) / durationMs)
+    // easeOutCubic
+    const eased = 1 - Math.pow(1 - t, 3)
+    el.scrollTop = start + delta * eased
+    if (t < 1) requestAnimationFrame(step)
+  }
+  requestAnimationFrame(step)
 }
 
 /** Swap the displayed document. Mirrors the original setMarkdownToEditor. */
@@ -147,13 +274,15 @@ watch(
  * Each handler short-circuits if no instance is mounted yet. */
 const busUnsubs: Array<() => void> = []
 
-function withMuya(fn: (muya: any) => void) { // eslint-disable-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function withMuya(fn: (muya: any) => void) {
   const m = muyaRef.value
   if (!m) return
   try { fn(m) } catch (err) { console.warn('[Muya action failed]', err) }
 }
 
 function installBusHandlers() {
+  // ── paragraph / format / clipboard ────────────────────────────
   busUnsubs.push(bus.on('paragraph', (type) => withMuya(m => m.updateParagraph(type))))
   busUnsubs.push(bus.on('format', (type) => withMuya(m => m.format(type))))
   busUnsubs.push(bus.on('undo', () => withMuya(m => m.undo())))
@@ -162,7 +291,32 @@ function installBusHandlers() {
   busUnsubs.push(bus.on('copyAsMarkdown', () => withMuya(m => m.copyAsMarkdown?.())))
   busUnsubs.push(bus.on('copyAsHtml', () => withMuya(m => m.copyAsHtml?.())))
   busUnsubs.push(bus.on('pasteAsPlainText', () => withMuya(m => m.pasteAsPlainText?.())))
-  // Find / replace — Muya returns updated searchMatches we push into the tab.
+
+  // ── paragraph manipulation (mirrors upstream bus channels) ────
+  busUnsubs.push(bus.on('duplicate', () => withMuya(m => m.duplicate?.())))
+  busUnsubs.push(bus.on('createParagraph', () => withMuya(m => m.insertParagraph?.('after'))))
+  busUnsubs.push(bus.on('deleteParagraph', () => withMuya(m => m.deleteParagraph?.())))
+  busUnsubs.push(bus.on('insertParagraph', ({ location, text, outMost }) =>
+    withMuya(m => m.insertParagraph?.(location, text, outMost))))
+
+  // ── images ─────────────────────────────────────────────────────
+  busUnsubs.push(bus.on('insert-image', (imageInfo) => withMuya(m => m.insertImage?.(imageInfo))))
+  busUnsubs.push(bus.on('invalidate-image-cache', () => withMuya(m => m.invalidateImageCache?.())))
+
+  // ── tables (dialog-driven) ────────────────────────────────────
+  busUnsubs.push(bus.on('insert-table', ({ rows, columns }) =>
+    withMuya(m => m.createTable?.({ rows, columns }))))
+
+  // ── spellchecker (Muya owns the contenteditable attribute) ────
+  busUnsubs.push(bus.on('switch-spellchecker-language', (lang) => {
+    void spellchecker.setLanguage(lang)
+    withMuya(m => m.setOptions?.({ spellcheckEnabled: spellchecker.enabled }))
+  }))
+  busUnsubs.push(bus.on('replace-misspelling', ({ word, replacement }) => {
+    spellchecker.replaceMisspelling(word, replacement)
+  }))
+
+  // ── find / replace ────────────────────────────────────────────
   busUnsubs.push(bus.on('find', ({ value, opt }) => withMuya(m => {
     const matches = m.search(value, opt)
     if (matches) editor.applySearchResult(matches)
@@ -187,7 +341,8 @@ function installBusHandlers() {
     if (matches) editor.applySearchResult(matches)
     scrollToHighlight()
   })))
-  // TOC click navigation.
+
+  // ── TOC click navigation ──────────────────────────────────────
   busUnsubs.push(bus.on('scroll-to-header', (slug) => {
     const el = document.getElementById(slug)
     el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -213,7 +368,11 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   for (const off of busUnsubs) { try { off() } catch { /* ignore */ } }
   busUnsubs.length = 0
+  try { disposePrefsApplier?.() } catch { /* ignore */ }
+  disposePrefsApplier = null
   editor.clearMuyaInstance()
+  // Clear any leftover ✓ marks before the window/menu may be GC'd.
+  void setFormatMenuState([]).catch(() => { /* ignore */ })
   try { muyaRef.value?.destroy?.() } catch (err) {
     console.warn('[Muya destroy] non-fatal:', err)
   }

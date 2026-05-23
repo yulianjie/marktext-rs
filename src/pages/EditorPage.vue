@@ -16,8 +16,12 @@ import CommandPalette from '@/components/commandPalette/CommandPalette.vue'
 import AboutDialog from '@/components/about/AboutDialog.vue'
 import RenameDialog from '@/components/rename/RenameDialog.vue'
 import RecentDialog from '@/components/recent/RecentDialog.vue'
+import TableDialog from '@/components/table/TableDialog.vue'
+import UpdaterDialog from '@/components/updater/UpdaterDialog.vue'
+import ExportSettingsDialog from '@/components/exportSettings/ExportSettingsDialog.vue'
 import FindReplaceBar from '@/components/search/FindReplaceBar.vue'
 import ContextMenu from '@/components/contextMenu/ContextMenu.vue'
+import ImagePreview from '@/components/imagePreview/ImagePreview.vue'
 import { useEditorStore } from '@/stores/editor'
 import { useLayoutStore } from '@/stores/layout'
 import { usePreferencesStore } from '@/stores/preferences'
@@ -95,7 +99,7 @@ async function doExportHtml() {
   }
 }
 
-function doPrint() { window.print() }
+function doPrint() { bus.emit('show-export-dialog', undefined) }
 
 async function doExportPandoc(format: 'docx' | 'odt' | 'epub') {
   const tab = editor.currentFile
@@ -170,11 +174,29 @@ const MENU_ACTIONS: Record<string, () => void | Promise<void>> = {
   'help.about': () => bus.emit('aboutDialog', undefined),
   'help.openDocs': async () => { const sh = await import('@tauri-apps/plugin-shell'); await sh.open('https://github.com/marktext/marktext') },
   'help.openIssues': async () => { const sh = await import('@tauri-apps/plugin-shell'); await sh.open('https://github.com/marktext/marktext/issues') },
+  'help.checkForUpdates': () => bus.emit('show-updater-dialog', undefined),
 }
 
 function routeMenuAction(id: string) {
+  // Tables: ask for rows/cols before insertion rather than relying on Muya's
+  // default 3×3. Matches the upstream Electron behaviour.
+  if (id === 'paragraph.table') { bus.emit('show-table-dialog', undefined); return }
   if (id.startsWith('paragraph.')) { bus.emit('paragraph', id.slice('paragraph.'.length)); return }
   if (id.startsWith('format.')) { bus.emit('format', id.slice('format.'.length)); return }
+  if (id.startsWith('theme.set:')) {
+    const theme = id.slice('theme.set:'.length)
+    void prefs.set('theme', theme)
+    return
+  }
+  if (id.startsWith('file.openRecent:')) {
+    const path = id.slice('file.openRecent:'.length)
+    void editor.openFile(path).catch(err => {
+      notify.pushToast({ type: 'error', title: t('toast.openFailed'), message: err instanceof Error ? err.message : String(err) })
+    })
+    return
+  }
+  if (id === 'file.clearRecent') { prefs.clearRecents(); return }
+  if (id === 'file.openRecent.empty') return
   const fn = MENU_ACTIONS[id]
   if (fn) void fn()
   else console.warn('[menu] no handler for action', id)
@@ -287,7 +309,11 @@ onBeforeUnmount(() => {
     <AboutDialog />
     <RenameDialog />
     <RecentDialog />
+    <TableDialog />
+    <UpdaterDialog />
+    <ExportSettingsDialog />
     <ContextMenu />
+    <ImagePreview />
     <div v-if="dragOver" class="drop-veil">Drop to open</div>
   </div>
 </template>

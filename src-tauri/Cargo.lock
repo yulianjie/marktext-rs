@@ -2645,6 +2645,7 @@ dependencies = [
  "reqwest 0.12.28",
  "serde",
  "serde_json",
+ "spellbook",
  "tauri",
  "tauri-build",
  "tauri-plugin-cli",
@@ -4542,6 +4543,16 @@ dependencies = [
  "gobject-sys",
  "libc",
  "system-deps",
+]
+
+[[package]]
+name = "spellbook"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "35ee5dba289ba4e50d9debb3bb939e61878dadb3e8ee94ddbaddcb14f06f9d4c"
+dependencies = [
+ "foldhash 0.2.0",
+ "hashbrown 0.17.1",
 ]
 
 [[package]]

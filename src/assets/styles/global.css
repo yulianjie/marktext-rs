@@ -43,28 +43,103 @@
   -webkit-font-smoothing: antialiased;
 }
 
-[data-theme='dark'],
-[data-theme='material-dark'],
-[data-theme='one-dark'] {
-  --mt-bg: #1e1e1e;
-  --mt-fg: #d4d4d4;
-  --mt-fg-muted: #9da5ad;
-  --mt-border: #333333;
+/* ── Built-in theme palettes ─────────────────────────────────────
+ *
+ * Each `[data-theme='*']` block defines a full palette so themes feel
+ * distinct, not just an accent recolouring. Ported from the upstream
+ * Electron theme files (`marktext/src/renderer/assets/themes/*.theme.css`)
+ * — variable names adapted to our `--mt-*` namespace.
+ */
+
+[data-theme='dark'] {
+  --mt-bg: #282828;
+  --mt-fg: rgba(255, 255, 255, 0.7);
+  --mt-fg-muted: rgba(255, 255, 255, 0.5);
+  --mt-border: #363839;
   --mt-accent: #409eff;
-  --mt-sidebar-bg: #252526;
-  --mt-row-hover: rgba(255, 255, 255, 0.03);
-  --mt-row-active: #37373d;
-  --mt-tab-bg: #2d2d2e;
-  --mt-tab-bg-active: #1e1e1e;
-  --mt-code-bg: #2a2a2a;
+  --mt-sidebar-bg: #1f1f1f;
+  --mt-row-hover: rgba(255, 255, 255, 0.04);
+  --mt-row-active: #424344;
+  --mt-tab-bg: #1f1f1f;
+  --mt-tab-bg-active: #282828;
+  --mt-code-bg: #424344;
   --mt-shadow: rgba(0, 0, 0, 0.5);
 }
 
-[data-theme='material-dark'] { --mt-accent: #80cbc4; }
-[data-theme='one-dark']      { --mt-accent: #61afef; }
-[data-theme='graphite-light'] { --mt-accent: #7e57c2; }
-[data-theme='ulysses-light']  { --mt-accent: #c0392b; }
-[data-theme='github-blue']    { --mt-accent: #0366d6; }
+[data-theme='one-dark'] {
+  --mt-bg: #2c313c;
+  --mt-fg: #abb2bf;
+  --mt-fg-muted: #8a91a0;
+  --mt-border: #3e4451;
+  --mt-accent: #61afef;
+  --mt-sidebar-bg: #21252b;
+  --mt-row-hover: rgba(255, 255, 255, 0.04);
+  --mt-row-active: #3e4451;
+  --mt-tab-bg: #21252b;
+  --mt-tab-bg-active: #2c313c;
+  --mt-code-bg: #21252b;
+  --mt-shadow: rgba(0, 0, 0, 0.5);
+}
+
+[data-theme='material-dark'] {
+  --mt-bg: #34393e;
+  --mt-fg: #c8d6dc;
+  --mt-fg-muted: #95a3aa;
+  --mt-border: #4a4e57;
+  --mt-accent: #80cbc4;
+  --mt-sidebar-bg: #2b3034;
+  --mt-row-hover: rgba(255, 255, 255, 0.04);
+  --mt-row-active: #41464d;
+  --mt-tab-bg: #2b3034;
+  --mt-tab-bg-active: #34393e;
+  --mt-code-bg: #2b3034;
+  --mt-shadow: rgba(0, 0, 0, 0.5);
+}
+
+[data-theme='graphite-light'] {
+  --mt-bg: #f7f7f7;
+  --mt-fg: #3a3a3a;
+  --mt-fg-muted: #6e6e6e;
+  --mt-border: #d9d9d9;
+  --mt-accent: #7e57c2;
+  --mt-sidebar-bg: #ececec;
+  --mt-row-hover: rgba(0, 0, 0, 0.03);
+  --mt-row-active: #dcdcdc;
+  --mt-tab-bg: #ececec;
+  --mt-tab-bg-active: #f7f7f7;
+  --mt-code-bg: #efefef;
+  --mt-shadow: rgba(0, 0, 0, 0.10);
+}
+
+[data-theme='ulysses-light'] {
+  --mt-bg: #fafaf7;
+  --mt-fg: #1a1a1a;
+  --mt-fg-muted: #6d6d6d;
+  --mt-border: #e6e3da;
+  --mt-accent: #c0392b;
+  --mt-sidebar-bg: #f1ede2;
+  --mt-row-hover: rgba(0, 0, 0, 0.03);
+  --mt-row-active: #e7e0cd;
+  --mt-tab-bg: #f1ede2;
+  --mt-tab-bg-active: #fafaf7;
+  --mt-code-bg: #f3efe5;
+  --mt-shadow: rgba(0, 0, 0, 0.08);
+}
+
+[data-theme='github-blue'] {
+  --mt-bg: #ffffff;
+  --mt-fg: #24292e;
+  --mt-fg-muted: #586069;
+  --mt-border: #e1e4e8;
+  --mt-accent: #0366d6;
+  --mt-sidebar-bg: #f6f8fa;
+  --mt-row-hover: rgba(0, 0, 0, 0.04);
+  --mt-row-active: #dbedff;
+  --mt-tab-bg: #f6f8fa;
+  --mt-tab-bg-active: #ffffff;
+  --mt-code-bg: #f6f8fa;
+  --mt-shadow: rgba(27, 31, 35, 0.10);
+}
 
 body {
   margin: 0;

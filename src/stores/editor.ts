@@ -66,6 +66,11 @@ export const useEditorStore = defineStore('editor', () => {
   const sourceCodeMode = ref(false)
   /** True when the in-editor find/replace bar is visible. */
   const findReplaceOpen = ref(false)
+  /** Flat list of "active" inline-format token names at the current Muya
+   *  selection (e.g. `['strong', 'em']` on bold+italic text). Refreshed by
+   *  the `selectionFormats` listener in MuyaEditor.vue and consumed by the
+   *  toolbar / native menu ✓ marks. */
+  const currentSelectionFormats = ref<string[]>([])
   /** Non-reactive handle to the live Muya instance, set by MuyaEditor on
    *  mount. Lets non-component code (e.g. menu actions / export) reach into
    *  Muya without dragging a ref around. */
@@ -279,6 +284,11 @@ export const useEditorStore = defineStore('editor', () => {
   function clearMuyaInstance() { muyaInstance = null }
   function getMuyaInstance(): unknown { return muyaInstance }
 
+  /** Replace the cached selection-format set. Pass an empty array on blur. */
+  function setSelectionFormats(types: string[]) {
+    currentSelectionFormats.value = types
+  }
+
   /** Forward a Muya search-result blob into the current tab's state so the
    *  find bar can show "n of m" counters. */
   function applySearchResult(matches: { index: number; matches: unknown[]; value: string }) {
@@ -333,6 +343,7 @@ export const useEditorStore = defineStore('editor', () => {
     listToc,
     sourceCodeMode,
     findReplaceOpen,
+    currentSelectionFormats,
     // getters
     currentFile,
     toc,
@@ -361,6 +372,7 @@ export const useEditorStore = defineStore('editor', () => {
     setMuyaInstance,
     clearMuyaInstance,
     getMuyaInstance,
+    setSelectionFormats,
     // lifecycle
     bootstrap,
   }

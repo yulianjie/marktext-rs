@@ -16,7 +16,8 @@
  * If a step fails, fall back to the raw path/data URL so the editor isn't
  * left with a broken image — surface the error through the notification store.
  */
-import { saveImageLocal, uploadImageGithub } from './tauri-invoke'
+import { saveImageLocal, uploadImageGithub, uploadImagePicgo, uploadImageScript } from './tauri-invoke'
+import { tempDir } from '@tauri-apps/api/path'
 import { usePreferencesStore } from '@/stores/preferences'
 import { useEditorStore } from '@/stores/editor'
 import { useNotificationStore } from '@/stores/notification'
@@ -53,6 +54,37 @@ function parentDirOf(path: string): string {
   return idx >= 0 ? path.slice(0, idx) : path
 }
 
+function basenameNoExt(path: string): string {
+  const base = path.split(/[\\/]/).pop() || path
+  const dot = base.lastIndexOf('.')
+  return dot > 0 ? base.slice(0, dot) : base
+}
+
+/**
+ * Expand `${...}` template variables in a relative-image-directory path.
+ * Mirrors the upstream subset:
+ *   - `${filename}`                  — current doc basename without ext
+ *   - `${fileBasenameNoExtension}`   — alias of `${filename}`
+ *   - `${fileDirname}`               — parent dir of the current doc
+ *   - `${fileWorkspaceFolder}`       — same as `${fileDirname}` when no
+ *                                       workspace is open
+ *   - `${relativeFileDirname}`       — basename of `${fileDirname}`
+ *
+ * Unknown variables are left untouched so the user sees the mistake.
+ */
+function expandImageDirTemplate(tmpl: string, docPath: string): string {
+  if (!tmpl || !docPath) return tmpl
+  const dir = parentDirOf(docPath)
+  const name = basenameNoExt(docPath)
+  const relDirname = dir.split(/[\\/]/).pop() || dir
+  return tmpl
+    .replace(/\$\{filename\}/g, name)
+    .replace(/\$\{fileBasenameNoExtension\}/g, name)
+    .replace(/\$\{fileDirname\}/g, dir)
+    .replace(/\$\{fileWorkspaceFolder\}/g, dir)
+    .replace(/\$\{relativeFileDirname\}/g, relDirname)
+}
+
 export async function muyaImageAction(input: File | string, _id: string, _name?: string): Promise<string> {
   const prefs = usePreferencesStore()
   const editor = useEditorStore()
@@ -77,7 +109,11 @@ export async function muyaImageAction(input: File | string, _id: string, _name?:
       const tab = editor.currentFile
       let targetDir = prefs.imageFolderPath
       if (prefs.imagePreferRelativeDirectory && tab?.pathname) {
-        targetDir = `${parentDirOf(tab.pathname)}/${prefs.imageRelativeDirectoryName || 'assets'}`
+        const rel = expandImageDirTemplate(
+          prefs.imageRelativeDirectoryName || 'assets',
+          tab.pathname,
+        )
+        targetDir = `${parentDirOf(tab.pathname)}/${rel}`
       }
       if (!targetDir) {
         notify.pushToast({
@@ -103,28 +139,51 @@ export async function muyaImageAction(input: File | string, _id: string, _name?:
     }
   }
 
-  // Upload mode → GitHub for now (the only uploader the Rust side implements).
+  // Upload mode → GitHub / PicGo / custom script depending on which
+  // backend the user picked in preferences.
   if (action === 'upload') {
-    if (prefs.currentUploader !== 'github' || !prefs.githubToken) {
+    try {
+      const uploader = prefs.currentUploader
+      if (uploader === 'github') {
+        if (!prefs.githubToken) throw new Error('GitHub token is not set')
+        const base64 = isFile ? await fileToBase64(input) : await readPathAsBase64(input)
+        const { downloadUrl } = await uploadImageGithub({
+          token: prefs.githubToken,
+          owner: prefs.imageBed.github.owner,
+          repo: prefs.imageBed.github.repo,
+          branch: prefs.imageBed.github.branch || undefined,
+          path: `marktext/${filename}`,
+          contentBase64: base64,
+        })
+        return downloadUrl
+      }
+      if (uploader === 'picgo' || uploader === 'script') {
+        // PicGo and CLI scripts both expect a local file path. For File
+        // blobs we materialise to the OS tempdir first.
+        const sourcePath = isFile
+          ? await materialiseToTempFile(input, filename)
+          : input
+        if (uploader === 'picgo') {
+          const { urls } = await uploadImagePicgo({
+            binary: prefs.picgoPath || undefined,
+            sourcePaths: [sourcePath],
+          })
+          if (urls.length === 0) throw new Error('PicGo returned no URLs')
+          return urls[0]
+        }
+        if (!prefs.cliScript) throw new Error('Custom upload script is not configured')
+        const { urls } = await uploadImageScript({
+          script: prefs.cliScript,
+          sourcePaths: [sourcePath],
+        })
+        if (urls.length === 0) throw new Error('Upload script returned no URLs')
+        return urls[0]
+      }
       notify.pushToast({
         type: 'warning',
         message: 'Image upload is not configured; falling back to local path.',
       })
       return isFile ? await fileToDataUrl(input) : input
-    }
-    try {
-      const base64 = isFile
-        ? await fileToBase64(input)
-        : await readPathAsBase64(input)
-      const { downloadUrl } = await uploadImageGithub({
-        token: prefs.githubToken,
-        owner: prefs.imageBed.github.owner,
-        repo: prefs.imageBed.github.repo,
-        branch: prefs.imageBed.github.branch || undefined,
-        path: `marktext/${filename}`,
-        contentBase64: base64,
-      })
-      return downloadUrl
     } catch (err) {
       notify.pushToast({
         type: 'error',
@@ -136,6 +195,22 @@ export async function muyaImageAction(input: File | string, _id: string, _name?:
   }
 
   return isFile ? await fileToDataUrl(input) : input
+}
+
+/**
+ * Write a `File` blob into the OS tempdir under its mangled filename. Used
+ * by PicGo / CLI uploaders since they speak in filesystem paths.
+ */
+async function materialiseToTempFile(file: File, filename: string): Promise<string> {
+  const tmp = await tempDir()
+  const targetDir = tmp.replace(/[\\/]$/, '')
+  const dataUrl = await fileToDataUrl(file)
+  const { path } = await saveImageLocal({
+    dataUrl,
+    targetDir,
+    filename,
+  })
+  return path
 }
 
 async function readPathAsBase64(path: string): Promise<string> {

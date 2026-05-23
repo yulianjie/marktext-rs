@@ -520,12 +520,30 @@ onMounted(async () => {
             <el-select
               :model-value="prefs.currentUploader"
               style="width: 220px"
-              @update:model-value="v => prefs.patchUserData({ currentUploader: v as 'none' | 'github' | 's3' })"
+              @update:model-value="v => prefs.patchUserData({ currentUploader: v as 'none' | 'github' | 's3' | 'picgo' | 'script' })"
             >
               <el-option :label="t('prefs.image.uploaderNone')" value="none" />
               <el-option :label="t('prefs.image.uploaderGithub')" value="github" />
               <el-option :label="t('prefs.image.uploaderS3')" value="s3" />
+              <el-option :label="t('prefs.image.uploaderPicgo')" value="picgo" />
+              <el-option :label="t('prefs.image.uploaderScript')" value="script" />
             </el-select>
+          </el-form-item>
+          <el-form-item v-show="prefs.currentUploader === 'picgo'" :label="t('prefs.image.picgoPath')">
+            <el-input
+              :model-value="prefs.picgoPath"
+              placeholder="picgo"
+              style="width: 320px"
+              @update:model-value="v => prefs.patchUserData({ picgoPath: String(v) })"
+            />
+          </el-form-item>
+          <el-form-item v-show="prefs.currentUploader === 'script'" :label="t('prefs.image.cliScript')">
+            <el-input
+              :model-value="prefs.cliScript"
+              placeholder="/path/to/upload.sh"
+              style="width: 320px"
+              @update:model-value="v => prefs.patchUserData({ cliScript: String(v) })"
+            />
           </el-form-item>
           <el-form-item v-show="prefs.currentUploader === 'github'" :label="t('prefs.image.githubToken')">
             <el-input

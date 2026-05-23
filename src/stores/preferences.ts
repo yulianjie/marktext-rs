@@ -107,10 +107,11 @@ interface State {
   imageFolderPath: string
   webImages: unknown[]
   cloudImages: unknown[]
-  currentUploader: 'none' | 'github' | 's3'
+  currentUploader: 'none' | 'github' | 's3' | 'picgo' | 'script'
   githubToken: string
   imageBed: { github: { owner: string; repo: string; branch: string } }
   cliScript: string
+  picgoPath: string
 
   // Recent files/folders. Capped to ~20 entries each; managed by the editor /
   // project stores via `pushRecentFile` / `pushRecentFolder`.
@@ -200,6 +201,7 @@ const defaults: State = {
   githubToken: '',
   imageBed: { github: { owner: '', repo: '', branch: '' } },
   cliScript: '',
+  picgoPath: '',
 
   recentFiles: [],
   recentFolders: [],

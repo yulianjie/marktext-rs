@@ -98,12 +98,16 @@ pub fn run() {
             let payload = ipc::events::SecondInstance { argv, cwd: cwd.into() };
             let _ = app.emit("mt://second-instance", payload);
         }));
-        // Updater plugin requires a public key for release verification —
-        // wire it in once we set up code signing (Phase 7).
+        // Updater plugin: registered so the renderer can call check()/
+        // downloadAndInstall(). With `pubkey` empty in tauri.conf.json the
+        // check itself gracefully fails until release signing is set up —
+        // the UI just reports "no update available".
+        builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
     }
 
     builder
         .manage(app::AppState::default())
+        .manage(menu::FormatMenuHandles::default())
         .invoke_handler(marktext_handler!())
         .setup(move |app| {
             // HiDPI-aware 4:3 clamp. Runs every launch when the user hasn't

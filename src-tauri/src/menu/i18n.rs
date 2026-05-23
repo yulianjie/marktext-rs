@@ -10,6 +10,7 @@ pub struct MenuStrings {
     pub paragraph: &'static str,
     pub format: &'static str,
     pub view: &'static str,
+    pub theme: &'static str,
     pub window: &'static str,
     pub help: &'static str,
 
@@ -18,6 +19,9 @@ pub struct MenuStrings {
     pub new_window: &'static str,
     pub open_file: &'static str,
     pub open_folder: &'static str,
+    pub open_recent: &'static str,
+    pub clear_recent: &'static str,
+    pub no_recent: &'static str,
     pub save: &'static str,
     pub save_as: &'static str,
     pub save_all: &'static str,
@@ -28,6 +32,15 @@ pub struct MenuStrings {
     pub print: &'static str,
     pub close_tab: &'static str,
     pub close_window: &'static str,
+
+    // theme labels (built-in themes)
+    pub theme_light: &'static str,
+    pub theme_dark: &'static str,
+    pub theme_one_dark: &'static str,
+    pub theme_material_dark: &'static str,
+    pub theme_ulysses_light: &'static str,
+    pub theme_graphite_light: &'static str,
+    pub theme_github_blue: &'static str,
 
     // edit
     pub find: &'static str,
@@ -77,6 +90,7 @@ pub struct MenuStrings {
     pub preferences: &'static str,
     pub documentation: &'static str,
     pub report_issue: &'static str,
+    pub check_for_updates: &'static str,
     pub about: &'static str,
 }
 
@@ -86,6 +100,7 @@ pub const EN: MenuStrings = MenuStrings {
     paragraph: "Paragraph",
     format: "Format",
     view: "View",
+    theme: "Theme",
     window: "Window",
     help: "Help",
 
@@ -93,6 +108,9 @@ pub const EN: MenuStrings = MenuStrings {
     new_window: "New Window",
     open_file: "Open File…",
     open_folder: "Open Folder…",
+    open_recent: "Open Recent",
+    clear_recent: "Clear Recent",
+    no_recent: "(empty)",
     save: "Save",
     save_as: "Save As…",
     save_all: "Save All",
@@ -103,6 +121,14 @@ pub const EN: MenuStrings = MenuStrings {
     print: "Print / Export PDF…",
     close_tab: "Close Tab",
     close_window: "Close Window",
+
+    theme_light: "Light",
+    theme_dark: "Dark",
+    theme_one_dark: "One Dark",
+    theme_material_dark: "Material Dark",
+    theme_ulysses_light: "Ulysses Light",
+    theme_graphite_light: "Graphite Light",
+    theme_github_blue: "GitHub Blue",
 
     find: "Find",
     replace: "Find & Replace",
@@ -146,6 +172,7 @@ pub const EN: MenuStrings = MenuStrings {
     preferences: "Preferences",
     documentation: "Documentation",
     report_issue: "Report an Issue",
+    check_for_updates: "Check for Updates…",
     about: "About MarkText",
 };
 
@@ -155,6 +182,7 @@ pub const ZH_CN: MenuStrings = MenuStrings {
     paragraph: "段落",
     format: "格式",
     view: "视图",
+    theme: "主题",
     window: "窗口",
     help: "帮助",
 
@@ -162,6 +190,9 @@ pub const ZH_CN: MenuStrings = MenuStrings {
     new_window: "新建窗口",
     open_file: "打开文件…",
     open_folder: "打开文件夹…",
+    open_recent: "打开最近",
+    clear_recent: "清空最近",
+    no_recent: "(空)",
     save: "保存",
     save_as: "另存为…",
     save_all: "全部保存",
@@ -172,6 +203,14 @@ pub const ZH_CN: MenuStrings = MenuStrings {
     print: "打印 / 导出 PDF…",
     close_tab: "关闭标签",
     close_window: "关闭窗口",
+
+    theme_light: "浅色",
+    theme_dark: "深色",
+    theme_one_dark: "One Dark",
+    theme_material_dark: "Material Dark",
+    theme_ulysses_light: "Ulysses Light",
+    theme_graphite_light: "Graphite Light",
+    theme_github_blue: "GitHub 蓝",
 
     find: "查找",
     replace: "查找和替换",
@@ -215,6 +254,7 @@ pub const ZH_CN: MenuStrings = MenuStrings {
     preferences: "偏好设置",
     documentation: "文档",
     report_issue: "报告问题",
+    check_for_updates: "检查更新…",
     about: "关于 MarkText",
 };
 
@@ -224,6 +264,7 @@ pub const JA: MenuStrings = MenuStrings {
     paragraph: "段落",
     format: "書式",
     view: "表示",
+    theme: "テーマ",
     window: "ウィンドウ",
     help: "ヘルプ",
 
@@ -231,6 +272,9 @@ pub const JA: MenuStrings = MenuStrings {
     new_window: "新しいウィンドウ",
     open_file: "ファイルを開く…",
     open_folder: "フォルダーを開く…",
+    open_recent: "最近使った項目を開く",
+    clear_recent: "履歴を消去",
+    no_recent: "(なし)",
     save: "保存",
     save_as: "名前を付けて保存…",
     save_all: "すべて保存",
@@ -241,6 +285,14 @@ pub const JA: MenuStrings = MenuStrings {
     print: "印刷 / PDF エクスポート…",
     close_tab: "タブを閉じる",
     close_window: "ウィンドウを閉じる",
+
+    theme_light: "ライト",
+    theme_dark: "ダーク",
+    theme_one_dark: "One Dark",
+    theme_material_dark: "Material Dark",
+    theme_ulysses_light: "Ulysses Light",
+    theme_graphite_light: "Graphite Light",
+    theme_github_blue: "GitHub Blue",
 
     find: "検索",
     replace: "検索と置換",
@@ -284,6 +336,7 @@ pub const JA: MenuStrings = MenuStrings {
     preferences: "環境設定",
     documentation: "ドキュメント",
     report_issue: "問題を報告",
+    check_for_updates: "アップデートを確認…",
     about: "MarkText について",
 };
 

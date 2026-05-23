@@ -125,6 +125,16 @@ export const exportPdf = (windowLabel: string) =>
 export const pandocConvert = (markdown: string, outputPath: string, outputFormat: string) =>
   invoke<void>('cmd_pandoc_convert', { markdown, outputPath, outputFormat })
 
+export interface PandocPdfOptions {
+  paperSize?: string
+  orientation?: 'portrait' | 'landscape'
+  title?: string
+  toc?: boolean
+}
+
+export const pandocPdfExport = (markdown: string, outputPath: string, options?: PandocPdfOptions) =>
+  invoke<void>('cmd_pandoc_pdf_export', { markdown, outputPath, options })
+
 /* ─── image ──────────────────────────────────────────────────── */
 
 export interface LocalSaveArgs {
@@ -150,6 +160,20 @@ export interface GithubUploadArgs {
 export const uploadImageGithub = (args: GithubUploadArgs) =>
   invoke<{ downloadUrl: string; sha: string }>('cmd_upload_image_github', { args })
 
+export interface PicgoUploadArgs {
+  binary?: string
+  sourcePaths: string[]
+}
+export const uploadImagePicgo = (args: PicgoUploadArgs) =>
+  invoke<{ urls: string[] }>('cmd_upload_image_picgo', { args })
+
+export interface ScriptUploadArgs {
+  script: string
+  sourcePaths: string[]
+}
+export const uploadImageScript = (args: ScriptUploadArgs) =>
+  invoke<{ urls: string[] }>('cmd_upload_image_script', { args })
+
 export interface UnsplashSearchArgs {
   query: string
   page?: number
@@ -170,6 +194,9 @@ export const searchInFolder = (args: SearchArgs) =>
 export const spellcheckWords = (words: string[]) =>
   invoke<string[]>('cmd_spellcheck_words', { words })
 
+export const spellcheckSuggest = (word: string) =>
+  invoke<string[]>('cmd_spellcheck_suggest', { word })
+
 export const spellcheckAddWord = (word: string) =>
   invoke<void>('cmd_spellcheck_add_word', { word })
 
@@ -178,6 +205,18 @@ export const spellcheckRemoveWord = (word: string) =>
 
 export const spellcheckAvailableDictionaries = () =>
   invoke<string[]>('cmd_spellcheck_available_dictionaries')
+
+/* ─── menu state ─────────────────────────────────────────────── */
+
+/**
+ * Update the ✓ marks on the native Format submenu's inline items.
+ *
+ * Pass the flat list of "active" token names Muya reports at the current
+ * selection — e.g. `['strong', 'em']` when the cursor is on **bold *italic***
+ * text. Unknown names are ignored; an empty array clears every check.
+ */
+export const setFormatMenuState = (formats: string[]) =>
+  invoke<void>('cmd_set_format_menu_state', { formats })
 
 /* ─── theme ──────────────────────────────────────────────────── */
 

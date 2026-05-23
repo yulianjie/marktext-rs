@@ -25,6 +25,20 @@ export interface BusEventMap {
   'editor-focus': void
   'screenshot-captured': { url: string }
   'invalidate-image-cache': void
+  'insert-image': { src: string; alt?: string; title?: string }
+
+  // Paragraph manipulation (mirrors upstream marktext bus events)
+  'duplicate': void
+  'createParagraph': void
+  'deleteParagraph': void
+  'insertParagraph': { location: 'before' | 'after'; text?: string; outMost?: boolean }
+
+  // Spellchecker
+  'switch-spellchecker-language': string
+  'replace-misspelling': { word: string; replacement: string }
+
+  // Image preview modal (opened by Ctrl/Cmd-click on an image in Muya)
+  'image-preview/open': { src: string; alt?: string }
 
   // Search / find
   'find': { value: string; opt: SearchOpt }
@@ -61,6 +75,10 @@ export interface BusEventMap {
   'aboutDialog': void
   'tweetDialog': void
   'rename': void
+  'show-table-dialog': void
+  'insert-table': { rows: number; columns: number }
+  'show-export-dialog': void
+  'show-updater-dialog': void
 
   // Format / paragraph (editor toolbar)
   'paragraph': string

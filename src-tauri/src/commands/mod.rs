@@ -13,6 +13,7 @@ pub mod debug;
 pub mod export;
 pub mod file;
 pub mod image;
+pub mod menu;
 pub mod prefs;
 pub mod search;
 pub mod spellcheck;
@@ -57,20 +58,26 @@ macro_rules! marktext_handler {
             $crate::commands::export::cmd_export_html,
             $crate::commands::export::cmd_export_pdf,
             $crate::commands::export::cmd_pandoc_convert,
+            $crate::commands::export::cmd_pandoc_pdf_export,
             // image
             $crate::commands::image::cmd_save_image_local,
             $crate::commands::image::cmd_upload_image_github,
+            $crate::commands::image::cmd_upload_image_picgo,
+            $crate::commands::image::cmd_upload_image_script,
             $crate::commands::image::cmd_search_unsplash,
             // search
             $crate::commands::search::cmd_search_in_folder,
             // spellcheck
             $crate::commands::spellcheck::cmd_spellcheck_words,
+            $crate::commands::spellcheck::cmd_spellcheck_suggest,
             $crate::commands::spellcheck::cmd_spellcheck_add_word,
             $crate::commands::spellcheck::cmd_spellcheck_remove_word,
             $crate::commands::spellcheck::cmd_spellcheck_available_dictionaries,
             // theme
             $crate::commands::theme::cmd_list_themes,
             $crate::commands::theme::cmd_read_theme_css,
+            // menu
+            $crate::commands::menu::cmd_set_format_menu_state,
         ]
     };
 }

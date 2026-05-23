@@ -126,6 +126,117 @@ pub async fn cmd_upload_image_github(args: GithubUploadArgs) -> AppResult<Github
     Ok(GithubUploadResult { download_url, sha })
 }
 
+/// PicGo upload — calls a PicGo CLI binary with one or more image paths.
+/// The user configures the binary path in preferences (`picgoPath`); a
+/// missing or empty value defaults to `picgo` on the PATH.
+///
+/// PicGo prints uploaded URLs to stdout, one per line. We collect those and
+/// hand them back to the renderer. Exit code != 0 (or empty stdout) is
+/// reported as an upload failure.
+#[derive(Debug, Deserialize)]
+pub struct PicgoUploadArgs {
+    pub binary: Option<String>,
+    pub source_paths: Vec<PathBuf>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PicgoUploadResult {
+    pub urls: Vec<String>,
+}
+
+#[tauri::command]
+pub async fn cmd_upload_image_picgo(args: PicgoUploadArgs) -> AppResult<PicgoUploadResult> {
+    if args.source_paths.is_empty() {
+        return Err(AppError::InvalidArgument("no source paths".into()));
+    }
+    let binary = match args.binary {
+        Some(s) if !s.trim().is_empty() => s,
+        _ => "picgo".to_string(),
+    };
+    let mut cmd = tokio::process::Command::new(&binary);
+    cmd.arg("upload");
+    for p in &args.source_paths {
+        cmd.arg(p);
+    }
+    let output = cmd
+        .output()
+        .await
+        .map_err(|e| AppError::Other(format!("failed to spawn picgo: {e}")))?;
+    if !output.status.success() {
+        let err = String::from_utf8_lossy(&output.stderr).to_string();
+        return Err(AppError::Other(format!(
+            "picgo exited with {:?}: {}",
+            output.status.code(),
+            err
+        )));
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let urls: Vec<String> = stdout
+        .lines()
+        .map(|l| l.trim().to_string())
+        .filter(|l| l.starts_with("http://") || l.starts_with("https://"))
+        .collect();
+    if urls.is_empty() {
+        return Err(AppError::Other(format!(
+            "picgo produced no URLs (stdout: {stdout})"
+        )));
+    }
+    Ok(PicgoUploadResult { urls })
+}
+
+/// Custom-script upload — runs the user's shell script (or executable) with
+/// the image paths as positional args. Same contract as PicGo: URLs on
+/// stdout, one per line. The user supplies the executable path through the
+/// `cliScript` preference.
+#[derive(Debug, Deserialize)]
+pub struct ScriptUploadArgs {
+    pub script: String,
+    pub source_paths: Vec<PathBuf>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ScriptUploadResult {
+    pub urls: Vec<String>,
+}
+
+#[tauri::command]
+pub async fn cmd_upload_image_script(args: ScriptUploadArgs) -> AppResult<ScriptUploadResult> {
+    if args.script.trim().is_empty() {
+        return Err(AppError::InvalidArgument("script path is empty".into()));
+    }
+    if args.source_paths.is_empty() {
+        return Err(AppError::InvalidArgument("no source paths".into()));
+    }
+    let mut cmd = tokio::process::Command::new(&args.script);
+    for p in &args.source_paths {
+        cmd.arg(p);
+    }
+    let output = cmd
+        .output()
+        .await
+        .map_err(|e| AppError::Other(format!("failed to spawn upload script: {e}")))?;
+    if !output.status.success() {
+        let err = String::from_utf8_lossy(&output.stderr).to_string();
+        return Err(AppError::Other(format!(
+            "upload script exited with {:?}: {}",
+            output.status.code(),
+            err
+        )));
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let urls: Vec<String> = stdout
+        .lines()
+        .map(|l| l.trim().to_string())
+        .filter(|l| !l.is_empty())
+        .collect();
+    if urls.is_empty() {
+        return Err(AppError::Other(format!(
+            "upload script produced no URLs (stdout: {stdout})"
+        )));
+    }
+    Ok(ScriptUploadResult { urls })
+}
+
 #[derive(Debug, Deserialize)]
 pub struct UnsplashSearchArgs {
     pub query: String,
