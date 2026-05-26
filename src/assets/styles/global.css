@@ -141,13 +141,114 @@
   --mt-shadow: rgba(27, 31, 35, 0.10);
 }
 
+/* ── Muya legacy variable bridge ─────────────────────────────────
+ *
+ * Original Electron marktext defined a set of `--xxx` editor variables
+ * (--floatBgColor, --themeColor, --editorColor*, …) in
+ * `renderer/assets/styles/index.css`. Webpack bundled that file into
+ * the page shell, so every `var(--xxx)` inside `src/muya/lib/**.css`
+ * resolved to the configured palette.
+ *
+ * Our Vite/Tauri build does not load any renderer-side CSS globally,
+ * so those refs used to resolve to "unset" — most visibly: clicking a
+ * Mermaid figure left the floating preview with no background, border
+ * or shadow, making the SVG look like it was overlapping the body text
+ * underneath. Other muya floats (tooltip, frontMenu, imageToolbar,
+ * quickInsert, baseFloat) would have shown the same symptom.
+ *
+ * Light values come straight from upstream `light.theme.css` /
+ * `renderer/assets/styles/index.css`. Dark overrides apply to every
+ * dark variant. */
+:root {
+  --themeColor: var(--mt-accent);
+  --highlightColor: rgba(33, 181, 111, .4);
+  --selectionColor: rgba(0, 0, 0, .1);
+
+  --editorColor: rgba(0, 0, 0, .7);
+  --editorColor80: rgba(0, 0, 0, .8);
+  --editorColor70: rgba(0, 0, 0, .7);
+  --editorColor50: rgba(0, 0, 0, .5);
+  --editorColor30: rgba(0, 0, 0, .3);
+  --editorColor10: rgba(0, 0, 0, .1);
+  --editorColor04: rgba(0, 0, 0, .03);
+  --editorBgColor: var(--mt-bg);
+  --editorAreaWidth: calc(90vw);
+
+  --deleteColor: #ff6969;
+  --iconColor: #6b737b;
+  --codeBlockBgColor: rgba(0, 0, 0, .03);
+  --footnoteBgColor: rgba(0, 0, 0, .03);
+  --inputBgColor: rgba(0, 0, 0, .06);
+  --itemBgColor: rgba(255, 255, 255, .6);
+  --tableBorderColor: #e5e5e5;
+
+  --floatFontColor: rgba(0, 0, 0, .6);
+  --floatBgColor: #ffffff;
+  --floatHoverColor: rgba(0, 0, 0, .04);
+  --floatBorderColor: rgba(0, 0, 0, .1);
+  --floatShadow: rgba(15, 15, 15, .03) 0px 0px 0px 1px,
+                 rgba(15, 15, 15, .04) 0px 3px 6px,
+                 rgba(15, 15, 15, .05) 0px 9px 24px;
+  --maskColor: rgba(232, 232, 232, .8);
+}
+
+[data-theme='dark'],
+[data-theme='one-dark'],
+[data-theme='material-dark'] {
+  --highlightColor: rgba(102, 177, 255, .6);
+  --selectionColor: rgba(102, 177, 255, .3);
+
+  --editorColor: rgba(255, 255, 255, .7);
+  --editorColor80: rgba(255, 255, 255, .8);
+  --editorColor70: rgba(255, 255, 255, .7);
+  --editorColor50: rgba(255, 255, 255, .5);
+  --editorColor30: rgba(255, 255, 255, .3);
+  --editorColor10: rgba(255, 255, 255, .1);
+  --editorColor04: rgba(255, 255, 255, .04);
+
+  --deleteColor: #409eff;
+  --iconColor: rgba(255, 255, 255, .56);
+  --codeBlockBgColor: var(--mt-code-bg);
+  --footnoteBgColor: rgba(66, 67, 68, .3);
+  --inputBgColor: #2f3336;
+  --itemBgColor: var(--mt-row-active);
+  --tableBorderColor: var(--mt-border);
+
+  --floatFontColor: rgba(255, 255, 255, .7);
+  --floatBgColor: var(--mt-sidebar-bg);
+  --floatHoverColor: rgba(255, 255, 255, .04);
+  --floatBorderColor: rgba(0, 0, 0, .05);
+  --floatShadow: rgba(0, 0, 0, .2) 0px 2px 12px 0px;
+}
+
 body {
   margin: 0;
   background: var(--mt-bg);
   color: var(--mt-fg);
+  /* Match the editor's line-height on <body> too. Mermaid renders by
+   * appending a temp container to <body>, measuring each label's
+   * <foreignObject> via getBoundingClientRect(), then innerHTML'ing the
+   * finished SVG into `.ag-container-preview` (inside `.muya-container`,
+   * which sets line-height: 1.6). If body's line-height differs from the
+   * editor's, the inherited line-height inside the foreignObject shifts
+   * after re-attachment and multi-line node labels overflow the rect
+   * (last line clipped below the bottom border).
+   *
+   * Upstream Electron marktext gets this for free because
+   * `muya/themes/default.css` sets `html, body { line-height: 1.6 }`
+   * globally — that stylesheet is bundled by webpack into the page
+   * shell. Our Vite build only imports per-component CSS, so the
+   * global rule was lost. We re-establish the same baseline here. */
+  line-height: var(--mt-line-height);
 }
 
-*, *::before, *::after { box-sizing: border-box; }
+/* No global box-sizing reset — original marktext doesn't have one either.
+ * Muya, Element Plus and our own SFCs set box-sizing explicitly where they
+ * need border-box. A global `* { box-sizing: border-box }` leaks into the
+ * <div> mermaid appends inside its measurement <foreignObject>
+ * (node_modules/mermaid/dist/createText-*.js, `addHtmlSpan`), throwing off
+ * the bbox.height it uses to size the surrounding node, so multi-line
+ * labels overflow past the bottom border. */
 
 /* Hide scrollbars option (preferences `hideScrollbar`). */
 body.mt-no-scrollbar ::-webkit-scrollbar { width: 0; height: 0; }
@@ -171,3 +272,4 @@ body.mt-rtl .muya-container,
 body.mt-rtl .source-pane {
   direction: rtl;
 }
+
