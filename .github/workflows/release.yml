@@ -5,6 +5,14 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build / publish (e.g. v0.1.0)'
+        required: true
+
+# tauri-action needs write access to create the release and upload assets
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -14,10 +22,10 @@ jobs:
       fail-fast: false
       matrix:
         platform:
-          - { name: 'macos-arm64', os: 'macos-14', target: 'aarch64-apple-darwin' }
-          - { name: 'macos-x64',   os: 'macos-13', target: 'x86_64-apple-darwin' }
-          - { name: 'linux-x64',   os: 'ubuntu-22.04', target: 'x86_64-unknown-linux-gnu' }
-          - { name: 'windows-x64', os: 'windows-latest', target: 'x86_64-pc-windows-msvc' }
+          - { name: 'macos-arm64', os: 'macos-14',       target: 'aarch64-apple-darwin'        }
+          - { name: 'macos-x64',   os: 'macos-13',       target: 'x86_64-apple-darwin'         }
+          - { name: 'linux-x64',   os: 'ubuntu-22.04',   target: 'x86_64-unknown-linux-gnu'    }
+          - { name: 'windows-x64', os: 'windows-latest', target: 'x86_64-pc-windows-msvc'      }
 
     steps:
       - uses: actions/checkout@v4
@@ -44,18 +52,21 @@ jobs:
       - name: Install npm deps
         run: npm ci || npm install
 
-      - name: Lint
-        run: npm run lint
-
-      - name: Frontend build (type check + bundle)
-        run: npm run build
-
-      - name: Tauri build
-        run: npm run tauri:build -- --target ${{ matrix.platform.target }}
-
-      - uses: actions/upload-artifact@v4
+      - name: Build and release (tauri-action)
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Signing / notarization secrets are optional. Builds still succeed
+          # unsigned if these repository secrets are not set.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          name: marktext-${{ matrix.platform.name }}
-          path: |
-            src-tauri/target/${{ matrix.platform.target }}/release/bundle/**/*
-          if-no-files-found: warn
+          # Tag chosen automatically from the pushed git tag, or from the
+          # manual workflow_dispatch input.
+          tagName: ${{ github.event.inputs.tag || github.ref_name }}
+          releaseName: 'MarkText ${{ github.event.inputs.tag || github.ref_name }}'
+          releaseBody: 'See the assets below to download and install MarkText for your platform.'
+          # Publish immediately on tag push (no manual review step).
+          releaseDraft: false
+          prerelease: false
+          args: --target ${{ matrix.platform.target }}
