@@ -165,6 +165,7 @@ function onDragEnd() {
 .tabs-scroll {
   display: flex;
   overflow-x: auto;
+  overflow-y: hidden;
   flex: 1;
 }
 .tabs-scroll::-webkit-scrollbar { height: 3px; }

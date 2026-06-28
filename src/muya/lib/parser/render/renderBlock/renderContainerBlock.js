@@ -63,6 +63,12 @@ export default function renderContainerBlock (parent, block, activeBlocks, match
     if (type === 'pre') {
       children.unshift(renderCopyButton())
     }
+    // Expose the code language on the <code> element so the corner badge
+    // (CSS `code::before { content: attr(data-lang) }`) shows the current
+    // language. Empty string for indent code / fenced blocks with no lang.
+    if (type === 'code') {
+      Object.assign(data.dataset, { lang: typeof lang === 'string' ? lang : '' })
+    }
     // FIXME: Disabled due to #1648 - be consistent.
     // if (this.muya.options.codeBlockLineNumbers) {
     //   if (type === 'pre') {

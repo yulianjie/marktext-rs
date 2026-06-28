@@ -10,12 +10,12 @@ import { getDefer } from '../utils'
 // Windows path resolution mangles the latter into an unresolvable mix of
 // `..` and `c:/`.
 const LANG_LOADERS = import.meta.glob([
-  '../../../../../node_modules/prismjs/components/prism-*.js',
-  '!../../../../../node_modules/prismjs/components/prism-*.min.js',
+  '../../../../node_modules/prismjs/components/prism-*.js',
+  '!../../../../node_modules/prismjs/components/prism-*.min.js',
 ])
 
 function langKey(lang) {
-  return `../../../../../node_modules/prismjs/components/prism-${lang}.js`
+  return `../../../../node_modules/prismjs/components/prism-${lang}.js`
 }
 
 /**

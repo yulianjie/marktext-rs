@@ -177,10 +177,11 @@
   --deleteColor: #ff6969;
   --iconColor: #6b737b;
   --codeBlockBgColor: rgba(0, 0, 0, .03);
+  --codeBlockBorderColor: #d0d7de;
   --footnoteBgColor: rgba(0, 0, 0, .03);
   --inputBgColor: rgba(0, 0, 0, .06);
   --itemBgColor: rgba(255, 255, 255, .6);
-  --tableBorderColor: #e5e5e5;
+  --tableBorderColor: #c0c4cc;
 
   --floatFontColor: rgba(0, 0, 0, .6);
   --floatBgColor: #ffffff;
@@ -209,10 +210,11 @@
   --deleteColor: #409eff;
   --iconColor: rgba(255, 255, 255, .56);
   --codeBlockBgColor: var(--mt-code-bg);
+  --codeBlockBorderColor: rgba(255, 255, 255, .15);
   --footnoteBgColor: rgba(66, 67, 68, .3);
   --inputBgColor: #2f3336;
   --itemBgColor: var(--mt-row-active);
-  --tableBorderColor: var(--mt-border);
+  --tableBorderColor: rgba(255, 255, 255, .25);
 
   --floatFontColor: rgba(255, 255, 255, .7);
   --floatBgColor: var(--mt-sidebar-bg);
