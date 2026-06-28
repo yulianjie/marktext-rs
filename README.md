@@ -1,5 +1,5 @@
 # MarkText (Tauri rewrite)
-
+![marktext preview](preview.png)
 Tauri 2 + Vue 3 + Rust port of [MarkText](https://github.com/marktext/marktext) — a real-time preview markdown editor.
 
 This codebase is a rewrite-in-progress of the original Electron app, mapping each Electron main-process responsibility onto a Rust module while preserving the Muya WYSIWYG engine and existing renderer component structure.

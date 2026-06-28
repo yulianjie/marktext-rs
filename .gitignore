@@ -29,3 +29,7 @@ src/components.d.ts
 /playwright-report
 
 output/
+
+# agent
+.claude/
+.opencode/
