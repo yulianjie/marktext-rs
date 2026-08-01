@@ -34,38 +34,59 @@ class ExportHtml {
   }
 
   async renderMermaid () {
-    const codes = this.exportContainer.querySelectorAll('code.language-mermaid')
+    const codes = Array.from(this.exportContainer.querySelectorAll('code.language-mermaid'))
+    if (!codes.length) {
+      return
+    }
+
+    let mermaid
+    try {
+      mermaid = await loadRenderer('mermaid')
+    } catch (err) {
+      console.warn('Unable to load the Mermaid renderer for HTML export.', err)
+      return
+    }
+
+    const replacements = []
     for (const code of codes) {
       const preEle = code.parentNode
       const mermaidContainer = document.createElement('div')
       mermaidContainer.innerHTML = sanitize(unescapeHTML(code.innerHTML), EXPORT_DOMPURIFY_CONFIG, true)
       mermaidContainer.classList.add('mermaid')
       preEle.replaceWith(mermaidContainer)
+      replacements.push({ preEle, mermaidContainer })
     }
-    const mermaid = await loadRenderer('mermaid')
-    // We only export light theme, so set mermaid theme to `default`, in the future, we can choose whick theme to export.
-    mermaid.initialize({
-      securityLevel: 'loose',
-      theme: 'default'
-    })
-    mermaid.init(undefined, this.exportContainer.querySelectorAll('div.mermaid'))
-    if (this.muya) {
+
+    try {
+      // We only export the light theme. Restore the editor theme afterwards.
       mermaid.initialize({
         securityLevel: 'loose',
-        theme: this.muya.options.mermaidTheme
+        theme: 'default'
       })
+      await mermaid.init(undefined, this.exportContainer.querySelectorAll('div.mermaid'))
+    } catch (err) {
+      console.warn('Unable to render Mermaid content for HTML export.', err)
+      for (const { preEle, mermaidContainer } of replacements) {
+        mermaidContainer.replaceWith(preEle)
+      }
+    } finally {
+      if (this.muya) {
+        mermaid.initialize({
+          securityLevel: 'loose',
+          theme: this.muya.options.mermaidTheme
+        })
+      }
     }
   }
 
   async renderDiagram () {
     const selector = 'code.language-vega-lite, code.language-flowchart, code.language-sequence, code.language-plantuml'
-    const RENDER_MAP = {
-      flowchart: await loadRenderer('flowchart'),
-      sequence: await loadRenderer('sequence'),
-      plantuml: await loadRenderer('plantuml'),
-      'vega-lite': await loadRenderer('vega-lite')
+    const codes = Array.from(this.exportContainer.querySelectorAll(selector))
+    if (!codes.length) {
+      return
     }
-    const codes = this.exportContainer.querySelectorAll(selector)
+
+    const renderers = new Map()
     for (const code of codes) {
       const rawCode = unescapeHTML(code.innerHTML)
       const functionType = (() => {
@@ -79,7 +100,21 @@ class ExportHtml {
           return 'vega-lite'
         }
       })()
-      const render = RENDER_MAP[functionType]
+
+      if (!renderers.has(functionType)) {
+        try {
+          renderers.set(functionType, await loadRenderer(functionType))
+        } catch (err) {
+          console.warn(`Unable to load the ${functionType} renderer for HTML export.`, err)
+          renderers.set(functionType, null)
+        }
+      }
+      const render = renderers.get(functionType)
+      if (!render) {
+        // Keep the original fenced code block when a renderer is unavailable.
+        continue
+      }
+
       const preParent = code.parentNode
       const diagramContainer = document.createElement('div')
       diagramContainer.classList.add(functionType)
@@ -110,7 +145,8 @@ class ExportHtml {
           await render(diagramContainer, JSON.parse(rawCode), options)
         }
       } catch (err) {
-        diagramContainer.innerHTML = '< Invalid Diagram >'
+        console.warn(`Unable to render ${functionType} content for HTML export.`, err)
+        diagramContainer.replaceWith(preParent)
       }
     }
   }
@@ -177,11 +213,16 @@ class ExportHtml {
     exportContainer.innerHTML = html
     document.body.appendChild(exportContainer)
 
-    // render only render the light theme of mermaid and diragram...
-    await this.renderMermaid()
-    await this.renderDiagram()
-    let result = exportContainer.innerHTML
-    exportContainer.remove()
+    let result = ''
+    try {
+      // Render only the light theme of Mermaid and other diagrams.
+      await this.renderMermaid()
+      await this.renderDiagram()
+      result = exportContainer.innerHTML
+    } finally {
+      exportContainer.remove()
+      this.exportContainer = null
+    }
 
     // hack to add arrow marker to output html
     const pathes = document.querySelectorAll('path[id^=raphael-marker-]')
@@ -194,7 +235,6 @@ class ExportHtml {
       return `${def}${str}`
     })
 
-    this.exportContainer = null
     return result
   }
 
