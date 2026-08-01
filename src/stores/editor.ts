@@ -15,10 +15,9 @@
  */
 
 import { defineStore } from 'pinia'
-import { computed, ref } from 'vue'
+import { computed, onScopeDispose, ref, watch } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import {
-  defaultFileState,
   getBlankFileState,
   getFileStateFromData,
   type DocumentState,
@@ -33,7 +32,19 @@ import {
   renameFile as renameFileCmd,
 } from '@/services/tauri-invoke'
 import { t } from '@/i18n'
-import { v4 as uuid } from '@/util/uuid'
+
+export function resolveDefaultLineEnding(
+  setting: 'default' | 'lf' | 'crlf',
+  platformName = typeof navigator === 'undefined' ? '' : navigator.platform,
+): 'lf' | 'crlf' {
+  if (setting === 'lf' || setting === 'crlf') return setting
+  return /win/i.test(platformName) ? 'crlf' : 'lf'
+}
+
+export function requiresBomForReliableDetection(encoding: string): boolean {
+  const compact = encoding.toLowerCase().replace(/[-_\s]/g, '')
+  return compact.startsWith('utf16') || compact.startsWith('utf32')
+}
 
 export interface TocItem {
   level: number
@@ -63,7 +74,7 @@ export const useEditorStore = defineStore('editor', () => {
   const currentFileId = ref<string | null>(null)
   const listToc = ref<{ lvl: number; content: string; slug?: string }[]>([])
   /** True when the editor shows raw markdown source instead of WYSIWYG Muya. */
-  const sourceCodeMode = ref(false)
+  const sourceCodeMode = ref(prefs.sourceCodeModeEnabled)
   /** True when the in-editor find/replace bar is visible. */
   const findReplaceOpen = ref(false)
   /** Flat list of "active" inline-format token names at the current Muya
@@ -76,6 +87,8 @@ export const useEditorStore = defineStore('editor', () => {
    *  Muya without dragging a ref around. */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let muyaInstance: any = null
+  const autoSaveTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  const saveQueues = new Map<string, Promise<boolean>>()
 
   const currentFile = computed<DocumentState | null>(() => {
     if (!currentFileId.value) return null
@@ -100,7 +113,7 @@ export const useEditorStore = defineStore('editor', () => {
     const file = getBlankFileState(
       tabs.value,
       prefs.defaultEncoding,
-      prefs.endOfLine === 'crlf' ? 'crlf' : 'lf',
+      resolveDefaultLineEnding(prefs.endOfLine),
       initialMarkdown,
     )
     tabs.value.push(file)
@@ -114,13 +127,22 @@ export const useEditorStore = defineStore('editor', () => {
       currentFileId.value = existing.id
       return existing
     }
-    const doc = await readMarkdown(pathname)
+    const doc = await readMarkdown(pathname, {
+      autoGuessEncoding: prefs.autoGuessEncoding,
+      defaultEncoding: prefs.defaultEncoding,
+    })
+    // Never put replacement characters into an editable/autosaved tab. Once
+    // that tab is saved the original bytes are irrecoverable, so require the
+    // user to choose a matching encoding in Preferences and reopen the file.
+    if (doc.hadDecodeErrors) {
+      throw new Error(t('toast.decodeFailed', { encoding: doc.encoding }))
+    }
     const filename = pathname.split(/[\\/]/).pop() || pathname
     const file = getFileStateFromData({
       markdown: doc.markdown,
       pathname: doc.path,
       filename,
-      encoding: { encoding: doc.encoding.toLowerCase(), isBom: false } as Encoding,
+      encoding: { encoding: doc.encoding.toLowerCase(), isBom: doc.bom } as Encoding,
       lineEnding: (doc.lineEnding === 'crlf' ? 'crlf' : 'lf') as 'lf' | 'crlf',
     })
     file.pendingBaselineUpdate = true
@@ -177,6 +199,7 @@ export const useEditorStore = defineStore('editor', () => {
 
   /** Remove a tab from the list and pick a sensible next active tab. */
   function removeTab(id: string) {
+    clearAutoSave(id)
     const idx = tabs.value.findIndex(t => t.id === id)
     if (idx === -1) return
     tabs.value.splice(idx, 1)
@@ -197,6 +220,23 @@ export const useEditorStore = defineStore('editor', () => {
 
   /* ─── content change & save ──────────────────────────────────── */
 
+  function clearAutoSave(id: string): void {
+    const timer = autoSaveTimers.get(id)
+    if (timer !== undefined) clearTimeout(timer)
+    autoSaveTimers.delete(id)
+  }
+
+  function scheduleAutoSave(tab: DocumentState): void {
+    clearAutoSave(tab.id)
+    // Never open a Save-As dialog merely because the user enabled autosave.
+    if (!prefs.autoSave || tab.isSaved || !tab.pathname) return
+    const delay = Math.max(0, Number(prefs.autoSaveDelay) || 0)
+    autoSaveTimers.set(tab.id, setTimeout(() => {
+      autoSaveTimers.delete(tab.id)
+      void saveTab(tab)
+    }, delay))
+  }
+
   /**
    * Called from the Muya `change` handler. The first call after load is the
    * parse-roundtrip baseline — don't dirty the buffer for that one.
@@ -211,6 +251,7 @@ export const useEditorStore = defineStore('editor', () => {
     } else if (tab.markdown !== markdown) {
       tab.markdown = markdown
       tab.isSaved = false
+      scheduleAutoSave(tab)
     }
     if (payload?.wordCount) tab.wordCount = payload.wordCount
     if (payload?.cursor !== undefined) tab.cursor = payload.cursor
@@ -223,21 +264,44 @@ export const useEditorStore = defineStore('editor', () => {
     return await saveTab(tab)
   }
 
-  async function saveTab(tab: DocumentState): Promise<boolean> {
-    let path = tab.pathname
-    if (!path) {
-      const picked = await saveAsDialog(tab.filename.endsWith('.md') ? tab.filename : `${tab.filename}.md`)
-      if (!picked) return false
-      path = picked
-      tab.pathname = path
-      tab.filename = path.split(/[\\/]/).pop() || tab.filename
+  function saveTab(tab: DocumentState): Promise<boolean> {
+    clearAutoSave(tab.id)
+    const previous = saveQueues.get(tab.id) ?? Promise.resolve(true)
+    const operation = previous.then(() => saveTabNow(tab), () => saveTabNow(tab))
+    saveQueues.set(tab.id, operation)
+    const cleanup = () => {
+      if (saveQueues.get(tab.id) === operation) saveQueues.delete(tab.id)
     }
+    void operation.then(cleanup, cleanup)
+    return operation
+  }
+
+  async function saveTabNow(tab: DocumentState): Promise<boolean> {
     try {
-      await saveMarkdown(path, tab.markdown, {
+      let path = tab.pathname
+      const wasUntitled = !path
+      if (!path) {
+        const picked = await saveAsDialog(tab.filename.endsWith('.md') ? tab.filename : `${tab.filename}.md`)
+        if (!picked) return false
+        path = picked
+        tab.pathname = path
+        tab.filename = path.split(/[\\/]/).pop() || tab.filename
+      }
+      const markdown = tab.markdown
+      const bom = tab.encoding.isBom || (
+        wasUntitled && requiresBomForReliableDetection(tab.encoding.encoding)
+      )
+      await saveMarkdown(path, markdown, {
         encoding: tab.encoding.encoding,
         lineEnding: tab.lineEnding,
+        bom,
       })
-      tab.isSaved = true
+      tab.encoding.isBom = bom
+      // An edit may have landed while the async write was in flight. Only the
+      // exact snapshot written to disk is clean; queue another autosave for a
+      // newer snapshot.
+      tab.isSaved = tab.markdown === markdown
+      if (!tab.isSaved) scheduleAutoSave(tab)
       return true
     } catch (err) {
       notify.pushToast({
@@ -308,6 +372,7 @@ export const useEditorStore = defineStore('editor', () => {
     if (tab.markdown !== markdown) {
       tab.markdown = markdown
       tab.isSaved = false
+      scheduleAutoSave(tab)
     }
   }
 
@@ -328,13 +393,29 @@ export const useEditorStore = defineStore('editor', () => {
 
   /** Default state on fresh window — a single Untitled tab. */
   function bootstrap() {
-    if (!tabs.value.length) {
-      const file = defaultFileState()
-      file.id = uuid()
-      tabs.value.push(file)
-      currentFileId.value = file.id
-    }
+    if (!tabs.value.length) newUntitledTab()
   }
+
+  watch(
+    () => prefs.sourceCodeModeEnabled,
+    enabled => { sourceCodeMode.value = enabled },
+    { immediate: true },
+  )
+  watch(sourceCodeMode, enabled => { prefs.sourceCode = enabled }, { immediate: true })
+  watch(
+    () => [prefs.autoSave, prefs.autoSaveDelay] as const,
+    ([enabled]) => {
+      for (const timer of autoSaveTimers.values()) clearTimeout(timer)
+      autoSaveTimers.clear()
+      if (enabled) {
+        for (const tab of tabs.value) scheduleAutoSave(tab)
+      }
+    },
+  )
+  onScopeDispose(() => {
+    for (const timer of autoSaveTimers.values()) clearTimeout(timer)
+    autoSaveTimers.clear()
+  })
 
   return {
     // state

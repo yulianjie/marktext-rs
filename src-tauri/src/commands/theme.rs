@@ -43,7 +43,12 @@ pub async fn cmd_list_themes() -> AppResult<Vec<UserTheme>> {
     let mut out = Vec::new();
     while let Some(entry) = read.next_entry().await? {
         let path = entry.path();
-        if path.extension().and_then(|s| s.to_str()).map(|s| s.eq_ignore_ascii_case("css")).unwrap_or(false) {
+        if path
+            .extension()
+            .and_then(|s| s.to_str())
+            .map(|s| s.eq_ignore_ascii_case("css"))
+            .unwrap_or(false)
+        {
             let stem = path
                 .file_stem()
                 .and_then(|s| s.to_str())

@@ -79,11 +79,16 @@
   },
   "defaultDirectoryToOpen": {
     "description": "General--The default directory that should be opened on startup when startUp=folder.",
-    "type": "string"
+    "type": "string",
+    "default": ""
   },
   "language": {
     "description": "General--The language MarkText use.",
-    "type": "string",
+    "enum": [
+      "en",
+      "zh-CN",
+      "ja"
+    ],
     "default": "en"
   },
   "editorFontFamily": {
@@ -272,13 +277,14 @@
   "tabSize": {
     "description": "Markdown--Replace the tab with x spaces",
     "type": "number",
+    "minimum": 1,
+    "maximum": 4,
     "default": 4
   },
   "listIndentation": {
     "description": "Markdown--Select the indent of list",
     "enum": [
       "dfm",
-      "tab",
       1,
       2,
       3,
@@ -351,8 +357,8 @@
   "spellcheckerLanguage": {
     "description": "Spelling--The spell checker language",
     "type": "string",
-    "pattern": "^[a-z]{2,3}(?:[-](?:[0-9]|[a-zA-Z]){2,}){0,2}$",
-    "default": "en-US"
+    "pattern": "^[a-z]{2,3}(?:[-_](?:[0-9]|[a-zA-Z]){2,}){0,2}$",
+    "default": "en_US"
   },
   "imageInsertAction": {
     "description": "Image--The default behavior after insert image from local folder",

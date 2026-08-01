@@ -101,11 +101,11 @@ async function revealSegment(seg: Segment) {
   align-items: center;
   justify-content: space-between;
   height: 32px;
-  background: #fafbfc;
-  border-bottom: 1px solid #eaecef;
+  background: var(--mt-sidebar-bg, #fafbfc);
+  border-bottom: 1px solid var(--mt-border, #eaecef);
   user-select: none;
   font-size: 12px;
-  color: #586069;
+  color: var(--mt-fg-muted, #586069);
 }
 .title-content {
   display: flex;
@@ -117,7 +117,7 @@ async function revealSegment(seg: Segment) {
   min-width: 0;
 }
 .dirty-dot {
-  color: #0366d6;
+  color: var(--mt-accent, #0366d6);
   font-size: 10px;
   line-height: 1;
 }
@@ -143,18 +143,18 @@ async function revealSegment(seg: Segment) {
   text-overflow: ellipsis;
   flex-shrink: 1;
 }
-.bc-seg:hover { color: #0366d6; }
+.bc-seg:hover { color: var(--mt-accent, #0366d6); }
 .bc-seg.active {
   font-weight: 600;
-  color: #24292e;
+  color: var(--mt-fg, #24292e);
   flex-shrink: 0;
 }
 .bc-sep {
-  color: #d1d5da;
+  color: var(--mt-border, #d1d5da);
   flex-shrink: 0;
 }
 .word-count {
-  color: #959da5;
+  color: var(--mt-fg-muted, #959da5);
   font-size: 11px;
   margin-left: auto;
   padding: 0 12px;

@@ -7,13 +7,14 @@
  */
 
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import {
   addDirectory,
   addFile,
   unlinkDirectory,
   unlinkFile,
   makeRoot,
+  sortTree,
   type TreeFolder,
   type TreeFile,
 } from './treeCtrl'
@@ -34,6 +35,17 @@ interface ClipboardEntry {
 
 const MARKDOWN_EXT_RE = /\.(md|markdown|mkd|mdown|mkdn|mdtxt|mdtext)$/i
 
+export function pathIsInsideRoot(rootPath: string, candidatePath: string): boolean {
+  const windowsStyle = /^[a-z]:[\\/]/i.test(rootPath) || rootPath.startsWith('\\\\')
+  const normalize = (value: string) => {
+    const path = value.replace(/[\\/]+/g, '/').replace(/\/$/, '')
+    return windowsStyle ? path.toLowerCase() : path
+  }
+  const root = normalize(rootPath)
+  const candidate = normalize(candidatePath)
+  return candidate === root || candidate.startsWith(`${root}/`)
+}
+
 function entryToTreeFile(entry: DirEntry): Omit<TreeFile, 'id'> {
   return {
     name: entry.name,
@@ -41,7 +53,8 @@ function entryToTreeFile(entry: DirEntry): Omit<TreeFile, 'id'> {
     isFile: true,
     isDirectory: false,
     isMarkdown: entry.isMarkdown || MARKDOWN_EXT_RE.test(entry.name),
-    birthTime: entry.modifiedMs,
+    birthTime: entry.createdMs ?? entry.modifiedMs,
+    modifiedTime: entry.modifiedMs,
   }
 }
 
@@ -78,6 +91,7 @@ export const useProjectStore = defineStore('project', () => {
     projectTree.value = root
     try {
       await buildSubtree(root, pathname, 0)
+      sortTree(root, prefs.fileSortBy)
       await watchFolder(pathname)
       installWatcher()
       prefs.pushRecentFolder(pathname)
@@ -107,26 +121,32 @@ export const useProjectStore = defineStore('project', () => {
     void listenTyped('mt://fs/change', event => {
       const root = projectTree.value
       if (!root) return
-      const path = 'path' in event ? event.path : null
-      const isInsideRoot = path && path.startsWith(root.pathname)
-      if (!isInsideRoot) return
+      if (event.kind === 'renamed') {
+        const fromInside = pathIsInsideRoot(root.pathname, event.from)
+        const toInside = pathIsInsideRoot(root.pathname, event.to)
+        if (!fromInside && !toInside) return
+        if (fromInside) {
+          unlinkFile(root, { pathname: event.from })
+          unlinkDirectory(root, { pathname: event.from })
+        }
+        if (toInside) void refreshParent(root, event.to)
+        return
+      }
+      if (!pathIsInsideRoot(root.pathname, event.path)) return
       switch (event.kind) {
         case 'created':
           // We don't know dir-vs-file from path alone — list parent to find out.
           void refreshParent(root, event.path)
           break
         case 'modified':
-          // Modify doesn't change the tree structure; sidebar refreshes via reactivity.
+          // Refresh metadata as well as structure so modified-time sorting
+          // reorders immediately after a save.
+          void refreshParent(root, event.path)
           break
         case 'removed':
           // Try both removal kinds; the wrong one is a no-op.
           unlinkFile(root, { pathname: event.path })
           unlinkDirectory(root, { pathname: event.path })
-          break
-        case 'renamed':
-          unlinkFile(root, { pathname: event.from })
-          unlinkDirectory(root, { pathname: event.from })
-          void refreshParent(root, event.to)
           break
       }
     })
@@ -141,6 +161,7 @@ export const useProjectStore = defineStore('project', () => {
         if (entry.isDir) addDirectory(root, { pathname: entry.path })
         else addFile(root, entryToTreeFile(entry))
       }
+      sortTree(root, prefs.fileSortBy)
     } catch { /* swallow — watcher may fire mid-rename and the dir vanishes */ }
   }
 
@@ -157,6 +178,11 @@ export const useProjectStore = defineStore('project', () => {
   function cancelRename() { renameCache.value = null }
 
   function setClipboard(entry: ClipboardEntry | null) { clipboard.value = entry }
+
+  watch(
+    () => prefs.fileSortBy,
+    mode => { if (projectTree.value) sortTree(projectTree.value, mode) },
+  )
 
   return {
     projectTree,

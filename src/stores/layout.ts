@@ -33,8 +33,16 @@ export const useLayoutStore = defineStore('layout', () => {
   const prefs = usePreferencesStore()
 
   const rightColumn = ref<RightColumn>('files')
-  const showSideBar = ref(true)
-  const showTabBar = ref(false)
+  // Keep visibility as a direct view of the preferences store.  A local copy
+  // goes stale when another window changes the same preference.
+  const showSideBar = computed({
+    get: () => prefs.sideBarVisibility,
+    set: value => { void prefs.set('sideBarVisibility', value) },
+  })
+  const showTabBar = computed({
+    get: () => prefs.tabBarVisibility,
+    set: value => { void prefs.set('tabBarVisibility', value) },
+  })
   const sideBarWidth = ref(readStoredWidth())
 
   /** Effective sidebar width — 0 when hidden, 45 when only the icon rail shows. */
@@ -46,14 +54,8 @@ export const useLayoutStore = defineStore('layout', () => {
 
   function setLayout(patch: Partial<{ rightColumn: RightColumn; showSideBar: boolean; showTabBar: boolean }>) {
     if (patch.rightColumn !== undefined) rightColumn.value = patch.rightColumn
-    if (patch.showSideBar !== undefined) {
-      showSideBar.value = patch.showSideBar
-      void prefs.set('sideBarVisibility', patch.showSideBar)
-    }
-    if (patch.showTabBar !== undefined) {
-      showTabBar.value = patch.showTabBar
-      void prefs.set('tabBarVisibility', patch.showTabBar)
-    }
+    if (patch.showSideBar !== undefined) showSideBar.value = patch.showSideBar
+    if (patch.showTabBar !== undefined) showTabBar.value = patch.showTabBar
   }
 
   function toggleSideBar() { setLayout({ showSideBar: !showSideBar.value }) }
@@ -65,11 +67,8 @@ export const useLayoutStore = defineStore('layout', () => {
     try { localStorage.setItem(STORAGE_KEY, String(clamped)) } catch { /* ignore */ }
   }
 
-  /** Load persisted visibility from preferences (call once after prefs.load). */
-  function syncFromPreferences() {
-    showSideBar.value = prefs.sideBarVisibility
-    showTabBar.value = prefs.tabBarVisibility
-  }
+  /** Retained for existing bootstrap call sites; computed refs stay in sync. */
+  function syncFromPreferences() {}
 
   return {
     rightColumn,

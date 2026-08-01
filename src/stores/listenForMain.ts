@@ -6,56 +6,98 @@
  */
 
 import { defineStore } from 'pinia'
-import { listenTyped } from '@/services/tauri-bridge'
+import { listenTyped, type EventName, type EventRegistry } from '@/services/tauri-bridge'
+import type { UnlistenFn } from '@tauri-apps/api/event'
 import { useLayoutStore } from './layout'
 import { usePreferencesStore } from './preferences'
+import { useKeybindingsStore } from './keybindings'
+import { getPreference } from '@/services/tauri-invoke'
 import { bus } from '@/bus'
 
 export const useListenForMainStore = defineStore('listenForMain', () => {
   let installed = false
+  let installing: Promise<boolean> | null = null
+  let localUnlisteners: UnlistenFn[] = []
 
-  async function install() {
-    if (installed) return
-    installed = true
-    const layout = useLayoutStore()
-    const prefs = usePreferencesStore()
+  async function install(): Promise<boolean> {
+    if (installed) return true
+    if (installing) return installing
 
-    // Sidebar / view toggle requests from native menu
-    await listenTyped('mt://view/toggle', payload => {
-      const entry = payload.entry
-      if (entry === 'sideBar') layout.toggleSideBar()
-      else if (entry === 'tabBar') layout.toggleTabBar()
-    })
-
-    // Command palette show
-    await listenTyped('mt://palette/show', () => {
-      bus.emit('show-command-palette', undefined)
-    })
-
-    // Cross-window preference / user-data sync. Either was written by THIS
-    // window (in which case the local store already has the value and the
-    // patch is a no-op) or by a sibling Preferences window — apply the
-    // patch to local state without round-tripping it back to disk.
-    await listenTyped('mt://prefs/changed', ({ patch }) => {
-      for (const [k, v] of Object.entries(patch)) {
-        if (k in prefs.$state) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          ;(prefs as any)[k] = v
-        }
+    installing = (async () => {
+      const layout = useLayoutStore()
+      const prefs = usePreferencesStore()
+      const keys = useKeybindingsStore()
+      const added: UnlistenFn[] = []
+      const on = async <K extends EventName>(
+        name: K,
+        handler: (payload: EventRegistry[K]) => void,
+      ) => {
+        const unlisten = await listenTyped(name, handler)
+        added.push(unlisten)
       }
-    })
-    await listenTyped('mt://userdata/changed', ({ patch }) => {
-      for (const [k, v] of Object.entries(patch)) {
-        if (k in prefs.$state) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          ;(prefs as any)[k] = v
-        }
-      }
-    })
 
-    // Menu-driven file events (open from "Open Recent…", etc.) are routed
-    // through `mt://window/open-file` and handled inside the editor store.
+      try {
+        // Sidebar / view toggle requests from native menu.
+        await on('mt://view/toggle', payload => {
+          const entry = payload.entry
+          if (entry === 'sideBar') layout.toggleSideBar()
+          else if (entry === 'tabBar') layout.toggleTabBar()
+        })
+
+        await on('mt://palette/show', () => {
+          bus.emit('show-command-palette', undefined)
+        })
+
+        await on('mt://prefs/changed', ({ patch }) => {
+          prefs.applyRemotePreferences(patch)
+          const keybindings = patch.keybindings
+          if (keybindings && typeof keybindings === 'object' && !Array.isArray(keybindings)) {
+            keys.hydrate(keybindings as Record<string, unknown>)
+          }
+        })
+
+        await on('mt://userdata/changed', ({ patch }) => {
+          prefs.applyRemoteUserData(patch)
+        })
+
+        localUnlisteners = added
+        installed = true
+
+        // Hydrate shortcuts only after the listener is active, closing the
+        // same snapshot/subscription race as the main preference bootstrap.
+        try {
+          // As with the preference snapshot, retry if a live keybinding event
+          // lands after an older value was read but before invoke resolves.
+          for (;;) {
+            const revision = keys.revision
+            const persisted = await getPreference<Record<string, unknown>>('keybindings')
+            if (revision !== keys.revision) continue
+            if (persisted) keys.hydrate(persisted)
+            break
+          }
+        } catch (error) {
+          console.warn('[listenForMain] failed to refresh keybindings', error)
+        }
+        return true
+      } catch (error) {
+        for (const unlisten of added.reverse()) {
+          try { unlisten() } catch { /* best-effort cleanup */ }
+        }
+        installed = false
+        prefs.lastError = `Unable to subscribe to application events: ${error instanceof Error ? error.message : String(error)}`
+        return false
+      }
+    })()
+
+    try { return await installing } finally { installing = null }
   }
 
-  return { install }
+  function uninstall() {
+    for (const unlisten of localUnlisteners.splice(0).reverse()) {
+      try { unlisten() } catch { /* best-effort cleanup */ }
+    }
+    installed = false
+  }
+
+  return { install, uninstall }
 })

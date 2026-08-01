@@ -13,7 +13,9 @@ test('renderer boots and shows the editor page', async ({ page }) => {
   // The TitleBar word-count label is the most reliable "boot ok" signal —
   // if Pinia or Muya failed, this never shows up.
   await expect(page.locator('.title-bar')).toBeVisible({ timeout: 10_000 })
-  await expect(page.locator('.tabs-bar')).toBeVisible()
+  // The canonical preference hides the optional tab bar by default. Assert
+  // the editor surface instead so this smoke test does not contradict it.
+  await expect(page.locator('.editor-stage')).toBeVisible()
 })
 
 test('command palette opens with Ctrl+Shift+P', async ({ page }) => {

@@ -10,6 +10,7 @@ import { useEditorStore } from '@/stores/editor'
 import { usePreferencesStore } from '@/stores/preferences'
 import { useNotificationStore } from '@/stores/notification'
 import { searchInFolder, type SearchHit } from '@/services/tauri-invoke'
+import { parseSearchMaxFileSize } from '@/services/search-preferences'
 import { t } from '@/i18n'
 
 interface Group { path: string; hits: SearchHit[] }
@@ -33,7 +34,7 @@ const totalHits = computed(() => groups.value.reduce((n, g) => n + g.hits.length
 let runToken = 0
 async function runSearch() {
   if (!project.projectTree) {
-    notify.pushToast({ type: 'warning', message: 'Open a folder first.' })
+    notify.pushToast({ type: 'warning', message: t('sideBar.openFolderFirst') })
     return
   }
   const text = query.value.trim()
@@ -49,12 +50,15 @@ async function runSearch() {
       regex: regex.value,
       includeHidden: includeHidden.value || prefs.searchIncludeHidden,
       followSymlinks: prefs.searchFollowSymlinks,
+      exclusions: prefs.searchExclusions,
+      maxFileSize: parseSearchMaxFileSize(prefs.searchMaxFileSize),
+      noIgnore: prefs.searchNoIgnore,
     })
     if (token !== runToken) return // a newer search supersedes us
     groups.value = group(hits)
   } catch (err) {
     if (token !== runToken) return
-    notify.pushToast({ type: 'error', title: 'Search failed', message: err instanceof Error ? err.message : String(err) })
+    notify.pushToast({ type: 'error', title: t('sideBar.searchFailed'), message: err instanceof Error ? err.message : String(err) })
     groups.value = []
   } finally {
     if (token === runToken) busy.value = false
@@ -74,7 +78,7 @@ function group(hits: SearchHit[]): Group[] {
 async function openHit(hit: SearchHit) {
   try { await editor.openFile(hit.path) }
   catch (err) {
-    notify.pushToast({ type: 'error', title: 'Open failed', message: err instanceof Error ? err.message : String(err) })
+    notify.pushToast({ type: 'error', title: t('toast.openFailed'), message: err instanceof Error ? err.message : String(err) })
   }
   // TODO: scroll Muya to `hit.line`. Muya exposes a `scrollToHeader`-style
   // bus event but no line-anchor jump yet; defer for now.
@@ -109,12 +113,12 @@ function shortPath(full: string): string {
         />
       </div>
       <div class="toggle-row">
-        <button class="toggle" :class="{ on: caseSensitive }" :title="t('sideBar.caseSensitive')" @click="caseSensitive = !caseSensitive; runSearch()">Aa</button>
-        <button class="toggle" :class="{ on: wholeWord }" :title="t('sideBar.wholeWord')" @click="wholeWord = !wholeWord; runSearch()">ab</button>
-        <button class="toggle" :class="{ on: regex }" :title="t('sideBar.regex')" @click="regex = !regex; runSearch()">.*</button>
+        <button type="button" class="toggle" :class="{ on: caseSensitive }" :title="t('sideBar.caseSensitive')" :aria-pressed="caseSensitive" @click="caseSensitive = !caseSensitive; runSearch()">Aa</button>
+        <button type="button" class="toggle" :class="{ on: wholeWord }" :title="t('sideBar.wholeWord')" :aria-pressed="wholeWord" @click="wholeWord = !wholeWord; runSearch()">ab</button>
+        <button type="button" class="toggle" :class="{ on: regex }" :title="t('sideBar.regex')" :aria-pressed="regex" @click="regex = !regex; runSearch()">.*</button>
         <span class="status">
-          <template v-if="busy">searching…</template>
-          <template v-else-if="hasResults">{{ totalHits }} match<template v-if="totalHits !== 1">es</template> in {{ groups.length }} file<template v-if="groups.length !== 1">s</template></template>
+          <template v-if="busy">{{ t('sideBar.searching') }}</template>
+          <template v-else-if="hasResults">{{ t('sideBar.searchResults', { matches: totalHits, files: groups.length }) }}</template>
         </span>
       </div>
     </div>
@@ -140,25 +144,26 @@ function shortPath(full: string): string {
 <style scoped>
 .search-pane { height: 100%; display: flex; flex-direction: column; }
 .search-header {
-  border-bottom: 1px solid #eaecef;
+  border-bottom: 1px solid var(--mt-border, #eaecef);
   padding: 8px 12px;
 }
 .input-row {
   display: flex;
   align-items: center;
-  border: 1px solid #d1d5da;
+  border: 1px solid var(--mt-border, #d1d5da);
   border-radius: 4px;
   padding: 4px 8px;
-  background: #fff;
+  background: var(--mt-row-active, #fff);
 }
-.input-row:focus-within { border-color: #0366d6; }
-.leading { color: #6a737d; margin-right: 6px; font-size: 14px; }
+.input-row:focus-within { border-color: var(--mt-accent, #0366d6); }
+.leading { color: var(--mt-fg-muted, #6a737d); margin-right: 6px; font-size: 14px; }
 .search-input {
   flex: 1;
   border: none;
   outline: none;
   font-size: 12px;
   background: transparent;
+  color: var(--mt-fg, #24292e);
 }
 .toggle-row {
   display: flex;
@@ -169,18 +174,19 @@ function shortPath(full: string): string {
 .toggle {
   border: 1px solid transparent;
   background: transparent;
-  color: #586069;
+  color: var(--mt-fg-muted, #586069);
   cursor: pointer;
   padding: 2px 6px;
   border-radius: 3px;
   font-size: 11px;
   font-family: ui-monospace, monospace;
 }
-.toggle:hover { background: #eaecef; color: #24292e; }
-.toggle.on { background: #dbedff; color: #0366d6; border-color: #79b8ff; }
+.toggle:hover { background: var(--mt-row-hover, #eaecef); color: var(--mt-fg, #24292e); }
+.toggle:focus-visible { outline: 2px solid var(--mt-accent, #0366d6); outline-offset: 1px; }
+.toggle.on { background: var(--mt-row-active, #dbedff); color: var(--mt-accent, #0366d6); border-color: var(--mt-accent, #79b8ff); }
 .status {
   margin-left: auto;
-  color: #6a737d;
+  color: var(--mt-fg-muted, #6a737d);
   font-size: 11px;
 }
 .results { flex: 1; overflow-y: auto; padding-bottom: 16px; }
@@ -189,8 +195,8 @@ function shortPath(full: string): string {
   padding: 4px 12px;
   font-size: 11px;
   font-weight: 600;
-  color: #24292e;
-  background: #f1f3f5;
+  color: var(--mt-fg, #24292e);
+  background: var(--mt-tab-bg, #f1f3f5);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -203,9 +209,9 @@ function shortPath(full: string): string {
   cursor: pointer;
   align-items: baseline;
 }
-.hit:hover { background: #f1f8ff; }
+.hit:hover { background: var(--mt-row-hover, #f1f8ff); }
 .hit .line {
-  color: #6a737d;
+  color: var(--mt-fg-muted, #6a737d);
   font-family: ui-monospace, monospace;
   font-size: 11px;
   min-width: 26px;
@@ -213,7 +219,7 @@ function shortPath(full: string): string {
   flex-shrink: 0;
 }
 .hit .preview {
-  color: #24292e;
+  color: var(--mt-fg, #24292e);
   font-family: ui-monospace, monospace;
   white-space: nowrap;
   overflow: hidden;
@@ -222,7 +228,7 @@ function shortPath(full: string): string {
 .empty {
   padding: 16px;
   text-align: center;
-  color: #959da5;
+  color: var(--mt-fg-muted, #959da5);
   font-size: 12px;
 }
 </style>

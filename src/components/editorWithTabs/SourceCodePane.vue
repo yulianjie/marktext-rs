@@ -24,18 +24,18 @@ const boundId = ref<string | null>(null)
 // Minimal markdown highlighting palette. Inherits font / colours from the
 // host stylesheet otherwise.
 const mdHighlight = HighlightStyle.define([
-  { tag: tags.heading1, fontSize: '1.4em', fontWeight: '600', color: '#22863a' },
-  { tag: tags.heading2, fontSize: '1.25em', fontWeight: '600', color: '#22863a' },
-  { tag: tags.heading3, fontSize: '1.15em', fontWeight: '600', color: '#22863a' },
-  { tag: [tags.heading4, tags.heading5, tags.heading6], fontWeight: '600', color: '#22863a' },
+  { tag: tags.heading1, fontSize: '1.4em', fontWeight: '600', color: 'var(--mt-syntax-heading)' },
+  { tag: tags.heading2, fontSize: '1.25em', fontWeight: '600', color: 'var(--mt-syntax-heading)' },
+  { tag: tags.heading3, fontSize: '1.15em', fontWeight: '600', color: 'var(--mt-syntax-heading)' },
+  { tag: [tags.heading4, tags.heading5, tags.heading6], fontWeight: '600', color: 'var(--mt-syntax-heading)' },
   { tag: tags.strong, fontWeight: '600' },
   { tag: tags.emphasis, fontStyle: 'italic' },
   { tag: tags.strikethrough, textDecoration: 'line-through' },
-  { tag: tags.link, color: '#0366d6', textDecoration: 'underline' },
-  { tag: tags.url, color: '#0366d6' },
-  { tag: tags.monospace, color: '#d73a49', background: '#fafbfc' },
-  { tag: tags.list, color: '#005cc5' },
-  { tag: tags.quote, color: '#6a737d', fontStyle: 'italic' },
+  { tag: tags.link, color: 'var(--mt-syntax-link)', textDecoration: 'underline' },
+  { tag: tags.url, color: 'var(--mt-syntax-link)' },
+  { tag: tags.monospace, color: 'var(--mt-syntax-code)', background: 'var(--mt-code-bg)' },
+  { tag: tags.list, color: 'var(--mt-syntax-list)' },
+  { tag: tags.quote, color: 'var(--mt-fg-muted)', fontStyle: 'italic' },
 ])
 
 const baseExtensions = (): Extension[] => [
@@ -130,7 +130,7 @@ onBeforeUnmount(() => {
 .source-pane {
   flex: 1;
   display: flex;
-  background: #fafbfc;
+  background: var(--mt-code-bg, #fafbfc);
   overflow: hidden;
 }
 .cm-host {
@@ -138,7 +138,8 @@ onBeforeUnmount(() => {
   overflow: auto;
   font-family: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, Consolas, monospace;
   font-size: 13px;
-  background: #fff;
+  background: var(--mt-bg, #fff);
+  color: var(--mt-fg, #24292e);
 }
 .cm-host :deep(.cm-editor) {
   height: 100%;
@@ -148,16 +149,16 @@ onBeforeUnmount(() => {
   line-height: 1.6;
 }
 .cm-host :deep(.cm-gutters) {
-  background: #fafbfc;
-  border-right: 1px solid #eaecef;
-  color: #959da5;
+  background: var(--mt-sidebar-bg, #fafbfc);
+  border-right: 1px solid var(--mt-border, #eaecef);
+  color: var(--mt-fg-muted, #959da5);
 }
 .cm-host :deep(.cm-activeLineGutter) {
-  background: #f1f8ff;
-  color: #24292e;
+  background: var(--mt-row-active, #f1f8ff);
+  color: var(--mt-fg, #24292e);
 }
 .cm-host :deep(.cm-activeLine) {
-  background: #f6f8fa;
+  background: var(--mt-row-hover, #f6f8fa);
 }
 .cm-host :deep(.cm-content) {
   padding: 16px 0;

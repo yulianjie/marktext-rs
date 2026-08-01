@@ -2,14 +2,15 @@
   "autoSave": false,
   "autoSaveDelay": 5000,
   "titleBarStyle": "custom",
+  "rememberWindowSize": false,
   "appIcon": "ios26",
   "openFilesInNewWindow": false,
   "openFolderInNewWindow": false,
   "zoom": 1.0,
   "hideScrollbar": false,
   "wordWrapInToc": false,
-  "fileSortBy": "created",
-  "startUpAction": "lastState",
+  "fileSortBy": "modified",
+  "startUpAction": "blank",
   "defaultDirectoryToOpen": "",
   "language": "en",
 
@@ -55,7 +56,7 @@
 
   "spellcheckerEnabled": false,
   "spellcheckerNoUnderline": false,
-  "spellcheckerLanguage": "en-US",
+  "spellcheckerLanguage": "en_US",
 
   "sideBarVisibility": true,
   "tabBarVisibility": false,

@@ -1,175 +1,259 @@
-/**
- * Side-effects: apply preferences store to the DOM.
- *
- * Watches reactive preferences and reflects them onto:
- *   - `document.documentElement.dataset.theme` (CSS theming hook)
- *   - `--mt-zoom`, `--mt-font-size`, `--mt-line-height`, `--mt-editor-font`,
- *     `--mt-code-font`, `--mt-code-font-size`, `--mt-editor-line-width`
- *     (CSS custom properties consumed by editor + Muya styles)
- *   - body class `mt-no-scrollbar` for the hide-scrollbar option
- *   - body class `mt-typewriter` / `mt-focus` for view modes
- *
- * Call once near the top of each window's root component after preferences
- * have been loaded. Subsequent changes are reactive — no manual re-apply
- * needed.
- *
- * The OS-color-scheme listener is installed when `autoSwitchTheme === 1`.
- * Mode 0 = always use selected theme; 2 = also use selected theme (legacy
- * default — kept for parity).
- */
-import { watchEffect, onScopeDispose } from 'vue'
+/** Apply persisted preferences to window-level DOM side effects. */
+import { effectScope, shallowRef, watch, type EffectScope } from 'vue'
+import { getCurrentWebview } from '@tauri-apps/api/webview'
 import { usePreferencesStore } from '@/stores/preferences'
 import { setLocale, type LocaleId } from '@/i18n'
 import { listThemes, readThemeCss, type UserTheme } from './tauri-invoke'
 import { applyWindowIcon } from './app-icon'
 
-let mediaQuery: MediaQueryList | null = null
-let mediaQueryListener: ((ev: MediaQueryListEvent) => void) | null = null
-
-/** IDs of themes the global stylesheet already handles natively. */
 const BUILTIN_THEMES = new Set([
   'light',
   'dark',
+  'github-blue',
   'graphite-light',
   'material-dark',
   'one-dark',
   'ulysses-light',
 ])
-
 const USER_THEME_STYLE_ID = 'mt-user-theme-css'
+const SPELL_STYLE_ID = 'mt-spell-underline-style'
 
-/** Cached lookup of user theme id → on-disk path. Populated lazily. */
+let applierScope: EffectScope | null = null
 let userThemesIndex: Map<string, UserTheme> | null = null
+let themeRequest = 0
+
+/** The theme actually displayed (selected theme, or the current OS theme). */
+export const effectiveThemeId = shallowRef('light')
+export const effectiveThemeIsDark = shallowRef(false)
+
+function systemPrefersDark(): boolean {
+  return typeof window !== 'undefined'
+    && typeof window.matchMedia === 'function'
+    && window.matchMedia('(prefers-color-scheme: dark)').matches
+}
+
+export function resolveEffectiveTheme(
+  selectedTheme: string,
+  autoSwitchMode: number,
+  prefersDark = systemPrefersDark(),
+): string {
+  if (autoSwitchMode === 1) return prefersDark ? 'dark' : 'light'
+  return selectedTheme || 'light'
+}
 
 async function ensureUserThemes(): Promise<Map<string, UserTheme>> {
   if (userThemesIndex) return userThemesIndex
   try {
     const list = await listThemes()
-    userThemesIndex = new Map(list.map(t => [t.id, t]))
+    userThemesIndex = new Map(list.map(theme => [theme.id, theme]))
   } catch {
     userThemesIndex = new Map()
   }
   return userThemesIndex
 }
 
-/** Re-fetch the user theme list from disk. Call after the user adds files. */
-export function invalidateUserThemes() {
+/** Re-fetch the user theme list from disk after files are added or removed. */
+export function invalidateUserThemes(): void {
   userThemesIndex = null
 }
 
-async function applyUserTheme(themeId: string): Promise<void> {
-  if (typeof document === 'undefined') return
-  const tag = document.getElementById(USER_THEME_STYLE_ID) as HTMLStyleElement | null
+function userThemeTag(): HTMLStyleElement | null {
+  if (typeof document === 'undefined') return null
+  return document.getElementById(USER_THEME_STYLE_ID) as HTMLStyleElement | null
+}
+
+async function applyUserTheme(themeId: string, request: number): Promise<boolean> {
+  if (typeof document === 'undefined') return true
+  const existing = userThemeTag()
   if (BUILTIN_THEMES.has(themeId)) {
-    // Built-in theme — wipe any injected user CSS.
-    if (tag) tag.textContent = ''
-    return
+    if (request === themeRequest && existing) existing.textContent = ''
+    return true
   }
-  const index = await ensureUserThemes()
-  const meta = index.get(themeId)
+
+  const meta = (await ensureUserThemes()).get(themeId)
   if (!meta) {
-    if (tag) tag.textContent = ''
-    return
+    if (request === themeRequest && existing) existing.textContent = ''
+    return false
   }
+
   try {
     const css = await readThemeCss(meta.path)
-    let el = tag
-    if (!el) {
-      el = document.createElement('style')
-      el.id = USER_THEME_STYLE_ID
-      document.head.appendChild(el)
+    if (request !== themeRequest) return true
+    let tag = existing
+    if (!tag) {
+      tag = document.createElement('style')
+      tag.id = USER_THEME_STYLE_ID
+      document.head.appendChild(tag)
     }
-    el.textContent = css
+    tag.textContent = css
+    return true
   } catch {
-    if (tag) tag.textContent = ''
+    if (request === themeRequest && existing) existing.textContent = ''
+    return false
   }
 }
 
-function effectiveTheme(theme: string, autoSwitchMode: number): string {
-  if (autoSwitchMode === 1 && typeof window !== 'undefined' && window.matchMedia) {
-    const dark = window.matchMedia('(prefers-color-scheme: dark)').matches
-    return dark ? 'dark' : 'light'
-  }
-  return theme || 'light'
+function setRootProp(name: string, value: string): void {
+  if (typeof document !== 'undefined') document.documentElement.style.setProperty(name, value)
 }
 
-function setRootProp(name: string, value: string) {
+function setDocumentClass(name: string, on: boolean): void {
   if (typeof document === 'undefined') return
-  document.documentElement.style.setProperty(name, value)
+  document.documentElement.classList.toggle(name, on)
+  document.body?.classList.toggle(name, on)
 }
 
-function setBodyClass(name: string, on: boolean) {
-  if (typeof document === 'undefined') return
-  document.body.classList.toggle(name, on)
-}
-
-export function applyPreferencesToDom(): void {
-  const prefs = usePreferencesStore()
-
-  watchEffect(() => {
-    const theme = effectiveTheme(prefs.theme, prefs.autoSwitchTheme)
-    if (typeof document !== 'undefined') {
-      document.documentElement.dataset.theme = theme
-      setBodyClass('dark', theme === 'dark' || theme.includes('dark'))
-    }
-    // Off-builtin user themes: read & inject the .css.
-    void applyUserTheme(theme)
-
-    // Locale.
-    if (prefs.language === 'zh-CN' || prefs.language === 'en' || prefs.language === 'ja') {
-      setLocale(prefs.language as LocaleId)
-    }
-
-    // Runtime app icon.
-    void applyWindowIcon(prefs.appIcon)
-
-    // Editor display
-    setRootProp('--mt-zoom', String(prefs.zoom))
-    setRootProp('--mt-font-size', `${prefs.fontSize}px`)
-    setRootProp('--mt-line-height', String(prefs.lineHeight))
-    setRootProp('--mt-editor-font', prefs.editorFontFamily)
-    setRootProp('--mt-code-font', prefs.codeFontFamily)
-    setRootProp('--mt-code-font-size', `${prefs.codeFontSize}px`)
-    setRootProp('--mt-editor-line-width', prefs.editorLineWidth || '860px')
-    setRootProp('--mt-text-direction', prefs.textDirection)
-
-    // Use a CSS-driven zoom: scale font instead of `zoom` to avoid layout breakage.
-    setRootProp('--mt-base-font-size', `${14 * prefs.zoom}px`)
-
-    // Body classes
-    setBodyClass('mt-no-scrollbar', prefs.hideScrollbar)
-    setBodyClass('mt-typewriter', prefs.typewriter)
-    setBodyClass('mt-focus', prefs.focus)
-    setBodyClass('mt-source-mode', prefs.sourceCode)
-    setBodyClass('mt-rtl', prefs.textDirection === 'rtl')
-  })
-
-  // Live-follow OS theme when autoSwitchTheme === 1.
-  watchEffect(onCleanup => {
-    if (typeof window === 'undefined' || !window.matchMedia) return
-    if (prefs.autoSwitchTheme !== 1) return
-    mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
-    mediaQueryListener = () => {
-      const dark = mediaQuery!.matches
-      const t = dark ? 'dark' : 'light'
-      document.documentElement.dataset.theme = t
-      setBodyClass('dark', dark)
-    }
-    mediaQuery.addEventListener('change', mediaQueryListener)
-    onCleanup(() => {
-      if (mediaQuery && mediaQueryListener) {
-        mediaQuery.removeEventListener('change', mediaQueryListener)
-      }
-      mediaQuery = null
-      mediaQueryListener = null
+function applyWindowZoom(zoom: number): void {
+  setRootProp('--mt-zoom', String(zoom))
+  if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+    void getCurrentWebview().setZoom(zoom).catch(error => {
+      console.warn('[preferences] failed to apply webview zoom', error)
     })
-  })
+  } else if (typeof document !== 'undefined') {
+    // Chromium's CSS zoom gives Vite/browser development the same whole-app
+    // behaviour as Tauri's native webview scale factor.
+    document.documentElement.style.zoom = String(zoom)
+  }
+}
 
-  onScopeDispose(() => {
-    if (mediaQuery && mediaQueryListener) {
-      mediaQuery.removeEventListener('change', mediaQueryListener)
-      mediaQuery = null
-      mediaQueryListener = null
-    }
+function setDarkThemeClass(dark: boolean): void {
+  effectiveThemeIsDark.value = dark
+  if (typeof document === 'undefined') return
+  document.documentElement.classList.toggle('dark', dark)
+  document.body?.classList.toggle('dark', dark)
+}
+
+function computedThemeIsDark(fallback: boolean): boolean {
+  if (typeof document === 'undefined' || typeof getComputedStyle !== 'function') return fallback
+  const color = getComputedStyle(document.documentElement).backgroundColor
+  const match = color.match(/rgba?\(\s*([\d.]+)[, ]+\s*([\d.]+)[, ]+\s*([\d.]+)/i)
+  if (!match) return fallback
+  const [, r, g, b] = match.map(Number)
+  // Relative luminance is unnecessary for a binary UI palette decision;
+  // weighted sRGB brightness handles theme background colours reliably.
+  return (r * 0.299 + g * 0.587 + b * 0.114) < 128
+}
+
+async function applyResolvedTheme(theme: string): Promise<boolean> {
+  effectiveThemeId.value = theme
+  const builtInDark = /dark/i.test(theme)
+  if (typeof document !== 'undefined') {
+    document.documentElement.dataset.theme = theme
+  }
+  setDarkThemeClass(builtInDark)
+  const request = ++themeRequest
+  const applied = await applyUserTheme(theme, request)
+  if (request === themeRequest) {
+    setDarkThemeClass(BUILTIN_THEMES.has(theme) ? builtInDark : computedThemeIsDark(false))
+  }
+  return applied
+}
+
+/** Force the current user-theme CSS to be re-indexed and re-read. */
+export async function refreshUserTheme(themeId?: string): Promise<boolean> {
+  const prefs = usePreferencesStore()
+  invalidateUserThemes()
+  const theme = themeId ?? resolveEffectiveTheme(prefs.theme, prefs.autoSwitchTheme)
+  return applyResolvedTheme(theme)
+}
+
+function ensureSpellStyle(): void {
+  if (typeof document === 'undefined' || document.getElementById(SPELL_STYLE_ID)) return
+  const tag = document.createElement('style')
+  tag.id = SPELL_STYLE_ID
+  tag.textContent = 'html.mt-spell-no-underline *::spelling-error { text-decoration: none; }'
+  document.head.appendChild(tag)
+}
+
+/**
+ * Install preference side effects once per window. Repeated calls are safe;
+ * `disposePreferencesApplier` is provided for tests and HMR teardown.
+ */
+export async function applyPreferencesToDom(): Promise<void> {
+  if (applierScope?.active) return
+  const prefs = usePreferencesStore()
+  ensureSpellStyle()
+  // User theme CSS is read from disk. Await it before the first Vue mount so
+  // secondary/settings windows do not flash the default light palette.
+  await applyResolvedTheme(resolveEffectiveTheme(prefs.theme, prefs.autoSwitchTheme))
+  applierScope = effectScope()
+  applierScope.run(() => {
+    watch(
+      () => [prefs.theme, prefs.autoSwitchTheme] as const,
+      ([theme, mode]) => { void applyResolvedTheme(resolveEffectiveTheme(theme, mode)) },
+      { immediate: true },
+    )
+
+    watch(
+      () => prefs.autoSwitchTheme,
+      (mode, _oldMode, onCleanup) => {
+        if (mode !== 1 || typeof window === 'undefined' || !window.matchMedia) return
+        const media = window.matchMedia('(prefers-color-scheme: dark)')
+        const listener = () => { void applyResolvedTheme(media.matches ? 'dark' : 'light') }
+        media.addEventListener('change', listener)
+        onCleanup(() => media.removeEventListener('change', listener))
+      },
+      { immediate: true },
+    )
+
+    watch(
+      () => prefs.language,
+      language => {
+        if (language === 'zh-CN' || language === 'en' || language === 'ja') {
+          setLocale(language as LocaleId)
+        }
+      },
+      { immediate: true },
+    )
+    watch(() => prefs.appIcon, icon => { void applyWindowIcon(icon) }, { immediate: true })
+    watch(() => prefs.zoom, applyWindowZoom, { immediate: true })
+
+    watch(
+      () => [
+        prefs.fontSize,
+        prefs.lineHeight,
+        prefs.editorFontFamily,
+        prefs.codeFontFamily,
+        prefs.codeFontSize,
+        prefs.editorLineWidth,
+        prefs.textDirection,
+      ] as const,
+      ([fontSize, lineHeight, editorFont, codeFont, codeFontSize, lineWidth, direction]) => {
+        setRootProp('--mt-font-size', `${fontSize}px`)
+        setRootProp('--mt-line-height', String(lineHeight))
+        setRootProp('--mt-editor-font', editorFont)
+        setRootProp('--mt-code-font', codeFont)
+        setRootProp('--mt-code-font-size', `${codeFontSize}px`)
+        setRootProp('--mt-editor-line-width', lineWidth || '860px')
+        setRootProp('--mt-text-direction', direction)
+        setRootProp('--mt-base-font-size', '14px')
+      },
+      { immediate: true },
+    )
+
+    watch(
+      () => [
+        prefs.hideScrollbar,
+        prefs.typewriter,
+        prefs.focus,
+        prefs.sourceCode,
+        prefs.textDirection,
+        prefs.spellcheckerNoUnderline,
+      ] as const,
+      ([hideScrollbar, typewriter, focus, sourceCode, direction, noSpellUnderline]) => {
+        setDocumentClass('mt-no-scrollbar', hideScrollbar)
+        setDocumentClass('mt-typewriter', typewriter)
+        setDocumentClass('mt-focus', focus)
+        setDocumentClass('mt-source-mode', sourceCode)
+        setDocumentClass('mt-rtl', direction === 'rtl')
+        setDocumentClass('mt-spell-no-underline', noSpellUnderline)
+      },
+      { immediate: true },
+    )
   })
+}
+
+export function disposePreferencesApplier(): void {
+  applierScope?.stop()
+  applierScope = null
 }

@@ -27,12 +27,20 @@ const BUNDLE_IDENTIFIER: &str = "com.marktext.rs";
 /// Reads the `rememberWindowSize` preference straight off disk. Falls back
 /// to `false` (don't restore size — every launch uses the conf default) if
 /// anything fails. This mirrors `tauri-plugin-store`'s on-disk layout:
-/// `app_config_dir() / "preferences.json"`.
+/// `app_data_dir() / "preferences.json"`.
 fn load_remember_window_size_pref() -> bool {
-    let Some(config_dir) = dirs::config_dir() else { return false; };
-    let path = config_dir.join(BUNDLE_IDENTIFIER).join("preferences.json");
-    let Ok(content) = std::fs::read_to_string(&path) else { return false; };
-    let Ok(v): Result<serde_json::Value, _> = serde_json::from_str(&content) else { return false; };
+    // tauri-plugin-store resolves relative stores against AppData, not
+    // AppConfig. These differ under XDG on Linux.
+    let Some(data_dir) = dirs::data_dir() else {
+        return false;
+    };
+    let path = preferences::store::path_from_data_dir(&data_dir, BUNDLE_IDENTIFIER);
+    let Ok(content) = std::fs::read_to_string(&path) else {
+        return false;
+    };
+    let Ok(v): Result<serde_json::Value, _> = serde_json::from_str(&content) else {
+        return false;
+    };
     v.get("rememberWindowSize")
         .and_then(|x| x.as_bool())
         .unwrap_or(false)
@@ -87,7 +95,9 @@ pub fn run() {
                 let _ = window.set_focus();
             }
             for arg in argv.iter().skip(1) {
-                if arg.starts_with("--") || arg.starts_with('-') { continue; }
+                if arg.starts_with("--") || arg.starts_with('-') {
+                    continue;
+                }
                 let p = std::path::PathBuf::from(arg);
                 if p.exists() && p.is_file() {
                     if let Some(win) = app.get_webview_window(&target) {
@@ -95,7 +105,10 @@ pub fn run() {
                     }
                 }
             }
-            let payload = ipc::events::SecondInstance { argv, cwd: cwd.into() };
+            let payload = ipc::events::SecondInstance {
+                argv,
+                cwd: cwd.into(),
+            };
             let _ = app.emit("mt://second-instance", payload);
         }));
         // Updater plugin: registered so the renderer can call check()/

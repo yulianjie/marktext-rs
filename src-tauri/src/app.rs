@@ -30,6 +30,10 @@ struct AppStateInner {
 
     /// Recent folders (most-recent first), capped to ~20 entries.
     recent_folders: Vec<PathBuf>,
+
+    /// Secrets must not be persisted in `preferences.json`. The GitHub image
+    /// upload token intentionally lives only for the lifetime of this process.
+    github_token: Option<String>,
 }
 
 pub struct Workspace {
@@ -66,6 +70,30 @@ impl AppState {
 
     pub fn remove_workspace(&self, root: &std::path::Path) -> Option<Workspace> {
         self.inner.write().workspaces.remove(root)
+    }
+
+    pub fn set_github_token(&self, token: String) {
+        let mut inner = self.inner.write();
+        inner.github_token = if token.is_empty() { None } else { Some(token) };
+    }
+
+    pub fn github_token(&self) -> Option<String> {
+        self.inner.read().github_token.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AppState;
+
+    #[test]
+    fn github_token_is_process_memory_only_state() {
+        let state = AppState::default();
+        assert_eq!(state.github_token(), None);
+        state.set_github_token("secret".into());
+        assert_eq!(state.github_token().as_deref(), Some("secret"));
+        state.set_github_token(String::new());
+        assert_eq!(state.github_token(), None);
     }
 }
 

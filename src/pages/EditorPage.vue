@@ -5,7 +5,7 @@
  * Owns the keyboard shortcuts, the file-association open-on-launch handoff,
  * the native menu action router, and webview drag-drop file opens.
  */
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { getCurrentWebview } from '@tauri-apps/api/webview'
 import TitleBar from '@/components/titleBar/TitleBar.vue'
 import TabsBar from '@/components/editorWithTabs/TabsBar.vue'
@@ -25,25 +25,26 @@ import ImagePreview from '@/components/imagePreview/ImagePreview.vue'
 import { useEditorStore } from '@/stores/editor'
 import { useLayoutStore } from '@/stores/layout'
 import { usePreferencesStore } from '@/stores/preferences'
-import { useListenForMainStore } from '@/stores/listenForMain'
 import { useCommandCenterStore } from '@/stores/commandCenter'
 import { useNotificationStore } from '@/stores/notification'
 import { useKeybindingsStore, eventAccel } from '@/stores/keybindings'
-import { openFiles, saveAsDialog, exportHtml, getPreference, pandocConvert } from '@/services/tauri-invoke'
+import { useProjectStore } from '@/stores/project'
+import { openFiles, saveAsDialog, exportHtml, pandocConvert } from '@/services/tauri-invoke'
 import { listenTyped } from '@/services/tauri-bridge'
-import { applyPreferencesToDom } from '@/services/preferences-applier'
 import { bus } from '@/bus'
 import { t } from '@/i18n'
 
 const editor = useEditorStore()
 const layout = useLayoutStore()
 const prefs = usePreferencesStore()
-const listener = useListenForMainStore()
 const cc = useCommandCenterStore()
 const notify = useNotificationStore()
 const keys = useKeybindingsStore()
+const project = useProjectStore()
 
 const dragOver = ref(false)
+const rendererHandlesShortcuts = typeof window !== 'undefined'
+  && !('__TAURI_INTERNALS__' in window)
 
 /* ── shortcuts ───────────────────────────────────────────────── */
 function onKey(ev: KeyboardEvent) {
@@ -67,10 +68,49 @@ async function doOpen() {
 
 async function doOpenFolder() {
   const { openFolder } = await import('@/services/tauri-invoke')
-  const { useProjectStore } = await import('@/stores/project')
   const path = await openFolder()
   if (!path) return
-  await useProjectStore().openRoot(path)
+  await project.openRoot(path)
+}
+
+async function restoreStartupState() {
+  let folder = ''
+  let file = ''
+  if (prefs.startUpAction === 'folder') {
+    folder = prefs.defaultDirectoryToOpen.trim()
+  } else if (prefs.startUpAction === 'lastState') {
+    folder = prefs.recentFolders[0] ?? ''
+    file = prefs.recentFiles[0] ?? ''
+  }
+
+  if (folder) {
+    try {
+      await project.openRoot(folder)
+    } catch (err) {
+      notify.pushToast({
+        type: 'error',
+        title: t('toast.openFailed'),
+        message: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+  if (!file) return
+
+  const placeholder = editor.tabs.find(tab =>
+    !tab.pathname && tab.isSaved && tab.markdown.length === 0,
+  )
+  try {
+    const opened = await editor.openFile(file)
+    if (placeholder && placeholder.id !== opened.id) {
+      await editor.closeTab(placeholder.id, true)
+    }
+  } catch (err) {
+    notify.pushToast({
+      type: 'error',
+      title: t('toast.openFailed'),
+      message: err instanceof Error ? err.message : String(err),
+    })
+  }
 }
 
 async function doExportHtml() {
@@ -139,6 +179,7 @@ const MENU_ACTIONS: Record<string, () => void | Promise<void>> = {
   'file.exportOdt': () => doExportPandoc('odt'),
   'file.exportEpub': () => doExportPandoc('epub'),
   'file.print': doPrint,
+  'file.preferences': async () => { const { openSettings } = await import('@/services/tauri-invoke'); await openSettings() },
   'file.closeTab': () => { if (editor.currentFileId) void editor.closeTab(editor.currentFileId) },
   'file.closeWindow': async () => { const win = await import('@tauri-apps/api/window'); await win.getCurrentWindow().close() },
   'edit.find': () => { editor.findReplaceOpen = true },
@@ -170,7 +211,6 @@ const MENU_ACTIONS: Record<string, () => void | Promise<void>> = {
     const cur = await w.isFullscreen()
     await w.setFullscreen(!cur)
   },
-  'help.openSettings': async () => { const { openSettings } = await import('@/services/tauri-invoke'); await openSettings() },
   'help.about': () => bus.emit('aboutDialog', undefined),
   'help.openDocs': async () => { const sh = await import('@tauri-apps/plugin-shell'); await sh.open('https://github.com/marktext/marktext') },
   'help.openIssues': async () => { const sh = await import('@tauri-apps/plugin-shell'); await sh.open('https://github.com/marktext/marktext/issues') },
@@ -185,7 +225,9 @@ function routeMenuAction(id: string) {
   if (id.startsWith('format.')) { bus.emit('format', id.slice('format.'.length)); return }
   if (id.startsWith('theme.set:')) {
     const theme = id.slice('theme.set:'.length)
-    void prefs.set('theme', theme)
+    // Choosing a concrete menu theme explicitly exits follow-system mode so
+    // the menu check mark and the rendered palette cannot disagree.
+    void prefs.patch({ theme, autoSwitchTheme: 2 })
     return
   }
   if (id.startsWith('file.openRecent:')) {
@@ -206,41 +248,48 @@ function routeMenuAction(id: string) {
 function registerBuiltinCommands() {
   const reg = (id: string, description: string, execute: () => void | Promise<void>, shortcut?: string[]) =>
     cc.register({ id, description, shortcut, execute })
-  reg('file.new', 'File: New Tab', () => { editor.newUntitledTab() }, ['Ctrl+T'])
-  reg('file.open', 'File: Open…', doOpen, ['Ctrl+O'])
-  reg('file.openFolder', 'File: Open Folder…', doOpenFolder, ['Ctrl+Shift+O'])
-  reg('file.save', 'File: Save', () => { void editor.saveCurrent() }, ['Ctrl+S'])
-  reg('file.saveAs', 'File: Save As…', () => MENU_ACTIONS['file.saveAs'](), ['Ctrl+Shift+S'])
+  const shortcut = (id: string) => keys.accel(id) ? [keys.accel(id)!] : undefined
+  reg('file.new', 'File: New Tab', () => { editor.newUntitledTab() }, shortcut('file.new'))
+  reg('file.open', 'File: Open…', doOpen, shortcut('file.open'))
+  reg('file.openFolder', 'File: Open Folder…', doOpenFolder, shortcut('file.openFolder'))
+  reg('file.save', 'File: Save', () => { void editor.saveCurrent() }, shortcut('file.save'))
+  reg('file.saveAs', 'File: Save As…', () => MENU_ACTIONS['file.saveAs'](), shortcut('file.saveAs'))
   reg('file.saveAll', 'File: Save All', () => { void editor.saveAllTabs() })
   reg('file.exportHtml', 'File: Export HTML…', doExportHtml)
-  reg('file.print', 'File: Print / Export PDF…', doPrint, ['Ctrl+P'])
+  reg('file.print', 'File: Print / Export PDF…', doPrint, shortcut('file.print'))
   reg('file.rename', 'File: Rename…', () => bus.emit('rename', undefined))
   reg('file.recent', 'File: Open Recent…', () => bus.emit('show-recent', undefined))
-  reg('view.toggleSidebar', 'View: Toggle Sidebar', () => layout.toggleSideBar(), ['Ctrl+B'])
+  reg('view.toggleSidebar', 'View: Toggle Sidebar', () => layout.toggleSideBar(), shortcut('view.toggleSidebar'))
   reg('view.toggleSourceCode', 'View: Toggle Source Code Mode', () => editor.toggleSourceCode(), ['Ctrl+Alt+S'])
   reg('view.toggleTypewriter', 'View: Toggle Typewriter Mode', () => { prefs.typewriter = !prefs.typewriter })
   reg('view.toggleFocus', 'View: Toggle Focus Mode', () => { prefs.focus = !prefs.focus })
-  reg('view.commandPalette', 'View: Command Palette', () => bus.emit('show-command-palette', undefined), ['Ctrl+Shift+P'])
-  reg('edit.find', 'Edit: Find', () => { editor.findReplaceOpen = true }, ['Ctrl+F'])
-  reg('edit.replace', 'Edit: Find & Replace', () => { editor.findReplaceOpen = true }, ['Ctrl+H'])
+  reg('view.commandPalette', 'View: Command Palette', () => bus.emit('show-command-palette', undefined), shortcut('view.commandPalette'))
+  reg('edit.find', 'Edit: Find', () => { editor.findReplaceOpen = true }, shortcut('edit.find'))
+  reg('edit.replace', 'Edit: Find & Replace', () => { editor.findReplaceOpen = true }, shortcut('edit.replace'))
   reg('app.about', 'Help: About MarkText', () => bus.emit('aboutDialog', undefined))
 }
 
+watch(() => keys.map, map => {
+  for (const cmd of cc.subcommands) {
+    if (!(cmd.id in map)) continue
+    const accel = map[cmd.id]
+    cc.register({ ...cmd, shortcut: accel ? [accel] : undefined })
+  }
+}, { deep: true })
+
 let unsubOpenFile: (() => void) | null = null
 let unsubDrop: (() => void) | null = null
+let unsubMenu: (() => void) | null = null
+let unsubPrint: (() => void) | null = null
 
 onMounted(async () => {
-  await prefs.load()
-  layout.syncFromPreferences()
-  applyPreferencesToDom()
-  await listener.install()
-  // Hydrate user keybindings if any.
-  try {
-    const persisted = await getPreference<Record<string, string>>('keybindings')
-    if (persisted) keys.hydrate(persisted)
-  } catch { /* ignore */ }
+  // Global bootstrap has already subscribed, then loaded the preference and
+  // keybinding snapshots before mounting this page.
   registerBuiltinCommands()
-  window.addEventListener('keydown', onKey)
+  // Native Tauri menus own accelerators and emit `mt://menu/action`. Keeping
+  // this listener there executes the same action twice. Browser-only Vite
+  // development has no native menu, so it still uses the renderer map.
+  if (rendererHandlesShortcuts) window.addEventListener('keydown', onKey)
 
   // File-association launches forward to a custom DOM event.
   const handler = (e: Event) => {
@@ -253,12 +302,16 @@ onMounted(async () => {
   unsubOpenFile = () => window.removeEventListener('mt:open-file', handler)
 
   // Native menu actions.
-  void listenTyped('mt://menu/action', id => routeMenuAction(id))
+  unsubMenu = await listenTyped('mt://menu/action', id => routeMenuAction(id))
 
   // Print request — Rust's cmd_export_pdf emits this when the user picks
   // "Export PDF" / "Print" from the menu. We invoke the browser's native
   // print dialog so the OS handles "Save as PDF".
-  void listenTyped('mt://export/print', () => { window.print() })
+  unsubPrint = await listenTyped('mt://export/print', () => { window.print() })
+
+  // Install external-open and menu listeners before potentially slow folder
+  // restoration so startup events cannot fall into another listener gap.
+  await restoreStartupState()
 
   // Drag-and-drop files onto the webview.
   try {
@@ -288,6 +341,8 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKey)
   unsubOpenFile?.()
   unsubDrop?.()
+  unsubMenu?.()
+  unsubPrint?.()
 })
 </script>
 
@@ -297,7 +352,7 @@ onBeforeUnmount(() => {
     <div class="page-body">
       <SideBar v-if="layout.showSideBar" />
       <div class="editor-column">
-        <TabsBar />
+        <TabsBar v-if="layout.showTabBar" />
         <div class="editor-stage">
           <MuyaEditor v-show="!editor.sourceCodeMode" />
           <SourceCodePane v-if="editor.sourceCodeMode" />

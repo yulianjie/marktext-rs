@@ -92,14 +92,16 @@ pub async fn cmd_pandoc_pdf_export(
             ))
         })?;
     if let Some(mut stdin) = child.stdin.take() {
-        stdin.write_all(markdown.as_bytes()).await.map_err(|e| {
-            AppError::Other(format!("failed to write to pandoc stdin: {e}"))
-        })?;
+        stdin
+            .write_all(markdown.as_bytes())
+            .await
+            .map_err(|e| AppError::Other(format!("failed to write to pandoc stdin: {e}")))?;
         drop(stdin);
     }
-    let out = child.wait_with_output().await.map_err(|e| {
-        AppError::Other(format!("pandoc exited unexpectedly: {e}"))
-    })?;
+    let out = child
+        .wait_with_output()
+        .await
+        .map_err(|e| AppError::Other(format!("pandoc exited unexpectedly: {e}")))?;
     if !out.status.success() {
         let stderr = String::from_utf8_lossy(&out.stderr);
         return Err(AppError::Other(format!("pandoc PDF failed: {stderr}")));
@@ -138,14 +140,16 @@ pub async fn cmd_pandoc_convert(
             ))
         })?;
     if let Some(mut stdin) = child.stdin.take() {
-        stdin.write_all(markdown.as_bytes()).await.map_err(|e| {
-            AppError::Other(format!("failed to write to pandoc stdin: {e}"))
-        })?;
+        stdin
+            .write_all(markdown.as_bytes())
+            .await
+            .map_err(|e| AppError::Other(format!("failed to write to pandoc stdin: {e}")))?;
         drop(stdin);
     }
-    let out = child.wait_with_output().await.map_err(|e| {
-        AppError::Other(format!("pandoc exited unexpectedly: {e}"))
-    })?;
+    let out = child
+        .wait_with_output()
+        .await
+        .map_err(|e| AppError::Other(format!("pandoc exited unexpectedly: {e}")))?;
     if !out.status.success() {
         let stderr = String::from_utf8_lossy(&out.stderr);
         return Err(AppError::Other(format!("pandoc failed: {stderr}")));

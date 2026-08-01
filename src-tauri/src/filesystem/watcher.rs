@@ -24,8 +24,10 @@ pub struct WatcherHandle {
 
 pub fn spawn(app: AppHandle, root: PathBuf) -> AppResult<WatcherHandle> {
     let app_handle = app.clone();
-    let mut debouncer = new_debouncer(Duration::from_millis(300), None, move |res: DebounceEventResult| {
-        match res {
+    let mut debouncer = new_debouncer(
+        Duration::from_millis(300),
+        None,
+        move |res: DebounceEventResult| match res {
             Ok(events) => {
                 for ev in events {
                     let payload = map_event(&ev.event);
@@ -39,8 +41,8 @@ pub fn spawn(app: AppHandle, root: PathBuf) -> AppResult<WatcherHandle> {
                     tracing::warn!(?err, "watcher error");
                 }
             }
-        }
-    })?;
+        },
+    )?;
     debouncer.watch(&root, RecursiveMode::Recursive)?;
     Ok(WatcherHandle {
         root,

@@ -22,6 +22,10 @@
   --mt-tab-bg: #f5f6f7;
   --mt-tab-bg-active: #ffffff;
   --mt-code-bg: #fafbfc;
+  --mt-syntax-heading: #22863a;
+  --mt-syntax-link: #0366d6;
+  --mt-syntax-code: #d73a49;
+  --mt-syntax-list: #005cc5;
   --mt-shadow: rgba(27, 31, 35, 0.10);
   --mt-shadow-tabs: 0 0 9px 2px rgba(0, 0, 0, 0.1);
 
@@ -221,6 +225,10 @@
   --floatHoverColor: rgba(255, 255, 255, .04);
   --floatBorderColor: rgba(0, 0, 0, .05);
   --floatShadow: rgba(0, 0, 0, .2) 0px 2px 12px 0px;
+  --mt-syntax-heading: #98c379;
+  --mt-syntax-link: #61afef;
+  --mt-syntax-code: #e06c75;
+  --mt-syntax-list: #56b6c2;
 }
 
 body {
@@ -255,6 +263,24 @@ body {
 /* Hide scrollbars option (preferences `hideScrollbar`). */
 body.mt-no-scrollbar ::-webkit-scrollbar { width: 0; height: 0; }
 body.mt-no-scrollbar { scrollbar-width: none; }
+
+/* Preferences is a long, navigational surface. Keep its scroll position and
+ * overflow discoverable even when the editor-only "hide scrollbar" preference
+ * is enabled. */
+body.mt-no-scrollbar .prefs-page,
+body.mt-no-scrollbar .prefs-page * {
+  scrollbar-width: auto;
+}
+body.mt-no-scrollbar .prefs-page ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+body.mt-no-scrollbar .prefs-page ::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--mt-fg-muted) 55%, transparent);
+  background-clip: padding-box;
+}
 
 /* Typewriter mode — keeps the active line vertically centered. */
 body.mt-typewriter .muya-host { display: flex; align-items: center; }

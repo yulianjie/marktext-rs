@@ -31,7 +31,10 @@ struct DictCache {
 static CACHE: Lazy<Mutex<Option<DictCache>>> = Lazy::new(|| Mutex::new(None));
 
 fn dictionaries_dir<R: Runtime>(app: &AppHandle<R>) -> Option<PathBuf> {
-    app.path().app_config_dir().ok().map(|p| p.join("dictionaries"))
+    app.path()
+        .app_config_dir()
+        .ok()
+        .map(|p| p.join("dictionaries"))
 }
 
 fn user_words_path<R: Runtime>(app: &AppHandle<R>) -> Option<PathBuf> {
@@ -79,9 +82,8 @@ fn ensure_loaded<R: Runtime>(app: &AppHandle<R>, lang: &str) -> AppResult<()> {
             aff_path.display()
         ))
     })?;
-    let dic = std::fs::read_to_string(&dic_path).map_err(|e| {
-        AppError::Other(format!("missing {}: {e}", dic_path.display()))
-    })?;
+    let dic = std::fs::read_to_string(&dic_path)
+        .map_err(|e| AppError::Other(format!("missing {}: {e}", dic_path.display())))?;
     let dict = spellbook::Dictionary::new(&aff, &dic)
         .map_err(|e| AppError::Other(format!("invalid dictionary {lang}: {e}")))?;
     let user_words = load_user_words(app);

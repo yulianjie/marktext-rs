@@ -17,6 +17,7 @@ export interface TreeFile {
   isDirectory: false
   isMarkdown: boolean
   birthTime?: number
+  modifiedTime?: number
 }
 
 export interface TreeFolder {
@@ -70,7 +71,14 @@ export function addFile(tree: TreeFolder, file: Omit<TreeFile, 'id'>): void {
     currentPath = `${currentPath}${POSIX_SEP}${name}`
     currentFolder = ensureFolder(currentFolder, name, currentPath)
   }
-  if (currentFolder.files.some(f => f.pathname === file.pathname)) return
+  const existing = currentFolder.files.find(f => f.pathname === file.pathname)
+  if (existing) {
+    existing.name = file.name
+    existing.isMarkdown = !!file.isMarkdown
+    existing.birthTime = file.birthTime
+    existing.modifiedTime = file.modifiedTime
+    return
+  }
   const fileCopy: TreeFile = {
     id: uuid(),
     name: file.name,
@@ -79,10 +87,25 @@ export function addFile(tree: TreeFolder, file: Omit<TreeFile, 'id'>): void {
     isFile: true,
     isMarkdown: !!file.isMarkdown,
     birthTime: file.birthTime,
+    modifiedTime: file.modifiedTime,
   }
   const idx = currentFolder.files.findIndex(f => f.name.localeCompare(file.name) > 0)
   if (idx === -1) currentFolder.files.push(fileCopy)
   else currentFolder.files.splice(idx, 0, fileCopy)
+}
+
+export type TreeSortMode = 'created' | 'modified' | 'title'
+
+/** Sort every file collection in place while keeping directories alphabetical. */
+export function sortTree(tree: TreeFolder, mode: TreeSortMode): void {
+  tree.folders.sort((a, b) => a.name.localeCompare(b.name))
+  tree.files.sort((a, b) => {
+    if (mode === 'title') return a.name.localeCompare(b.name)
+    const aTime = mode === 'created' ? (a.birthTime ?? 0) : (a.modifiedTime ?? 0)
+    const bTime = mode === 'created' ? (b.birthTime ?? 0) : (b.modifiedTime ?? 0)
+    return bTime - aTime || a.name.localeCompare(b.name)
+  })
+  for (const folder of tree.folders) sortTree(folder, mode)
 }
 
 export function addDirectory(tree: TreeFolder, dir: Pick<TreeFolder, 'pathname'>): void {

@@ -116,8 +116,8 @@ onBeforeUnmount(() => { /* nothing to clean — listeners are inline */ })
   top: 8px;
   right: 16px;
   z-index: 10;
-  background: #fff;
-  border: 1px solid #d1d5da;
+  background: var(--mt-bg, #fff);
+  border: 1px solid var(--mt-border, #d1d5da);
   border-radius: 6px;
   box-shadow: 0 6px 12px rgba(0, 0, 0, 0.08);
   padding: 6px;
@@ -132,18 +132,20 @@ onBeforeUnmount(() => { /* nothing to clean — listeners are inline */ })
   align-items: center;
   gap: 4px;
 }
-.row-icon { color: #6a737d; padding: 0 4px; }
+.row-icon { color: var(--mt-fg-muted, #6a737d); padding: 0 4px; }
 .input {
   flex: 1;
-  border: 1px solid #d1d5da;
+  border: 1px solid var(--mt-border, #d1d5da);
   border-radius: 4px;
   padding: 4px 8px;
   font-size: 12px;
   outline: none;
+  color: var(--mt-fg, #24292e);
+  background: var(--mt-row-active, #fff);
 }
-.input:focus { border-color: #0366d6; }
+.input:focus { border-color: var(--mt-accent, #0366d6); }
 .match-info {
-  color: #6a737d;
+  color: var(--mt-fg-muted, #6a737d);
   font-size: 11px;
   font-family: ui-monospace, monospace;
   min-width: 36px;
@@ -152,7 +154,7 @@ onBeforeUnmount(() => { /* nothing to clean — listeners are inline */ })
 .btn {
   border: 1px solid transparent;
   background: transparent;
-  color: #586069;
+  color: var(--mt-fg-muted, #586069);
   cursor: pointer;
   padding: 4px 6px;
   border-radius: 3px;
@@ -163,11 +165,12 @@ onBeforeUnmount(() => { /* nothing to clean — listeners are inline */ })
   align-items: center;
   justify-content: center;
 }
-.btn:hover { background: #eaecef; color: #24292e; }
+.btn:hover { background: var(--mt-row-hover, #eaecef); color: var(--mt-fg, #24292e); }
+.btn:focus-visible { outline: 2px solid var(--mt-accent, #0366d6); outline-offset: 1px; }
 .btn.toggle.on {
-  background: #dbedff;
-  color: #0366d6;
-  border-color: #79b8ff;
+  background: var(--mt-row-active, #dbedff);
+  color: var(--mt-accent, #0366d6);
+  border-color: var(--mt-accent, #79b8ff);
 }
-.btn.close:hover { background: #f1f3f5; }
+.btn.close:hover { background: var(--mt-row-hover, #f1f3f5); }
 </style>

@@ -45,13 +45,16 @@ macro_rules! marktext_handler {
             // window
             $crate::commands::window::cmd_new_window,
             $crate::commands::window::cmd_close_window,
+            $crate::commands::window::cmd_destroy_settings_window,
             $crate::commands::window::cmd_set_always_on_top,
+            $crate::commands::window::cmd_set_menu_accelerators_enabled,
             $crate::commands::window::cmd_open_settings,
             // prefs
             $crate::commands::prefs::cmd_get_preferences,
             $crate::commands::prefs::cmd_get_preference,
             $crate::commands::prefs::cmd_set_preference,
             $crate::commands::prefs::cmd_set_preferences,
+            $crate::commands::prefs::cmd_push_recent,
             $crate::commands::prefs::cmd_get_user_data,
             $crate::commands::prefs::cmd_set_user_data,
             // export

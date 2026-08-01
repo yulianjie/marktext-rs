@@ -4,10 +4,12 @@
  */
 import { computed } from 'vue'
 import { useEditorStore } from '@/stores/editor'
+import { usePreferencesStore } from '@/stores/preferences'
 import type { TocItem } from '@/stores/editor'
 import { t } from '@/i18n'
 
 const editor = useEditorStore()
+const prefs = usePreferencesStore()
 
 interface FlatItem {
   level: number
@@ -37,16 +39,18 @@ function scrollTo(item: FlatItem) {
   <div class="toc-pane">
     <div class="toc-header">{{ t('sideBar.toc') }}</div>
     <div class="toc-list">
-      <div
+      <button
         v-for="(item, idx) in flat"
         :key="idx"
+        type="button"
         class="toc-row"
+        :class="{ wrap: prefs.wordWrapInToc }"
         :style="{ paddingLeft: (4 + (item.level - 1) * 12) + 'px' }"
         :title="item.content"
         @click="scrollTo(item)"
       >
         {{ item.content }}
-      </div>
+      </button>
       <div v-if="!flat.length" class="empty">{{ t('sideBar.noHeadings') }}</div>
     </div>
   </div>
@@ -63,8 +67,8 @@ function scrollTo(item: FlatItem) {
   font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
-  color: #24292e;
-  border-bottom: 1px solid #eaecef;
+  color: var(--mt-fg, #24292e);
+  border-bottom: 1px solid var(--mt-border, #eaecef);
   letter-spacing: 0.04em;
 }
 .toc-list { flex: 1; overflow-y: auto; padding: 4px 0; }
@@ -74,16 +78,30 @@ function scrollTo(item: FlatItem) {
   display: flex;
   align-items: center;
   padding-right: 12px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
   cursor: pointer;
-  color: #586069;
+  color: var(--mt-fg-muted, #586069);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.toc-row:hover { background: #f1f3f5; color: #24292e; }
+.toc-row:hover { background: var(--mt-row-hover, #f1f3f5); color: var(--mt-fg, #24292e); }
+.toc-row:focus-visible { outline: 2px solid var(--mt-accent, #0366d6); outline-offset: -2px; }
+.toc-row.wrap {
+  height: auto;
+  min-height: 22px;
+  align-items: flex-start;
+  padding-top: 3px;
+  padding-bottom: 3px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 .empty {
   padding: 16px 12px;
-  color: #959da5;
+  color: var(--mt-fg-muted, #959da5);
   font-size: 12px;
   text-align: center;
 }

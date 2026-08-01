@@ -39,6 +39,7 @@ import {
   muyaClipboardFilePath,
 } from '@/services/muya-image-picker'
 import { applyPreferencesToMuya } from '@/services/muya-preferences-applier'
+import { effectiveThemeId } from '@/services/preferences-applier'
 import { setFormatMenuState } from '@/services/tauri-invoke'
 import { spellchecker } from '@/services/spellchecker'
 import { bus } from '@/bus'
@@ -103,7 +104,7 @@ async function loadMuya() {
 async function construct() {
   if (muyaRef.value || !editorRoot.value) return
   const Muya = await loadMuya()
-  const isDark = /dark/i.test(prefs.theme)
+  const isDark = /dark/i.test(effectiveThemeId.value)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let muya: any
   try {
@@ -120,6 +121,7 @@ async function construct() {
       // passed `orderListMarker`, which Muya silently ignored.
       orderListDelimiter: prefs.orderListDelimiter,
       preferLooseListItem: prefs.preferLooseListItem,
+      preferHeadingStyle: prefs.preferHeadingStyle,
       tabSize: prefs.tabSize,
       listIndentation: prefs.listIndentation,
       // ── auto-pair ─────────────────────────────────────────────

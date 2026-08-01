@@ -19,6 +19,7 @@
 import { watch } from 'vue'
 import { usePreferencesStore } from '@/stores/preferences'
 import { spellchecker } from '@/services/spellchecker'
+import { effectiveThemeId, effectiveThemeIsDark } from '@/services/preferences-applier'
 import lightPrismCss from 'muya/themes/prismjs/light.theme.css?raw'
 import darkPrismCss from 'muya/themes/prismjs/dark.theme.css?raw'
 
@@ -27,8 +28,7 @@ type Muya = any
 
 const PRISM_STYLE_ID = 'mt-prism-theme'
 
-function applyPrismTheme(theme: string) {
-  const isDark = /dark/i.test(theme)
+function applyPrismTheme(isDark: boolean) {
   let el = document.getElementById(PRISM_STYLE_ID) as HTMLStyleElement | null
   if (!el) {
     el = document.createElement('style')
@@ -38,12 +38,12 @@ function applyPrismTheme(theme: string) {
   el.textContent = isDark ? darkPrismCss : lightPrismCss
 }
 
-function mermaidThemeFor(theme: string): string {
-  return /dark/i.test(theme) ? 'dark' : 'default'
+function mermaidThemeFor(isDark: boolean): string {
+  return isDark ? 'dark' : 'default'
 }
 
-function vegaThemeFor(theme: string): string {
-  return /dark/i.test(theme) ? 'dark' : 'latimes'
+function vegaThemeFor(isDark: boolean): string {
+  return isDark ? 'dark' : 'latimes'
 }
 
 /**
@@ -57,7 +57,7 @@ export function applyPreferencesToMuya(muya: Muya): () => void {
 
   // Apply the current Prism theme up-front so the first paint already matches
   // the configured app theme, not the import-time light default.
-  applyPrismTheme(prefs.theme)
+  applyPrismTheme(effectiveThemeIsDark.value)
 
   const stops: Array<() => void> = []
 
@@ -117,13 +117,13 @@ export function applyPreferencesToMuya(muya: Muya): () => void {
   stops.push(watch(() => prefs.preferHeadingStyle, v => muya.setOptions?.({ preferHeadingStyle: v }, true)))
 
   // ── theme (Mermaid + Vega + Prism in one watcher) ───────────
-  stops.push(watch(() => prefs.theme, v => {
+  stops.push(watch([effectiveThemeId, effectiveThemeIsDark], ([, isDark]) => {
     muya.setOptions?.({
-      mermaidTheme: mermaidThemeFor(v),
-      vegaTheme: vegaThemeFor(v),
+      mermaidTheme: mermaidThemeFor(isDark),
+      vegaTheme: vegaThemeFor(isDark),
     }, true)
-    applyPrismTheme(v)
-  }))
+    applyPrismTheme(isDark)
+  }, { immediate: true }))
   stops.push(watch(() => prefs.sequenceTheme, v => muya.setOptions?.({ sequenceTheme: v }, true)))
 
   return () => {

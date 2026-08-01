@@ -1,12 +1,14 @@
 //! Image upload commands — local copy, GitHub upload, Unsplash search.
 
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf};
 
+use base64::Engine;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{AppError, AppResult};
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct LocalSaveArgs {
     pub source_path: Option<PathBuf>,
     pub data_url: Option<String>,
@@ -15,67 +17,59 @@ pub struct LocalSaveArgs {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct LocalSaveResult {
     pub path: PathBuf,
 }
 
 #[tauri::command]
 pub async fn cmd_save_image_local(args: LocalSaveArgs) -> AppResult<LocalSaveResult> {
-    tokio::fs::create_dir_all(&args.target_dir).await.ok();
+    validate_filename(&args.filename)?;
     let target = args.target_dir.join(&args.filename);
-    if let Some(src) = args.source_path {
-        tokio::fs::copy(&src, &target).await?;
+    let bytes = if let Some(src) = args.source_path {
+        tokio::fs::read(&src).await?
     } else if let Some(data_url) = args.data_url {
-        let bytes = decode_data_url(&data_url)?;
-        tokio::fs::write(&target, bytes).await?;
+        decode_data_url(&data_url)?
     } else {
         return Err(AppError::InvalidArgument(
             "either source_path or data_url is required".into(),
         ));
-    }
+    };
+    crate::filesystem::atomic_write::write_async(target.clone(), bytes).await?;
     Ok(LocalSaveResult { path: target })
 }
 
-fn decode_data_url(data_url: &str) -> AppResult<Vec<u8>> {
-    use base64_decode::decode;
-    let comma = data_url
-        .find(',')
-        .ok_or_else(|| AppError::InvalidArgument("malformed data url".into()))?;
-    let payload = &data_url[(comma + 1)..];
-    decode(payload).map_err(|e| AppError::Other(e.to_string()))
-}
-
-// Tiny base64 fallback so we don't pull a whole crate for one call site.
-mod base64_decode {
-    pub fn decode(input: &str) -> Result<Vec<u8>, String> {
-        let cleaned: String = input.chars().filter(|c| !c.is_whitespace()).collect();
-        let mut out = Vec::with_capacity(cleaned.len() * 3 / 4);
-        let mut buf: u32 = 0;
-        let mut bits = 0u8;
-        for c in cleaned.chars() {
-            if c == '=' {
-                break;
-            }
-            let v = match c {
-                'A'..='Z' => c as u32 - 'A' as u32,
-                'a'..='z' => c as u32 - 'a' as u32 + 26,
-                '0'..='9' => c as u32 - '0' as u32 + 52,
-                '+' | '-' => 62,
-                '/' | '_' => 63,
-                _ => return Err(format!("invalid base64 char: {c}")),
-            };
-            buf = (buf << 6) | v;
-            bits += 6;
-            if bits >= 8 {
-                bits -= 8;
-                out.push((buf >> bits) as u8 & 0xff);
-            }
-        }
-        Ok(out)
+fn validate_filename(filename: &str) -> AppResult<()> {
+    let mut components = Path::new(filename).components();
+    match (components.next(), components.next()) {
+        (Some(Component::Normal(_)), None) => Ok(()),
+        _ => Err(AppError::InvalidArgument(
+            "image filename must be a single path component".into(),
+        )),
     }
 }
 
+fn decode_data_url(data_url: &str) -> AppResult<Vec<u8>> {
+    let (metadata, payload) = data_url
+        .split_once(',')
+        .ok_or_else(|| AppError::InvalidArgument("malformed data url".into()))?;
+    if !metadata.starts_with("data:")
+        || !metadata
+            .split(';')
+            .skip(1)
+            .any(|part| part.eq_ignore_ascii_case("base64"))
+    {
+        return Err(AppError::InvalidArgument(
+            "image data url must contain a base64 payload".into(),
+        ));
+    }
+    base64::engine::general_purpose::STANDARD
+        .decode(payload)
+        .map_err(|error| AppError::InvalidArgument(format!("invalid base64 payload: {error}")))
+}
+
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GithubUploadArgs {
     pub token: String,
     pub owner: String,
@@ -87,6 +81,7 @@ pub struct GithubUploadArgs {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GithubUploadResult {
     pub download_url: String,
     pub sha: String,
@@ -134,12 +129,14 @@ pub async fn cmd_upload_image_github(args: GithubUploadArgs) -> AppResult<Github
 /// hand them back to the renderer. Exit code != 0 (or empty stdout) is
 /// reported as an upload failure.
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PicgoUploadArgs {
     pub binary: Option<String>,
     pub source_paths: Vec<PathBuf>,
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PicgoUploadResult {
     pub urls: Vec<String>,
 }
@@ -189,12 +186,14 @@ pub async fn cmd_upload_image_picgo(args: PicgoUploadArgs) -> AppResult<PicgoUpl
 /// stdout, one per line. The user supplies the executable path through the
 /// `cliScript` preference.
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ScriptUploadArgs {
     pub script: String,
     pub source_paths: Vec<PathBuf>,
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ScriptUploadResult {
     pub urls: Vec<String>,
 }
@@ -238,6 +237,7 @@ pub async fn cmd_upload_image_script(args: ScriptUploadArgs) -> AppResult<Script
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UnsplashSearchArgs {
     pub query: String,
     pub page: Option<u32>,
@@ -260,4 +260,86 @@ pub async fn cmd_search_unsplash(args: UnsplashSearchArgs) -> AppResult<serde_js
         .await?
         .error_for_status()?;
     Ok(resp.json().await?)
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::*;
+
+    #[test]
+    fn image_request_dtos_accept_camel_case() {
+        let local: LocalSaveArgs = serde_json::from_value(json!({
+            "sourcePath": "source.png",
+            "dataUrl": null,
+            "targetDir": "assets",
+            "filename": "image.png"
+        }))
+        .unwrap();
+        assert_eq!(local.source_path, Some(PathBuf::from("source.png")));
+        assert_eq!(local.target_dir, PathBuf::from("assets"));
+
+        let github: GithubUploadArgs = serde_json::from_value(json!({
+            "token": "token",
+            "owner": "owner",
+            "repo": "repo",
+            "path": "image.png",
+            "contentBase64": "AA=="
+        }))
+        .unwrap();
+        assert_eq!(github.content_base64, "AA==");
+
+        let picgo: PicgoUploadArgs = serde_json::from_value(json!({
+            "sourcePaths": ["one.png", "two.png"]
+        }))
+        .unwrap();
+        assert_eq!(picgo.source_paths.len(), 2);
+
+        let script: ScriptUploadArgs = serde_json::from_value(json!({
+            "script": "upload.cmd",
+            "sourcePaths": ["one.png"]
+        }))
+        .unwrap();
+        assert_eq!(script.source_paths, vec![PathBuf::from("one.png")]);
+
+        let unsplash: UnsplashSearchArgs = serde_json::from_value(json!({
+            "query": "mountain",
+            "perPage": 10,
+            "accessKey": "key"
+        }))
+        .unwrap();
+        assert_eq!(unsplash.per_page, Some(10));
+        assert_eq!(unsplash.access_key, "key");
+    }
+
+    #[test]
+    fn image_results_serialize_camel_case() {
+        let result = GithubUploadResult {
+            download_url: "https://example.invalid/image.png".into(),
+            sha: "abc".into(),
+        };
+        let value = serde_json::to_value(result).unwrap();
+        assert_eq!(
+            value["downloadUrl"],
+            json!("https://example.invalid/image.png")
+        );
+        assert!(value.get("download_url").is_none());
+    }
+
+    #[test]
+    fn data_url_decoder_rejects_truncated_or_malformed_padding() {
+        assert_eq!(
+            decode_data_url("data:image/png;base64,AA==").unwrap(),
+            vec![0]
+        );
+        for malformed in [
+            "data:image/png,AA==",
+            "data:image/png;base64,A",
+            "data:image/png;base64,AA=A",
+            "not-data:image/png;base64,AA==",
+        ] {
+            assert!(decode_data_url(malformed).is_err(), "{malformed}");
+        }
+    }
 }

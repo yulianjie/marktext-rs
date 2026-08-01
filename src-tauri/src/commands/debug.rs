@@ -15,10 +15,17 @@ pub struct LogEntry {
 
 #[tauri::command]
 pub fn cmd_log(entry: LogEntry) -> AppResult<()> {
-    let LogEntry { level, message, stack, source } = entry;
+    let LogEntry {
+        level,
+        message,
+        stack,
+        source,
+    } = entry;
     let source = source.unwrap_or_default();
     match level.as_str() {
-        "error" => tracing::error!(target: "renderer", source = %source, stack = ?stack, "{message}"),
+        "error" => {
+            tracing::error!(target: "renderer", source = %source, stack = ?stack, "{message}")
+        }
         "warn" => tracing::warn!(target: "renderer", source = %source, "{message}"),
         "info" => tracing::info!(target: "renderer", source = %source, "{message}"),
         _ => tracing::debug!(target: "renderer", source = %source, "{message}"),

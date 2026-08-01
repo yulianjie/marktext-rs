@@ -1,6 +1,6 @@
 //! Window-level commands.
 
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent};
 
 use crate::error::{AppError, AppResult};
 
@@ -24,6 +24,28 @@ pub fn cmd_close_window(app: AppHandle, label: String) -> AppResult<()> {
     Ok(())
 }
 
+fn ensure_settings_window(label: &str) -> AppResult<()> {
+    if label == "settings" {
+        Ok(())
+    } else {
+        Err(AppError::InvalidArgument(
+            "only the settings window may invoke cmd_destroy_settings_window".into(),
+        ))
+    }
+}
+
+/// Destroy Preferences after its renderer has flushed pending drafts.
+///
+/// A normal `close()` cannot be re-entered reliably from a cancelled
+/// `CloseRequested` callback on Windows. Keeping the destructive operation in
+/// Rust also avoids granting the generic window-destroy capability to every
+/// editor renderer.
+#[tauri::command]
+pub fn cmd_destroy_settings_window(window: WebviewWindow) -> AppResult<()> {
+    ensure_settings_window(window.label())?;
+    window.destroy().map_err(AppError::from)
+}
+
 #[tauri::command]
 pub fn cmd_set_always_on_top(app: AppHandle, label: String, on_top: bool) -> AppResult<()> {
     if let Some(win) = app.get_webview_window(&label) {
@@ -34,16 +56,66 @@ pub fn cmd_set_always_on_top(app: AppHandle, label: String, on_top: bool) -> App
 }
 
 #[tauri::command]
+pub fn cmd_set_menu_accelerators_enabled(app: AppHandle, enabled: bool) -> AppResult<()> {
+    crate::menu::set_accelerators_enabled(&app, enabled)
+}
+
+#[tauri::command]
 pub async fn cmd_open_settings(app: AppHandle) -> AppResult<()> {
     let label = "settings";
     if let Some(win) = app.get_webview_window(label) {
-        let _ = win.set_focus();
+        // Preferences is a utility window, not an editor window. Reassert the
+        // menu-less contract before showing an existing instance in case an
+        // app-wide menu rebuild occurred while it was hidden/minimized.
+        win.remove_menu()
+            .map_err(|e| AppError::Other(e.to_string()))?;
+        win.show().map_err(|e| AppError::Other(e.to_string()))?;
+        win.unminimize()
+            .map_err(|e| AppError::Other(e.to_string()))?;
+        win.set_focus()
+            .map_err(|e| AppError::Other(e.to_string()))?;
         return Ok(());
     }
-    WebviewWindowBuilder::new(&app, label, WebviewUrl::App("index.html#/preferences".into()))
-        .title("Preferences")
-        .inner_size(900.0, 700.0)
-        .build()
+    let window = WebviewWindowBuilder::new(
+        &app,
+        label,
+        WebviewUrl::App("index.html#/preferences".into()),
+    )
+    .title("Preferences")
+    .inner_size(900.0, 700.0)
+    .min_inner_size(760.0, 560.0)
+    // The renderer shows the window after preferences/i18n are hydrated,
+    // preventing an English/default-theme first-frame flash.
+    .visible(false)
+    .build()
+    .map_err(|e| AppError::Other(e.to_string()))?;
+    // App-level menus are inherited by newly-created windows on Windows and
+    // Linux. Preferences must remain a menu-less utility window.
+    window
+        .remove_menu()
         .map_err(|e| AppError::Other(e.to_string()))?;
+    // Renderer teardown cannot reliably await an IPC call. Restore the
+    // app-wide menu accelerator lease from Rust after Preferences is actually
+    // destroyed. CloseRequested may be cancelled while a draft save fails.
+    let restore_app = app.clone();
+    window.on_window_event(move |event| {
+        if matches!(event, WindowEvent::Destroyed) {
+            if let Err(error) = crate::menu::set_accelerators_enabled(&restore_app, true) {
+                tracing::warn!(%error, "failed to restore menu accelerators after settings close");
+            }
+        }
+    });
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ensure_settings_window;
+
+    #[test]
+    fn settings_destroy_command_rejects_non_settings_windows() {
+        assert!(ensure_settings_window("settings").is_ok());
+        assert!(ensure_settings_window("main").is_err());
+        assert!(ensure_settings_window("editor-123").is_err());
+    }
 }
