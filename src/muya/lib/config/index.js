@@ -276,6 +276,10 @@ export const MUYA_DEFAULT_OPTION = Object.freeze({
   // NOTE: The browser is not able to correct misspelled words words without a custom
   // implementation like in MarkText.
   spellcheckEnabled: false,
+  // Current Markdown file path and renderer-only local image URL adapter.
+  // The Tauri host updates baseUrl whenever the active tab changes.
+  baseUrl: '',
+  imageSrcResolver: null,
   // transform the image to local folder, cloud or just return the local path
   imageAction: null,
   // Call Electron open dialog or input element type is file.

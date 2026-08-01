@@ -143,7 +143,8 @@ export default function renderLeafBlock (parent, block, activeBlocks, matches, u
           const imgs = doc.documentElement.querySelectorAll('img')
           for (const img of imgs) {
             const src = img.getAttribute('src')
-            const imageInfo = getImageInfo(src)
+            const { baseUrl, imageSrcResolver } = this.muya.options
+            const imageInfo = getImageInfo(src, baseUrl, imageSrcResolver)
             img.setAttribute('src', imageInfo.src)
           }
 

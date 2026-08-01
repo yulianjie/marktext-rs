@@ -255,7 +255,8 @@ class ImageSelector extends BaseFloat {
 
         try {
           const newSrc = await this.muya.options.imageAction(src, id, alt)
-          const { src: localPath } = getImageSrc(src)
+          const { baseUrl, imageSrcResolver } = this.muya.options
+          const { src: localPath } = getImageSrc(src, baseUrl, imageSrcResolver)
           if (localPath) {
             this.muya.contentState.stateRender.urlMap.set(newSrc, localPath)
           }

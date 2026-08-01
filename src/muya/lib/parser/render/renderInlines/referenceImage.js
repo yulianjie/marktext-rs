@@ -14,7 +14,8 @@ export default function referenceImage (h, cursor, block, token, outerClass) {
   if (this.labels.has((rawSrc).toLowerCase())) {
     ({ href, title } = this.labels.get(rawSrc.toLowerCase()))
   }
-  const imageInfo = getImageInfo(href)
+  const { baseUrl, imageSrcResolver } = this.muya.options
+  const imageInfo = getImageInfo(href, baseUrl, imageSrcResolver)
   const { src } = imageInfo
   let id
   let isSuccess

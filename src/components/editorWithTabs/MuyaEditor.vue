@@ -33,6 +33,7 @@ import { open as openExternal } from '@tauri-apps/plugin-shell'
 import { useEditorStore } from '@/stores/editor'
 import { usePreferencesStore } from '@/stores/preferences'
 import { muyaImageAction } from '@/services/muya-image-action'
+import { resolveLocalImageSrc } from '@/services/local-image-src'
 import {
   muyaImagePathPicker,
   muyaImagePathAutoComplete,
@@ -111,6 +112,8 @@ async function construct() {
     muya = new Muya(editorRoot.value, {
       // ── content / focus ───────────────────────────────────────
       markdown: '',
+      baseUrl: '',
+      imageSrcResolver: resolveLocalImageSrc,
       focusMode: prefs.focus,
       // ── typography ────────────────────────────────────────────
       fontSize: prefs.fontSize,
@@ -244,12 +247,13 @@ function animatedScrollTo(el: HTMLElement, to: number, durationMs: number) {
 }
 
 /** Swap the displayed document. Mirrors the original setMarkdownToEditor. */
-function loadFile(tab: { id: string; markdown: string; cursor?: unknown }) {
+function loadFile(tab: { id: string; pathname: string; markdown: string; cursor?: unknown }) {
   const muya = muyaRef.value
   if (!muya) return
   // Suspend `change` writes until the new tab is bound — otherwise the
   // setMarkdown round-trip's dispatchChange fires under the *old* tab id.
   activeBoundId.value = null
+  muya.setOptions({ baseUrl: tab.pathname })
   muya.clearHistory()
   if (tab.cursor) {
     muya.setMarkdown(tab.markdown, tab.cursor, true)
@@ -270,6 +274,20 @@ watch(
     loadFile(tab)
   },
   { immediate: false },
+)
+
+// Save As gives an untitled document its first base directory without changing
+// the tab id. Re-render in place so relative images start resolving immediately
+// while preserving the editor history and Markdown source.
+watch(
+  () => editor.currentFile?.pathname ?? '',
+  (pathname) => {
+    const muya = muyaRef.value
+    if (!muya || activeBoundId.value !== editor.currentFileId) return
+    if (muya.options.baseUrl === pathname) return
+    muya.contentState?.stateRender?.loadImageMap?.clear?.()
+    muya.setOptions({ baseUrl: pathname }, true)
+  },
 )
 
 /* ── bus subscriptions: forward editor actions into the live Muya instance.

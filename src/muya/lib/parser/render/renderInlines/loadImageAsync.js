@@ -3,7 +3,7 @@ import { insertAfter, operateClassName } from '../../../utils/domManipulate'
 import { CLASS_OR_ID } from '../../../config'
 
 export default function loadImageAsync (imageInfo, attrs, className, imageClass) {
-  const { src, isUnknownType } = imageInfo
+  const { src, isUnknownType, isLocal } = imageInfo
   let id
   let isSuccess
   let w
@@ -22,17 +22,16 @@ export default function loadImageAsync (imageInfo, attrs, className, imageClass)
   }
   if (reload) {
     id = getUniqueId()
-    loadImage(src, isUnknownType)
+    const requestSrc = isLocal
+      ? `${src}${src.includes('?') ? '&' : '?'}msec=${Date.now()}`
+      : src
+    loadImage(requestSrc, isUnknownType)
       .then(({ url, width, height }) => {
         const imageText = document.querySelector(`#${id}`)
         const img = document.createElement('img')
         let dispMsec = Date.now()
         let touchMsec = dispMsec
-        if (/^file:\/\//.test(src)) {
-          domsrc = url + '?msec=' + dispMsec
-        } else {
-          domsrc = url
-        }
+        domsrc = url
         img.src = domsrc
         if (attrs.alt) img.alt = attrs.alt.replace(/[`*{}[\]()#+\-.!_>~:|<>$]/g, '')
         if (attrs.title) img.setAttribute('title', attrs.title)

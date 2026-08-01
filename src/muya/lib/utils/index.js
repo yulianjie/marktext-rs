@@ -283,12 +283,23 @@ export const checkImageContentType = url => {
  * @param {string} src Image url
  * @param {string} baseUrl Base path; used on desktop to fix the relative image path.
  */
-export const getImageInfo = (src, baseUrl = window.DIRNAME) => {
+export const getImageInfo = (src, baseUrl = window.DIRNAME, imageSrcResolver = null) => {
   const imageExtension = IMAGE_EXT_REG.test(src)
   const isUrl = URL_REG.test(src) || (imageExtension && /^file:\/\/.+/.test(src))
 
   // Treat an URL with valid extension as image.
   if (imageExtension) {
+    if (typeof imageSrcResolver === 'function' && !URL_REG.test(src)) {
+      const resolvedSrc = imageSrcResolver(src, baseUrl)
+      if (resolvedSrc) {
+        return {
+          isUnknownType: false,
+          isLocal: true,
+          src: resolvedSrc
+        }
+      }
+    }
+
     // NOTE: Check both "C:\" and "C:/" because we're using "file:///C:/".
     const isAbsoluteLocal = /^(?:\/|\\\\|[a-zA-Z]:\\|[a-zA-Z]:\/).+/.test(src)
 
@@ -299,6 +310,7 @@ export const getImageInfo = (src, baseUrl = window.DIRNAME) => {
 
       return {
         isUnknownType: false,
+        isLocal: false,
         src
       }
     } else {
@@ -306,6 +318,7 @@ export const getImageInfo = (src, baseUrl = window.DIRNAME) => {
       // NOTE: We don't need to convert Windows styled path to UNIX style because Chromium handels this internal.
       return {
         isUnknownType: false,
+        isLocal: true,
         src: 'file://' + resolveRelativePath(baseUrl, src)
       }
     }
@@ -313,6 +326,7 @@ export const getImageInfo = (src, baseUrl = window.DIRNAME) => {
     // Assume it's a valid image and make a http request later
     return {
       isUnknownType: true,
+      isLocal: false,
       src
     }
   }
@@ -321,6 +335,7 @@ export const getImageInfo = (src, baseUrl = window.DIRNAME) => {
   if (DATA_URL_REG.test(src)) {
     return {
       isUnknownType: false,
+      isLocal: false,
       src
     }
   }
@@ -328,6 +343,7 @@ export const getImageInfo = (src, baseUrl = window.DIRNAME) => {
   // Url type is unknown
   return {
     isUnknownType: false,
+    isLocal: false,
     src: ''
   }
 }

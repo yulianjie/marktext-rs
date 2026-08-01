@@ -150,7 +150,8 @@ const pasteCtrl = ContentState => {
         return null
       }
 
-      const { src } = getImageSrc(imagePath)
+      const { baseUrl, imageSrcResolver } = this.muya.options
+      const { src } = getImageSrc(imagePath, baseUrl, imageSrcResolver)
       if (src) {
         this.stateRender.urlMap.set(newSrc, src)
       }
