@@ -378,7 +378,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #fff;
+  background: var(--mt-bg);
   position: relative;
 }
 .page-body {

@@ -97,25 +97,38 @@ onBeforeUnmount(() => { dragging.value = false })
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 8px 0;
-  gap: 4px;
+  padding: 10px 0;
+  gap: 6px;
   border-right: 1px solid var(--mt-border);
 }
 .spacer { flex: 1; }
 .rail-icon {
-  width: 32px;
-  height: 32px;
+  box-sizing: border-box;
+  width: 34px;
+  height: 34px;
   border: none;
   background: transparent;
   color: var(--mt-fg-muted);
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: background-color 120ms, color 120ms, box-shadow 120ms;
 }
-.rail-icon:hover { background: var(--mt-row-hover); color: var(--mt-fg); }
-.rail-icon.active { background: transparent; color: var(--mt-accent); }
+.rail-icon:hover {
+  background: var(--mt-row-hover);
+  color: var(--mt-fg);
+}
+.rail-icon.active {
+  background: color-mix(in srgb, var(--mt-accent) 11%, transparent);
+  color: var(--mt-accent);
+  box-shadow: inset 2px 0 0 var(--mt-accent);
+}
+.rail-icon:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--mt-accent) 72%, transparent);
+  outline-offset: 1px;
+}
 
 .panel {
   position: relative;
@@ -123,6 +136,7 @@ onBeforeUnmount(() => { dragging.value = false })
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  box-shadow: inset -1px 0 0 color-mix(in srgb, var(--mt-border) 72%, transparent);
 }
 .placeholder {
   padding: 24px 16px;
