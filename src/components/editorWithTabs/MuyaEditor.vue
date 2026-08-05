@@ -29,6 +29,7 @@
  *      installed in `installBusHandlers()`.
  */
 import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { writeText } from '@tauri-apps/plugin-clipboard-manager'
 import { open as openExternal } from '@tauri-apps/plugin-shell'
 import { useEditorStore } from '@/stores/editor'
 import { usePreferencesStore } from '@/stores/preferences'
@@ -156,6 +157,7 @@ async function construct() {
       imagePathPicker: muyaImagePathPicker,
       imagePathAutoComplete: muyaImagePathAutoComplete,
       clipboardFilePath: muyaClipboardFilePath,
+      clipboardWriteText: writeText,
     })
   } catch (err) {
     console.error('[Muya constructor failed]', err)

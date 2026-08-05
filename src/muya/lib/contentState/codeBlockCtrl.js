@@ -165,12 +165,23 @@ const codeBlockCtrl = ContentState => {
   /**
    * Copy the code block by click right-top copy icon in code block.
    */
-  ContentState.prototype.copyCodeBlock = function (event) {
+  ContentState.prototype.copyCodeBlock = async function (event) {
     const { target } = event
     const preEle = target.closest('pre')
     const preBlock = this.getBlock(preEle.id)
     const codeBlock = preBlock.children.find(c => c.type === 'code')
     const codeContent = codeBlock.children[0].text
+
+    const { clipboardWriteText } = this.muya.options
+    if (typeof clipboardWriteText === 'function') {
+      try {
+        await clipboardWriteText(codeContent)
+        return
+      } catch (err) {
+        console.warn('[muya] clipboardWriteText failed, falling back to copy event', err)
+      }
+    }
+
     this.muya.clipboard.copy('copyCodeContent', codeContent)
   }
 

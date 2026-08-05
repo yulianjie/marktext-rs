@@ -285,6 +285,9 @@ export const MUYA_DEFAULT_OPTION = Object.freeze({
   // Call Electron open dialog or input element type is file.
   imagePathPicker: null,
   clipboardFilePath: () => {},
+  // Optional host adapter for writing plain text to the system clipboard.
+  // Browser-only consumers can keep using Muya's legacy copy-event fallback.
+  clipboardWriteText: null,
   // image path auto completed when you input in image selector.
   imagePathAutoComplete: () => [],
 
