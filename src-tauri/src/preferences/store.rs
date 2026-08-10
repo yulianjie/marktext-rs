@@ -155,6 +155,44 @@ pub fn get_user_data<R: Runtime>(app: &AppHandle<R>) -> AppResult<Map<String, Va
     Ok(result)
 }
 
+/// Read one opaque application-owned user-data value without exposing it
+/// through the generic renderer user-data snapshot. Dedicated IPC commands
+/// validate the value before returning it.
+pub fn get_user_data_key<R: Runtime>(app: &AppHandle<R>, key: &str) -> AppResult<Option<Value>> {
+    let _guard = STORE_LOCK.lock();
+    let store = open_store(app)?;
+    match store.get("_userData") {
+        Some(Value::Object(object)) => Ok(object.get(key).cloned()),
+        Some(_) => Err(AppError::Schema(
+            "persisted `_userData` must be an object; refusing to overwrite it".into(),
+        )),
+        None => Ok(None),
+    }
+}
+
+/// Atomically replace one opaque application-owned user-data value. This is
+/// intentionally separate from the deep-merged/broadcast generic API.
+pub fn set_user_data_key<R: Runtime>(app: &AppHandle<R>, key: &str, value: Value) -> AppResult<()> {
+    let _guard = STORE_LOCK.lock();
+    let store = open_store(app)?;
+    let mut user_data = match store.get("_userData") {
+        Some(Value::Object(object)) => object,
+        Some(_) => {
+            return Err(AppError::Schema(
+                "persisted `_userData` must be an object; refusing to overwrite it".into(),
+            ));
+        }
+        None => Map::new(),
+    };
+    // A dedicated opaque write must not accidentally preserve a plaintext
+    // token left by a legacy build.
+    user_data.remove("githubToken");
+    user_data.insert(key.to_owned(), value);
+    let mut outer = Map::new();
+    outer.insert("_userData".into(), Value::Object(user_data));
+    apply_and_save(&store, &resolved_store_path(app)?, outer)
+}
+
 /// Deep-merge a validated user-data patch into the existing subtree. Object
 /// children are merged recursively; scalar and array values replace only their
 /// own key, never sibling settings.

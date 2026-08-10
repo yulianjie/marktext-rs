@@ -39,6 +39,13 @@ function newTab() {
   editor.newUntitledTab()
 }
 
+async function closeTabsInOrder(ids: string[]): Promise<boolean> {
+  for (const tabId of ids) {
+    if (!await editor.closeTab(tabId)) return false
+  }
+  return true
+}
+
 /* ── context menu ─────────────────────────────────────────────── */
 function parentDirOf(p: string): string {
   const idx = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\'))
@@ -56,10 +63,10 @@ function onTabContextMenu(id: string, ev: MouseEvent) {
     items: [
       { label: t('tabs.closeTab'), action: () => { void editor.closeTab(id) } },
       { label: t('tabs.closeOthers'), action: async () => {
-        for (const t of [...editor.tabs]) if (t.id !== id) await editor.closeTab(t.id)
+        await closeTabsInOrder(editor.tabs.filter(tab => tab.id !== id).map(tab => tab.id))
       } },
       { label: t('tabs.closeAll'), action: async () => {
-        for (const t of [...editor.tabs]) await editor.closeTab(t.id)
+        await closeTabsInOrder(editor.tabs.map(tab => tab.id))
       } },
       { divider: true },
       { label: t('tabs.rename'), action: () => { editor.setCurrent(id); bus.emit('rename', undefined) } },

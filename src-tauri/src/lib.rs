@@ -130,6 +130,7 @@ pub fn run() {
             // saved geometry yet); subsequent launches restore whatever the
             // user last had.
             if let Some(window) = app.get_webview_window("main") {
+                commands::window::install_editor_workspace_cleanup(&window);
                 // tauri-plugin-window-state saves to `app_config_dir()`, so
                 // detect first launch against the same path. (On Windows
                 // app_config_dir == app_data_dir, but they diverge on

@@ -40,11 +40,18 @@ macro_rules! marktext_handler {
             // workspace
             $crate::commands::workspace::cmd_open_folder,
             $crate::commands::workspace::cmd_list_directory,
+            $crate::commands::workspace::cmd_workspace_list_directory,
             $crate::commands::workspace::cmd_watch_folder,
             $crate::commands::workspace::cmd_unwatch_folder,
+            $crate::commands::workspace::cmd_workspace_create,
+            $crate::commands::workspace::cmd_workspace_rename,
+            $crate::commands::workspace::cmd_workspace_copy,
+            $crate::commands::workspace::cmd_workspace_move,
+            $crate::commands::workspace::cmd_workspace_trash,
             // window
             $crate::commands::window::cmd_new_window,
             $crate::commands::window::cmd_close_window,
+            $crate::commands::window::cmd_destroy_editor_window,
             $crate::commands::window::cmd_destroy_settings_window,
             $crate::commands::window::cmd_set_always_on_top,
             $crate::commands::window::cmd_set_menu_accelerators_enabled,
@@ -57,6 +64,9 @@ macro_rules! marktext_handler {
             $crate::commands::prefs::cmd_push_recent,
             $crate::commands::prefs::cmd_get_user_data,
             $crate::commands::prefs::cmd_set_user_data,
+            $crate::commands::prefs::cmd_get_editor_session,
+            $crate::commands::prefs::cmd_set_editor_session,
+            $crate::commands::prefs::cmd_clear_editor_session,
             // export
             $crate::commands::export::cmd_export_html,
             $crate::commands::export::cmd_export_pdf,

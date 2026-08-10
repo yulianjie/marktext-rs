@@ -3,13 +3,22 @@
  * File-tree pane in the sidebar. Two sections: Opened Files (always shown)
  * and Project (file tree or empty state).
  */
-import { ref } from 'vue'
-import { useProjectStore } from '@/stores/project'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { ElMessageBox } from 'element-plus'
+import { collectTreeFilterMatches, useProjectStore } from '@/stores/project'
 import { useEditorStore } from '@/stores/editor'
 import { openFolder } from '@/services/tauri-invoke'
 import { useNotificationStore } from '@/stores/notification'
 import type { TreeFile } from '@/stores/treeCtrl'
-import { CaretRight } from '@element-plus/icons-vue'
+import {
+  CaretRight,
+  Close,
+  CopyDocument,
+  DocumentAdd,
+  Fold,
+  FolderAdd,
+  Refresh,
+} from '@element-plus/icons-vue'
 import { t } from '@/i18n'
 import TreeRow from './TreeRow.vue'
 import OpenedFileRow from './OpenedFileRow.vue'
@@ -20,10 +29,27 @@ const notify = useNotificationStore()
 
 const openedCollapsed = ref(false)
 const projectCollapsed = ref(false)
+const filterText = ref('')
+const refreshing = ref(false)
+
+const filterMatches = computed(() => {
+  const root = project.projectTree
+  return root && filterText.value.trim()
+    ? collectTreeFilterMatches(root, filterText.value)
+    : new Set<string>()
+})
+
+const hasFilteredNodes = computed(() => {
+  return filterMatches.value.size > 0
+})
+
+watch(filterText, query => { void project.loadTreeForFilter(query) })
+onBeforeUnmount(() => project.cancelFilterLoad())
 
 async function pickFolder() {
   const path = await openFolder()
   if (!path) return
+  filterText.value = ''
   await project.openRoot(path)
 }
 
@@ -37,6 +63,75 @@ async function openFile(file: TreeFile) {
       message: err instanceof Error ? err.message : String(err),
     })
   }
+}
+
+function notifyOperationError(err: unknown) {
+  notify.pushToast({
+    type: 'error',
+    title: t('tree.operationFailed'),
+    message: err instanceof Error ? err.message : String(err),
+  })
+}
+
+function validateName(value: string): boolean | string {
+  const name = value.trim()
+  if (!name || name === '.' || name === '..' || /[\\/]/.test(name)) {
+    return t('tree.invalidName')
+  }
+  return true
+}
+
+async function createAtRoot(kind: 'file' | 'directory') {
+  const root = project.projectTree
+  if (!root) return
+  project.startCreate(root.pathname, kind)
+  try {
+    const { value } = await ElMessageBox.prompt(
+      kind === 'file' ? t('tree.newFilePrompt') : t('tree.newFolderPrompt'),
+      kind === 'file' ? t('tree.newFile') : t('tree.newFolder'),
+      {
+        inputValue: kind === 'file' ? 'untitled.md' : '',
+        inputValidator: validateName,
+        confirmButtonText: t('common.confirm'),
+        cancelButtonText: t('common.cancel'),
+        closeOnClickModal: false,
+      },
+    )
+    const name = value.trim()
+    const created = await project.createEntry(root.pathname, name, kind)
+    if (kind === 'file') await editor.openFile(created)
+  } catch (err) {
+    // MessageBox rejects with cancel/close; those are expected, not errors.
+    if (err !== 'cancel' && err !== 'close') notifyOperationError(err)
+  } finally {
+    project.cancelCreate()
+  }
+}
+
+async function pasteAtRoot() {
+  const root = project.projectTree
+  if (!root || !project.clipboard) return
+  try {
+    await project.pasteInto(root.pathname)
+  } catch (err) {
+    notifyOperationError(err)
+  }
+}
+
+async function refreshProject() {
+  refreshing.value = true
+  try {
+    await project.refreshTree()
+  } catch (err) {
+    notifyOperationError(err)
+  } finally {
+    refreshing.value = false
+  }
+}
+
+async function closeProject() {
+  filterText.value = ''
+  await project.closeRoot()
 }
 </script>
 
@@ -72,11 +167,62 @@ async function openFile(file: TreeFile) {
           <el-button size="small" type="primary" @click="pickFolder">{{ t('sideBar.openFolder') }}</el-button>
         </div>
         <template v-else>
+          <div class="project-controls">
+            <el-input
+              v-model="filterText"
+              size="small"
+              clearable
+              :placeholder="t('tree.filterPlaceholder')"
+              :aria-label="t('tree.filterPlaceholder')"
+            />
+            <div class="project-actions">
+              <button type="button" :title="t('tree.newFile')" @click="createAtRoot('file')">
+                <el-icon><DocumentAdd /></el-icon>
+              </button>
+              <button type="button" :title="t('tree.newFolder')" @click="createAtRoot('directory')">
+                <el-icon><FolderAdd /></el-icon>
+              </button>
+              <button
+                type="button"
+                :title="t('tree.paste')"
+                :disabled="!project.clipboard"
+                @click="pasteAtRoot"
+              >
+                <el-icon><CopyDocument /></el-icon>
+              </button>
+              <button type="button" :title="t('common.refresh')" :disabled="refreshing" @click="refreshProject">
+                <el-icon :class="{ spinning: refreshing }"><Refresh /></el-icon>
+              </button>
+              <button type="button" :title="t('tree.collapseAll')" @click="project.collapseAll()">
+                <el-icon><Fold /></el-icon>
+              </button>
+              <button type="button" :title="t('tree.closeWorkspace')" @click="closeProject">
+                <el-icon><Close /></el-icon>
+              </button>
+            </div>
+          </div>
+          <div v-if="filterText && project.filterLoading" class="filter-status" role="status">
+            <el-icon class="spinning"><Refresh /></el-icon>
+            <span>{{ t('sideBar.searching') }}</span>
+          </div>
+          <div
+            v-else-if="filterText && project.filterError"
+            class="filter-status error"
+            role="alert"
+            :title="project.filterError"
+          >
+            <span>{{ t('tree.refreshFailed') }}</span>
+            <button type="button" :aria-label="t('common.refresh')" @click="project.loadTreeForFilter(filterText)">
+              <el-icon><Refresh /></el-icon>
+            </button>
+          </div>
           <TreeRow
             v-for="child in project.projectTree.folders"
             :key="child.id"
             :node="child"
             :depth="0"
+            :filter="filterText"
+            :matching-paths="filterMatches"
             @select="openFile"
           />
           <TreeRow
@@ -84,8 +230,16 @@ async function openFile(file: TreeFile) {
             :key="file.id"
             :node="file"
             :depth="0"
+            :filter="filterText"
+            :matching-paths="filterMatches"
             @select="openFile"
           />
+          <div
+            v-if="filterText && !project.filterLoading && !project.filterError && !hasFilteredNodes"
+            class="empty-line"
+          >
+            {{ t('tree.noFilteredFiles') }}
+          </div>
         </template>
       </div>
     </section>
@@ -147,6 +301,62 @@ async function openFile(file: TreeFile) {
   flex: 1;
   overflow-y: auto;
   padding: 4px 0;
+}
+.project-controls {
+  position: sticky;
+  top: -4px;
+  z-index: 2;
+  padding: 4px 8px 6px;
+  background: var(--mt-bg);
+  border-bottom: 1px solid var(--mt-border);
+}
+.project-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  margin-top: 4px;
+}
+.project-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 25px;
+  height: 23px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  color: var(--mt-fg-muted);
+  background: transparent;
+  cursor: pointer;
+}
+.project-actions button:hover:not(:disabled) {
+  color: var(--mt-fg);
+  background: var(--mt-row-hover);
+}
+.project-actions button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.spinning { animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.filter-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  padding: 3px 12px;
+  color: var(--mt-fg-muted);
+  font-size: 12px;
+}
+.filter-status.error { color: var(--el-color-danger); }
+.filter-status button {
+  display: inline-flex;
+  padding: 2px;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
 }
 .empty-line {
   padding: 6px 12px;

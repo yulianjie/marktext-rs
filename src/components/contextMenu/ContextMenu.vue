@@ -26,8 +26,20 @@ const visible = ref(false)
 const x = ref(0)
 const y = ref(0)
 const items = ref<ContextMenuItem[]>([])
+let closeCallback: (() => void) | undefined
 
-function open(payload: { x: number; y: number; items: ContextMenuItem[] }) {
+function open(payload: {
+  x: number
+  y: number
+  items: ContextMenuItem[]
+  onClose?: () => void
+}) {
+  // Programmatic replacement does not pass through the window-level outside
+  // handler. Tell the superseded owner so pending async work cannot reopen it.
+  if (visible.value && closeCallback && closeCallback !== payload.onClose) {
+    closeCallback()
+  }
+  closeCallback = payload.onClose
   items.value = payload.items
   x.value = payload.x
   y.value = payload.y
@@ -37,8 +49,12 @@ function open(payload: { x: number; y: number; items: ContextMenuItem[] }) {
 }
 
 function close() {
+  if (!visible.value) return
+  const callback = closeCallback
+  closeCallback = undefined
   visible.value = false
   items.value = []
+  callback?.()
 }
 
 function clampToViewport() {
@@ -92,6 +108,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  close()
   unsub?.()
   window.removeEventListener('mousedown', onOutside, true)
   window.removeEventListener('contextmenu', onOutside, true)

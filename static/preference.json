@@ -60,6 +60,8 @@
 
   "sideBarVisibility": true,
   "tabBarVisibility": false,
+  "toolBarVisibility": true,
+  "statusBarVisibility": true,
   "sourceCodeModeEnabled": false,
 
   "searchExclusions": [],

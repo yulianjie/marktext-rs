@@ -252,6 +252,8 @@ mod tests {
         assert_eq!(defaults.get("autoSave"), Some(&json!(false)));
         assert_eq!(defaults.get("fontSize"), Some(&json!(16)));
         assert_eq!(defaults.get("defaultDirectoryToOpen"), Some(&json!("")));
+        assert_eq!(defaults.get("toolBarVisibility"), Some(&json!(true)));
+        assert_eq!(defaults.get("statusBarVisibility"), Some(&json!(true)));
     }
 
     #[test]
@@ -260,6 +262,8 @@ mod tests {
         assert!(validate_preference("fontSize", &json!(11)).is_err());
         assert!(validate_preference("zoom", &json!(2.1)).is_err());
         assert!(validate_preference("fileSortBy", &json!("unknown")).is_err());
+        assert!(validate_preference("toolBarVisibility", &json!(false)).is_ok());
+        assert!(validate_preference("statusBarVisibility", &json!("true")).is_err());
     }
 
     #[test]

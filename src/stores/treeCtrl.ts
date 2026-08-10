@@ -25,6 +25,12 @@ export interface TreeFolder {
   name: string
   pathname: string
   isCollapsed: boolean
+  /** Whether this folder's direct children have been listed from disk. */
+  loaded: boolean
+  /** True while the direct-child listing is in flight. */
+  loading: boolean
+  /** Last direct-child listing failure. A retry clears this field. */
+  loadError: string | null
   isFile: false
   isDirectory: true
   isMarkdown: false
@@ -42,20 +48,42 @@ function relativeSegments(rootPath: string, target: string): string[] {
   return rel ? rel.split(SEP_RE).filter(Boolean) : []
 }
 
-function ensureFolder(parent: TreeFolder, name: string, fullPath: string): TreeFolder {
-  let child = parent.folders.find(f => f.name === name)
-  if (child) return child
-  child = {
+export function makeFolder(pathname: string, isCollapsed = true): TreeFolder {
+  const name = pathname.split(SEP_RE).filter(Boolean).pop() ?? pathname
+  return {
     id: uuid(),
-    pathname: fullPath,
+    pathname,
     name,
-    isCollapsed: true,
+    isCollapsed,
+    loaded: false,
+    loading: false,
+    loadError: null,
     isDirectory: true,
     isFile: false,
     isMarkdown: false,
     folders: [],
     files: [],
   }
+}
+
+export function makeFile(file: Omit<TreeFile, 'id'>): TreeFile {
+  return {
+    id: uuid(),
+    name: file.name,
+    pathname: file.pathname,
+    isDirectory: false,
+    isFile: true,
+    isMarkdown: !!file.isMarkdown,
+    birthTime: file.birthTime,
+    modifiedTime: file.modifiedTime,
+  }
+}
+
+function ensureFolder(parent: TreeFolder, name: string, fullPath: string): TreeFolder {
+  let child = parent.folders.find(f => f.name === name)
+  if (child) return child
+  child = makeFolder(fullPath)
+  child.name = name
   parent.folders.push(child)
   // Keep folders alphabetised so the tree doesn't shuffle on each add.
   parent.folders.sort((a, b) => a.name.localeCompare(b.name))
@@ -79,16 +107,7 @@ export function addFile(tree: TreeFolder, file: Omit<TreeFile, 'id'>): void {
     existing.modifiedTime = file.modifiedTime
     return
   }
-  const fileCopy: TreeFile = {
-    id: uuid(),
-    name: file.name,
-    pathname: file.pathname,
-    isDirectory: false,
-    isFile: true,
-    isMarkdown: !!file.isMarkdown,
-    birthTime: file.birthTime,
-    modifiedTime: file.modifiedTime,
-  }
+  const fileCopy = makeFile(file)
   const idx = currentFolder.files.findIndex(f => f.name.localeCompare(file.name) > 0)
   if (idx === -1) currentFolder.files.push(fileCopy)
   else currentFolder.files.splice(idx, 0, fileCopy)
@@ -96,16 +115,25 @@ export function addFile(tree: TreeFolder, file: Omit<TreeFile, 'id'>): void {
 
 export type TreeSortMode = 'created' | 'modified' | 'title'
 
-/** Sort every file collection in place while keeping directories alphabetical. */
-export function sortTree(tree: TreeFolder, mode: TreeSortMode): void {
-  tree.folders.sort((a, b) => a.name.localeCompare(b.name))
-  tree.files.sort((a, b) => {
+/** Sort one folder's direct children. */
+export function sortFolder(folder: TreeFolder, mode: TreeSortMode): void {
+  folder.folders.sort((a, b) => a.name.localeCompare(b.name))
+  folder.files.sort((a, b) => {
     if (mode === 'title') return a.name.localeCompare(b.name)
     const aTime = mode === 'created' ? (a.birthTime ?? 0) : (a.modifiedTime ?? 0)
     const bTime = mode === 'created' ? (b.birthTime ?? 0) : (b.modifiedTime ?? 0)
     return bTime - aTime || a.name.localeCompare(b.name)
   })
-  for (const folder of tree.folders) sortTree(folder, mode)
+}
+
+/** Sort loaded file collections in place without recursive call-stack growth. */
+export function sortTree(tree: TreeFolder, mode: TreeSortMode): void {
+  const pending = [tree]
+  while (pending.length) {
+    const folder = pending.pop()!
+    sortFolder(folder, mode)
+    pending.push(...folder.folders)
+  }
 }
 
 export function addDirectory(tree: TreeFolder, dir: Pick<TreeFolder, 'pathname'>): void {
@@ -144,16 +172,5 @@ export function unlinkDirectory(tree: TreeFolder, dir: Pick<TreeFolder, 'pathnam
 }
 
 export function makeRoot(pathname: string): TreeFolder {
-  const name = pathname.split(SEP_RE).filter(Boolean).pop() ?? pathname
-  return {
-    id: uuid(),
-    name,
-    pathname,
-    isCollapsed: false,
-    isFile: false,
-    isDirectory: true,
-    isMarkdown: false,
-    folders: [],
-    files: [],
-  }
+  return makeFolder(pathname, false)
 }

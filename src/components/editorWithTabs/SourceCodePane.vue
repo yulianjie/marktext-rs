@@ -7,19 +7,51 @@
  * focus). Edits flow back into the editor store via `setMarkdownExternal`.
  */
 import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
-import { EditorState, type Extension } from '@codemirror/state'
+import { EditorState, Transaction, type Extension } from '@codemirror/state'
 import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter } from '@codemirror/view'
-import { history, historyKeymap, defaultKeymap, indentWithTab } from '@codemirror/commands'
+import {
+  history,
+  historyField,
+  historyKeymap,
+  defaultKeymap,
+  indentWithTab,
+  redo,
+  selectAll,
+  undo,
+} from '@codemirror/commands'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { HighlightStyle, syntaxHighlighting, indentOnInput, bracketMatching } from '@codemirror/language'
 import { tags } from '@lezer/highlight'
 import { useEditorStore } from '@/stores/editor'
+import type { DocumentState } from '@/stores/help'
+import { bus, type SearchOpt } from '@/bus'
+import {
+  findSourceMatches,
+  firstSourceMatchAtOrAfter,
+  stepSourceMatch,
+  type SourceSearchMatch,
+} from '@/services/source-search'
+import {
+  emptySearchRevealGuard,
+  enqueueSearchReveal,
+  searchCoordinatesToEditorRange,
+  settleSearchReveal,
+} from '@/services/search-reveal'
+import { publishSourceDocumentChange, restoreSourceEditorState } from '@/services/source-editor-state'
 
 const editor = useEditorStore()
 const hostRef = ref<HTMLDivElement | null>(null)
 const viewRef = shallowRef<EditorView | null>(null)
 /** Last id the view's content was synced with — used to detect tab swaps. */
 const boundId = ref<string | null>(null)
+const stateFields = { history: historyField }
+const busUnsubs: Array<() => void> = []
+let currentQuery = ''
+let currentOptions: SearchOpt = {}
+let currentMatches: SourceSearchMatch[] = []
+let currentMatchIndex = -1
+let replaceAllPending = false
+let revealGuard = emptySearchRevealGuard()
 
 // Minimal markdown highlighting palette. Inherits font / colours from the
 // host stylesheet otherwise.
@@ -50,9 +82,14 @@ const baseExtensions = (): Extension[] => [
   EditorView.lineWrapping,
   keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
   EditorView.updateListener.of(update => {
-    if (!update.docChanged) return
-    if (!boundId.value) return
-    editor.setMarkdownExternal(boundId.value, update.state.doc.toString())
+    const id = boundId.value
+    if (!id) return
+    const tab = editor.tabs.find(candidate => candidate.id === id)
+    if (tab) {
+      tab.sourceEditorState = update.state.toJSON(stateFields)
+      tab.sourceSelection = update.state.selection.toJSON()
+    }
+    publishSourceDocumentChange(update, id, (tabId, value) => editor.setMarkdownExternal(tabId, value))
   }),
 ]
 
@@ -60,41 +97,183 @@ function buildState(doc: string): EditorState {
   return EditorState.create({ doc, extensions: baseExtensions() })
 }
 
-function mountView(initialDoc: string, id: string) {
-  if (!hostRef.value) return
-  viewRef.value = new EditorView({
-    state: buildState(initialDoc),
-    parent: hostRef.value,
-  })
-  boundId.value = id
+function restoreState(tab: DocumentState): EditorState {
+  return restoreSourceEditorState(tab, baseExtensions(), stateFields)
 }
 
-function swapDoc(doc: string, id: string) {
+function persistBoundState() {
+  const id = boundId.value
   const view = viewRef.value
-  if (!view) { mountView(doc, id); return }
-  // Replace the entire doc but keep history; suppress our updateListener
-  // re-entering by toggling boundId first.
-  const prevId = boundId.value
+  if (!id || !view) return
+  const tab = editor.tabs.find(candidate => candidate.id === id)
+  if (tab) {
+    tab.sourceEditorState = view.state.toJSON(stateFields)
+    tab.sourceSelection = view.state.selection.toJSON()
+  }
+}
+
+function mountView(tab: DocumentState | null) {
+  if (!hostRef.value) return
+  viewRef.value = new EditorView({
+    state: tab ? restoreState(tab) : buildState(''),
+    parent: hostRef.value,
+  })
+  boundId.value = tab?.id ?? null
+  persistBoundState()
+}
+
+function swapTab(tab: DocumentState) {
+  const view = viewRef.value
+  if (!view) { mountView(tab); return }
+  persistBoundState()
   boundId.value = null
-  view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: doc } })
-  boundId.value = id
-  void prevId // intentionally unused
+  view.setState(restoreState(tab))
+  boundId.value = tab.id
+  persistBoundState()
+}
+
+function publishSearchResult() {
+  editor.applySearchResult({
+    index: currentMatchIndex,
+    matches: currentMatches,
+    value: currentQuery,
+  })
+}
+
+function selectSearchMatch(index: number) {
+  const view = viewRef.value
+  const match = currentMatches[index]
+  if (!view || !match) return
+  currentMatchIndex = index
+  view.dispatch({
+    selection: { anchor: match.from, head: match.to },
+    effects: EditorView.scrollIntoView(match.from, { y: 'center' }),
+  })
+  publishSearchResult()
+}
+
+function tryRevealSearchHit() {
+  const settlement = settleSearchReveal(revealGuard, {
+    currentTabId: editor.currentFileId,
+    boundTabId: boundId.value,
+    consumerMode: 'source',
+    activeMode: editor.sourceCodeMode ? 'source' : 'wysiwyg',
+  })
+  revealGuard = settlement.state
+  const request = settlement.request
+  const view = viewRef.value
+  if (!request || !view) return
+
+  const range = searchCoordinatesToEditorRange(view.state.doc.toString(), request)
+  view.dispatch({
+    selection: { anchor: range.from, head: range.to },
+    effects: EditorView.scrollIntoView(range.from, { y: 'center' }),
+  })
+  view.focus()
+}
+
+function refreshSearch(value: string, options: SearchOpt, selectFromCursor = true) {
+  const view = viewRef.value
+  currentQuery = value
+  currentOptions = { ...options }
+  currentMatches = view ? findSourceMatches(view.state.doc.toString(), value, options) : []
+  currentMatchIndex = view && selectFromCursor
+    ? firstSourceMatchAtOrAfter(currentMatches, view.state.selection.main.head)
+    : Math.min(currentMatchIndex, currentMatches.length - 1)
+  if (currentMatchIndex >= 0) selectSearchMatch(currentMatchIndex)
+  else publishSearchResult()
+}
+
+function moveSearch(direction: 'next' | 'previous') {
+  currentMatchIndex = stepSourceMatch(currentMatches, currentMatchIndex, direction)
+  if (currentMatchIndex >= 0) selectSearchMatch(currentMatchIndex)
+  else publishSearchResult()
+}
+
+function replaceSearchMatch(replacement: string) {
+  const view = viewRef.value
+  if (!view || !currentQuery) return
+  currentMatches = findSourceMatches(view.state.doc.toString(), currentQuery, currentOptions)
+  if (!currentMatches.length) { currentMatchIndex = -1; publishSearchResult(); return }
+
+  if (replaceAllPending) {
+    replaceAllPending = false
+    view.dispatch({
+      changes: currentMatches.map(match => ({ from: match.from, to: match.to, insert: replacement })),
+    })
+    refreshSearch(currentQuery, currentOptions, false)
+    return
+  }
+
+  if (currentMatchIndex < 0 || currentMatchIndex >= currentMatches.length) {
+    currentMatchIndex = firstSourceMatchAtOrAfter(currentMatches, view.state.selection.main.head)
+  }
+  const match = currentMatches[currentMatchIndex]
+  if (!match) return
+  view.dispatch({
+    changes: { from: match.from, to: match.to, insert: replacement },
+    selection: { anchor: match.from, head: match.from + replacement.length },
+  })
+  refreshSearch(currentQuery, currentOptions, false)
+  currentMatchIndex = firstSourceMatchAtOrAfter(currentMatches, match.from + replacement.length)
+  if (currentMatchIndex >= 0) selectSearchMatch(currentMatchIndex)
+  else publishSearchResult()
+}
+
+function installBusHandlers() {
+  busUnsubs.push(bus.on('undo', () => {
+    if (editor.sourceCodeMode && viewRef.value) undo(viewRef.value)
+  }))
+  busUnsubs.push(bus.on('redo', () => {
+    if (editor.sourceCodeMode && viewRef.value) redo(viewRef.value)
+  }))
+  busUnsubs.push(bus.on('selectAll', () => {
+    if (editor.sourceCodeMode && viewRef.value) selectAll(viewRef.value)
+  }))
+  busUnsubs.push(bus.on('find', ({ value, opt }) => {
+    if (editor.sourceCodeMode) refreshSearch(value, opt)
+  }))
+  busUnsubs.push(bus.on('findNext', () => {
+    if (editor.sourceCodeMode) moveSearch('next')
+  }))
+  busUnsubs.push(bus.on('findPrev', () => {
+    if (editor.sourceCodeMode) moveSearch('previous')
+  }))
+  busUnsubs.push(bus.on('find-action', action => {
+    if (editor.sourceCodeMode && action === 'replaceAll') replaceAllPending = true
+  }))
+  busUnsubs.push(bus.on('replace', ({ value }) => {
+    if (editor.sourceCodeMode) replaceSearchMatch(value)
+  }))
+  busUnsubs.push(bus.on('reveal-search-hit', (request) => {
+    revealGuard = enqueueSearchReveal(revealGuard, request)
+    tryRevealSearchHit()
+  }))
 }
 
 onMounted(() => {
-  const tab = editor.currentFile
-  mountView(tab?.markdown ?? '', tab?.id ?? '')
+  mountView(editor.currentFile)
+  installBusHandlers()
 })
 
 watch(
   () => editor.currentFileId,
   (id) => {
-    if (!id) return
+    if (!id) { tryRevealSearchHit(); return }
     const tab = editor.tabs.find(t => t.id === id)
-    if (!tab) return
-    if (boundId.value === id) return
-    swapDoc(tab.markdown, id)
+    if (tab && boundId.value !== id) {
+      swapTab(tab)
+      if (editor.sourceCodeMode && editor.findReplaceOpen && currentQuery) {
+        refreshSearch(currentQuery, currentOptions)
+      }
+    }
+    tryRevealSearchHit()
   },
+)
+
+watch(
+  () => editor.sourceCodeMode,
+  () => { tryRevealSearchHit() },
 )
 
 // External update (Muya saved, file reloaded) — sync into the view.
@@ -106,15 +285,30 @@ watch(
     if (!view) return
     if (md === view.state.doc.toString()) return
     if (!boundId.value) return
-    // Caller is overwriting our local edits — keep cursor at top to avoid OOB.
+    const tab = editor.currentFile
+    if (!tab || tab.id !== boundId.value) return
     const id = boundId.value
     boundId.value = null
-    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: md } })
+    if (tab.sourceEditorState === null) {
+      view.setState(buildState(md))
+    } else {
+      view.dispatch({
+        changes: { from: 0, to: view.state.doc.length, insert: md },
+        annotations: Transaction.addToHistory.of(false),
+      })
+    }
     boundId.value = id
+    persistBoundState()
+    if (editor.sourceCodeMode && editor.findReplaceOpen && currentQuery) {
+      refreshSearch(currentQuery, currentOptions, false)
+    }
   },
 )
 
 onBeforeUnmount(() => {
+  persistBoundState()
+  for (const off of busUnsubs) { try { off() } catch { /* ignore */ } }
+  busUnsubs.length = 0
   viewRef.value?.destroy()
   viewRef.value = null
 })

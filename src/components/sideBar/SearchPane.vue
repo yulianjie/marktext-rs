@@ -9,8 +9,10 @@ import { useProjectStore } from '@/stores/project'
 import { useEditorStore } from '@/stores/editor'
 import { usePreferencesStore } from '@/stores/preferences'
 import { useNotificationStore } from '@/stores/notification'
+import { bus } from '@/bus'
 import { searchInFolder, type SearchHit } from '@/services/tauri-invoke'
 import { parseSearchMaxFileSize } from '@/services/search-preferences'
+import { createSearchRevealRequest } from '@/services/search-reveal'
 import { t } from '@/i18n'
 
 interface Group { path: string; hits: SearchHit[] }
@@ -27,6 +29,8 @@ const regex = ref(false)
 const includeHidden = ref(false)
 const busy = ref(false)
 const groups = ref<Group[]>([])
+const activeHitKey = ref<string | null>(null)
+const focusedHitKey = ref<string | null>(null)
 
 const hasResults = computed(() => groups.value.length > 0)
 const totalHits = computed(() => groups.value.reduce((n, g) => n + g.hits.length, 0))
@@ -75,13 +79,32 @@ function group(hits: SearchHit[]): Group[] {
   return [...map.entries()].map(([path, hits]) => ({ path, hits }))
 }
 
-async function openHit(hit: SearchHit) {
-  try { await editor.openFile(hit.path) }
-  catch (err) {
+let openToken = 0
+let latestOpenedTabId: string | null = null
+async function openHit(hit: SearchHit, key: string) {
+  const token = ++openToken
+  try {
+    const tab = await editor.openFile(hit.path)
+    // A slower, older file read must not steal focus or reveal inside the tab
+    // opened by a newer click.
+    if (token !== openToken) {
+      if (latestOpenedTabId) editor.setCurrent(latestOpenedTabId)
+      return
+    }
+    latestOpenedTabId = tab.id
+    activeHitKey.value = key
+    bus.emit('reveal-search-hit', createSearchRevealRequest({
+      tabId: tab.id,
+      path: tab.pathname || hit.path,
+      line: hit.line,
+      column: hit.column,
+      length: hit.length,
+      mode: editor.sourceCodeMode ? 'source' : 'wysiwyg',
+    }))
+  } catch (err) {
+    if (token !== openToken) return
     notify.pushToast({ type: 'error', title: t('toast.openFailed'), message: err instanceof Error ? err.message : String(err) })
   }
-  // TODO: scroll Muya to `hit.line`. Muya exposes a `scrollToHeader`-style
-  // bus event but no line-anchor jump yet; defer for now.
 }
 
 // Debounced auto-search on typing.
@@ -95,6 +118,14 @@ function shortPath(full: string): string {
   if (!project.projectTree) return full
   const root = project.projectTree.pathname
   return full.startsWith(root) ? full.slice(root.length + 1) : full
+}
+
+function hitKey(path: string, hit: SearchHit, index: number): string {
+  return `${path}:${hit.line}:${hit.column}:${hit.endColumn}:${index}`
+}
+
+function hitAriaLabel(path: string, hit: SearchHit): string {
+  return `${shortPath(path)} ${hit.line}:${hit.column} ${hit.preview}`
 }
 </script>
 
@@ -122,16 +153,29 @@ function shortPath(full: string): string {
         </span>
       </div>
     </div>
-    <div class="results">
-      <div v-for="g in groups" :key="g.path" class="group">
+    <div class="results" role="listbox" :aria-label="t('sideBar.searchInFolder')">
+      <div v-for="g in groups" :key="g.path" class="group" role="group" :aria-label="shortPath(g.path)">
         <div class="group-header" :title="g.path">{{ shortPath(g.path) }}</div>
         <div
           v-for="(hit, idx) in g.hits"
-          :key="idx"
+          :key="hitKey(g.path, hit, idx)"
           class="hit"
-          @click="openHit(hit)"
+          :class="{
+            current: activeHitKey === hitKey(g.path, hit, idx),
+            focused: focusedHitKey === hitKey(g.path, hit, idx),
+          }"
+          role="option"
+          tabindex="0"
+          :aria-label="hitAriaLabel(g.path, hit)"
+          :aria-selected="activeHitKey === hitKey(g.path, hit, idx)"
+          :aria-current="activeHitKey === hitKey(g.path, hit, idx) ? 'location' : undefined"
+          @focus="focusedHitKey = hitKey(g.path, hit, idx)"
+          @blur="focusedHitKey = null"
+          @click="openHit(hit, hitKey(g.path, hit, idx))"
+          @keydown.enter.prevent="openHit(hit, hitKey(g.path, hit, idx))"
+          @keydown.space.prevent="openHit(hit, hitKey(g.path, hit, idx))"
         >
-          <span class="line">{{ hit.line }}</span>
+          <span class="line">{{ hit.line }}:{{ hit.column }}</span>
           <span class="preview">{{ hit.preview }}</span>
         </div>
       </div>
@@ -210,11 +254,16 @@ function shortPath(full: string): string {
   align-items: baseline;
 }
 .hit:hover { background: var(--mt-row-hover, #f1f8ff); }
+.hit.current { background: var(--mt-row-active, #dbedff); }
+.hit:focus-visible {
+  outline: 2px solid var(--mt-accent, #0366d6);
+  outline-offset: -2px;
+}
 .hit .line {
   color: var(--mt-fg-muted, #6a737d);
   font-family: ui-monospace, monospace;
   font-size: 11px;
-  min-width: 26px;
+  min-width: 42px;
   text-align: right;
   flex-shrink: 0;
 }

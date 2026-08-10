@@ -1,20 +1,50 @@
 <script setup lang="ts">
 /**
- * Auto-update dialog — driven by `@tauri-apps/plugin-updater`. Opens on
- * `bus.emit('show-updater-dialog')` from the Help → Check for Updates menu
- * action.
- *
- * With `pubkey` empty in `tauri.conf.json` the plugin call gracefully fails
- * and we show "no update available" — the dialog is still wired up so the
- * UX is complete once signing lands.
+ * Auto-update dialog — driven by `@tauri-apps/plugin-updater`. The Rust plugin
+ * stays registered, but this renderer gate refuses to call it unless the
+ * project-level `active` flag, an HTTPS endpoint, and a signing public key are
+ * all present in tauri.conf.json. An unsigned build therefore fails closed.
  */
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import type { DownloadEvent, Update } from '@tauri-apps/plugin-updater'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { bus } from '@/bus'
 import { useI18n } from '@/i18n'
+import tauriConfig from '../../../src-tauri/tauri.conf.json'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
-type Phase = 'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'uptodate' | 'error'
+type Phase =
+  | 'idle'
+  | 'disabled'
+  | 'unconfigured'
+  | 'checking'
+  | 'available'
+  | 'downloading'
+  | 'ready'
+  | 'uptodate'
+  | 'error'
+
+const localizedCopy = {
+  en: {
+    disabled: 'Automatic updates are disabled in this build. Release signing has not been enabled, so MarkText did not contact the update server. Install updates manually from the project releases page.',
+    unconfigured: 'Automatic updates are not configured safely. A signing public key and at least one HTTPS endpoint are required, so no update check was performed.',
+    releases: 'Open project releases',
+  },
+  'zh-CN': {
+    disabled: '此版本已关闭自动更新。发布签名尚未启用，因此 MarkText 未连接更新服务器。请从项目发布页面手动安装更新。',
+    unconfigured: '自动更新配置不安全：必须提供签名公钥和至少一个 HTTPS 地址。本次未执行更新检查。',
+    releases: '打开项目发布页面',
+  },
+  ja: {
+    disabled: 'このビルドでは自動更新が無効です。リリース署名が有効になっていないため、MarkText は更新サーバーに接続していません。プロジェクトのリリースページから手動で更新してください。',
+    unconfigured: '自動更新が安全に構成されていません。署名公開鍵と 1 つ以上の HTTPS エンドポイントが必要なため、更新確認は実行されませんでした。',
+    releases: 'プロジェクトのリリースを開く',
+  },
+} as const
+
+const copy = computed(() => localizedCopy[locale.value] ?? localizedCopy.en)
+const updaterConfig = tauriConfig.plugins.updater
+const releasesUrl = 'https://github.com/yulianjie/marktext-rs/releases'
 
 const visible = ref(false)
 const phase = ref<Phase>('idle')
@@ -23,15 +53,36 @@ const notes = ref('')
 const error = ref('')
 const downloaded = ref(0)
 const total = ref(0)
+let activeUpdate: Update | null = null
+
+function updaterReadiness(): 'ready' | 'disabled' | 'unconfigured' {
+  // `active` is a MarkText renderer gate. The Tauri updater Config ignores
+  // unknown fields, so this check must happen before importing/calling check().
+  if (!updaterConfig.active) return 'disabled'
+
+  const hasPublicKey = updaterConfig.pubkey.trim().length > 0
+  const hasSecureEndpoints = updaterConfig.endpoints.length > 0
+    && updaterConfig.endpoints.every(endpoint => endpoint.startsWith('https://'))
+  return hasPublicKey && hasSecureEndpoints ? 'ready' : 'unconfigured'
+}
 
 async function open() {
   visible.value = true
-  phase.value = 'checking'
+  phase.value = 'idle'
   error.value = ''
   version.value = ''
   notes.value = ''
   downloaded.value = 0
   total.value = 0
+  activeUpdate = null
+
+  const readiness = updaterReadiness()
+  if (readiness !== 'ready') {
+    phase.value = readiness
+    return
+  }
+
+  phase.value = 'checking'
 
   try {
     const { check } = await import('@tauri-apps/plugin-updater')
@@ -43,8 +94,7 @@ async function open() {
     version.value = update.version ?? ''
     notes.value = update.body ?? ''
     phase.value = 'available'
-    // Stash on window so the install action can reach it
-    ;(window as unknown as { __mt_update?: unknown }).__mt_update = update
+    activeUpdate = update
   } catch (err) {
     phase.value = 'error'
     error.value = err instanceof Error ? err.message : String(err)
@@ -52,11 +102,10 @@ async function open() {
 }
 
 async function downloadAndInstall() {
-  const update = (window as unknown as { __mt_update?: { downloadAndInstall: (cb: (e: { event: string; data?: { contentLength?: number; chunkLength?: number } }) => void) => Promise<void> } }).__mt_update
-  if (!update) return
+  if (!activeUpdate) return
   phase.value = 'downloading'
   try {
-    await update.downloadAndInstall((ev) => {
+    await activeUpdate.downloadAndInstall((ev: DownloadEvent) => {
       if (ev.event === 'Started') total.value = ev.data?.contentLength ?? 0
       else if (ev.event === 'Progress') downloaded.value += ev.data?.chunkLength ?? 0
       else if (ev.event === 'Finished') phase.value = 'ready'
@@ -72,6 +121,7 @@ async function relaunchApp() {
     const { relaunch } = await import('@tauri-apps/plugin-process')
     await relaunch()
   } catch (err) {
+    phase.value = 'error'
     error.value = err instanceof Error ? err.message : String(err)
   }
 }
@@ -89,6 +139,13 @@ onBeforeUnmount(() => { unsub?.() })
     :close-on-click-modal="false"
     append-to-body
   >
+    <div v-if="phase === 'disabled'" class="notice">
+      <p>{{ copy.disabled }}</p>
+      <a :href="releasesUrl" target="_blank" rel="noopener noreferrer">{{ copy.releases }}</a>
+    </div>
+    <div v-else-if="phase === 'unconfigured'" class="notice warning">
+      {{ copy.unconfigured }}
+    </div>
     <div v-if="phase === 'checking'">{{ t('updater.checking') }}</div>
     <div v-else-if="phase === 'uptodate'">{{ t('updater.uptodate') }}</div>
     <div v-else-if="phase === 'available'">
@@ -128,5 +185,18 @@ onBeforeUnmount(() => { unsub?.() })
 }
 .error {
   color: var(--el-color-danger);
+}
+.notice {
+  line-height: 1.55;
+  color: var(--el-text-color-regular);
+}
+.notice p {
+  margin: 0 0 10px;
+}
+.notice a {
+  color: var(--el-color-primary);
+}
+.notice.warning {
+  color: var(--el-color-warning-dark-2);
 }
 </style>

@@ -487,6 +487,17 @@ fn unclaimed_fixed_accel<'a>(
     }
 }
 
+fn fixed_edit_accelerators(cmd_or_ctrl: &str, macos: bool) -> (String, String, String) {
+    let undo = format!("{cmd_or_ctrl}+Z");
+    let redo = if macos {
+        format!("{cmd_or_ctrl}+Shift+Z")
+    } else {
+        format!("{cmd_or_ctrl}+Y")
+    };
+    let select_all = format!("{cmd_or_ctrl}+A");
+    (undo, redo, select_all)
+}
+
 fn build_menu(
     app: &AppHandle<Wry>,
     s: &i18n::MenuStrings,
@@ -587,15 +598,38 @@ fn build_menu(
         ])
         .build()?;
 
+    // Undo/redo/select-all must be ordinary menu items, not Tauri/muda
+    // `PredefinedMenuItem`s. On Windows the predefined variants consume the
+    // accelerator and synthesize Ctrl+Z/Y/A in the WebView without emitting a
+    // menu event. That bypasses the editor's per-tab Muya/CodeMirror history.
+    // Normal items emit their stable ids through `mt://menu/action`, where the
+    // renderer routes each operation to the active editor exactly once.
+    let (undo_accel, redo_accel, select_all_accel) =
+        fixed_edit_accelerators(cmd_or_ctrl, cfg!(target_os = "macos"));
     let edit = SubmenuBuilder::new(app, s.edit)
         .items(&[
-            &PredefinedMenuItem::undo(app, None)?,
-            &PredefinedMenuItem::redo(app, None)?,
+            &mi(
+                app,
+                "edit.undo",
+                s.undo,
+                unclaimed_fixed_accel(&undo_accel, &keybindings),
+            )?,
+            &mi(
+                app,
+                "edit.redo",
+                s.redo,
+                unclaimed_fixed_accel(&redo_accel, &keybindings),
+            )?,
             &PredefinedMenuItem::separator(app)?,
             &PredefinedMenuItem::cut(app, None)?,
             &PredefinedMenuItem::copy(app, None)?,
             &PredefinedMenuItem::paste(app, None)?,
-            &PredefinedMenuItem::select_all(app, None)?,
+            &mi(
+                app,
+                "edit.selectAll",
+                s.select_all,
+                unclaimed_fixed_accel(&select_all_accel, &keybindings),
+            )?,
             &PredefinedMenuItem::separator(app)?,
             &mi(app, "edit.find", s.find, custom_accel("edit.find"))?,
             &mi(app, "edit.replace", s.replace, custom_accel("edit.replace"))?,
@@ -713,6 +747,8 @@ fn build_menu(
                 custom_accel("view.toggleSidebar"),
             )?,
             &mi(app, "view.toggleTabBar", s.toggle_tab_bar, None)?,
+            &mi(app, "view.toggleToolbar", s.toggle_toolbar, None)?,
+            &mi(app, "view.toggleStatusBar", s.toggle_status_bar, None)?,
             &mi(
                 app,
                 "view.toggleSourceCode",
@@ -939,6 +975,23 @@ mod tests {
         assert_eq!(bindings["view.toggleSidebar"], "Ctrl+Shift+B");
         assert_eq!(unclaimed_fixed_accel("Ctrl+B", &bindings), Some("Ctrl+B"));
         assert_eq!(unclaimed_fixed_accel("Ctrl+I", &bindings), Some("Ctrl+I"));
+    }
+
+    #[test]
+    fn fixed_edit_accelerators_match_platform_conventions_and_avoid_conflicts() {
+        assert_eq!(
+            fixed_edit_accelerators("Ctrl", false),
+            ("Ctrl+Z".into(), "Ctrl+Y".into(), "Ctrl+A".into())
+        );
+        assert_eq!(
+            fixed_edit_accelerators("Cmd", true),
+            ("Cmd+Z".into(), "Cmd+Shift+Z".into(), "Cmd+A".into())
+        );
+
+        let mut bindings = keybindings_from_value(None, "Ctrl");
+        bindings.insert("file.save".into(), "Ctrl+Z".into());
+        assert_eq!(unclaimed_fixed_accel("Ctrl+Z", &bindings), None);
+        assert_eq!(unclaimed_fixed_accel("Ctrl+Y", &bindings), Some("Ctrl+Y"));
     }
 
     #[test]

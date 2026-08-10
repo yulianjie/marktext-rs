@@ -21,6 +21,7 @@ import { tempDir } from '@tauri-apps/api/path'
 import { usePreferencesStore } from '@/stores/preferences'
 import { useEditorStore } from '@/stores/editor'
 import { useNotificationStore } from '@/stores/notification'
+import { toPortableRelativeImageSrc } from './portable-image-path'
 
 function extOf(name: string): string {
   const i = name.lastIndexOf('.')
@@ -66,8 +67,9 @@ function basenameNoExt(path: string): string {
  *   - `${filename}`                  — current doc basename without ext
  *   - `${fileBasenameNoExtension}`   — alias of `${filename}`
  *   - `${fileDirname}`               — parent dir of the current doc
- *   - `${fileWorkspaceFolder}`       — same as `${fileDirname}` when no
- *                                       workspace is open
+ *   - `${fileWorkspaceFolder}`       — currently falls back to `${fileDirname}`;
+ *                                       this service has no validated workspace
+ *                                       root to expand here
  *   - `${relativeFileDirname}`       — basename of `${fileDirname}`
  *
  * Unknown variables are left untouched so the user sees the mistake.
@@ -107,13 +109,15 @@ export async function muyaImageAction(input: File | string, _id: string, _name?:
   if (action === 'folder') {
     try {
       const tab = editor.currentFile
+      const documentPath = tab?.pathname || ''
+      const useRelativeDirectory = prefs.imagePreferRelativeDirectory && Boolean(documentPath)
       let targetDir = prefs.imageFolderPath
-      if (prefs.imagePreferRelativeDirectory && tab?.pathname) {
+      if (useRelativeDirectory) {
         const rel = expandImageDirTemplate(
           prefs.imageRelativeDirectoryName || 'assets',
-          tab.pathname,
+          documentPath,
         )
-        targetDir = `${parentDirOf(tab.pathname)}/${rel}`
+        targetDir = `${parentDirOf(documentPath)}/${rel}`
       }
       if (!targetDir) {
         notify.pushToast({
@@ -128,6 +132,15 @@ export async function muyaImageAction(input: File | string, _id: string, _name?:
         targetDir,
         filename,
       })
+      if (useRelativeDirectory) {
+        const relativeSrc = toPortableRelativeImageSrc(documentPath, path)
+        if (relativeSrc !== null) return relativeSrc
+        notify.pushToast({
+          type: 'warning',
+          title: 'Portable image link unavailable',
+          message: 'The image was saved, but its path cannot be made relative to this document. Using the absolute path instead.',
+        })
+      }
       return path
     } catch (err) {
       notify.pushToast({

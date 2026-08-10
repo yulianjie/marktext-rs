@@ -9,6 +9,10 @@
  */
 
 import { invoke } from '@tauri-apps/api/core'
+import {
+  assertValidEditorSession,
+  type EditorSession,
+} from '@/services/editor-session'
 
 /* ─── shared types ───────────────────────────────────────────── */
 
@@ -57,8 +61,12 @@ export interface SearchArgs {
 
 export interface SearchHit {
   path: string
+  /** One-based Unicode-scalar line/column returned by the Rust searcher. */
   line: number
   column: number
+  /** Unicode-scalar match length and one-based exclusive end column. */
+  length: number
+  endColumn: number
   preview: string
 }
 
@@ -87,10 +95,40 @@ export const openFolder = () => invoke<string | null>('cmd_open_folder')
 export const listDirectory = (path: string) =>
   invoke<DirEntry[]>('cmd_list_directory', { path })
 
-export const watchFolder = (path: string) => invoke<void>('cmd_watch_folder', { path })
+export const listWorkspaceDirectory = (root: string, path: string) =>
+  invoke<DirEntry[]>('cmd_workspace_list_directory', { root, path })
+
+export const watchFolder = (path: string) => invoke<string>('cmd_watch_folder', { path })
 
 export const unwatchFolder = (path: string) =>
   invoke<void>('cmd_unwatch_folder', { path })
+
+export type WorkspaceEntryKind = 'file' | 'directory'
+
+export const createWorkspaceEntry = (
+  root: string,
+  parent: string,
+  name: string,
+  kind: WorkspaceEntryKind,
+) => invoke<string>('cmd_workspace_create', { root, parent, name, kind })
+
+export const renameWorkspaceEntry = (root: string, source: string, newName: string) =>
+  invoke<string>('cmd_workspace_rename', { root, source, newName })
+
+export const copyWorkspaceEntry = (
+  root: string,
+  source: string,
+  destinationDir: string,
+) => invoke<string>('cmd_workspace_copy', { root, source, destinationDir })
+
+export const moveWorkspaceEntry = (
+  root: string,
+  source: string,
+  destinationDir: string,
+) => invoke<string>('cmd_workspace_move', { root, source, destinationDir })
+
+export const trashWorkspaceEntry = (root: string, path: string) =>
+  invoke<void>('cmd_workspace_trash', { root, path })
 
 /* ─── window ─────────────────────────────────────────────────── */
 
@@ -98,6 +136,10 @@ export const newWindow = (label?: string) => invoke<void>('cmd_new_window', { la
 
 export const closeWindow = (label: string) =>
   invoke<void>('cmd_close_window', { label })
+
+export const destroyEditorWindow = () => isTauriRuntime()
+  ? invoke<void>('cmd_destroy_editor_window')
+  : Promise.resolve()
 
 export const destroySettingsWindow = () => isTauriRuntime()
   ? invoke<void>('cmd_destroy_settings_window')
@@ -115,6 +157,7 @@ const isTauriRuntime = () =>
 
 const browserPreferences: Record<string, unknown> = {}
 let browserUserData: Record<string, unknown> = {}
+let browserEditorSession: EditorSession | null = null
 
 function deepMergeRecord(
   current: Record<string, unknown>,
@@ -187,6 +230,31 @@ export const setUserData = (patch: Record<string, unknown>) => {
     return Promise.resolve()
   }
   return invoke<void>('cmd_set_user_data', { patch })
+}
+
+/** Dedicated editor-session IPC deliberately bypasses user-data broadcasts. */
+export const getEditorSession = () => {
+  if (!isTauriRuntime()) {
+    return Promise.resolve(browserEditorSession ? structuredClone(browserEditorSession) : null)
+  }
+  return invoke<EditorSession | null>('cmd_get_editor_session')
+}
+
+export const setEditorSession = (session: EditorSession) => {
+  assertValidEditorSession(session)
+  if (!isTauriRuntime()) {
+    browserEditorSession = structuredClone(session)
+    return Promise.resolve()
+  }
+  return invoke<void>('cmd_set_editor_session', { session })
+}
+
+export const clearEditorSession = () => {
+  if (!isTauriRuntime()) {
+    browserEditorSession = null
+    return Promise.resolve()
+  }
+  return invoke<void>('cmd_clear_editor_session')
 }
 
 /* ─── export ─────────────────────────────────────────────────── */

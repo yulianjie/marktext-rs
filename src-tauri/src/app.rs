@@ -5,14 +5,14 @@
 //! state that outlives a single command invocation.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use parking_lot::RwLock;
 use tauri::{App, Emitter, Manager};
 
 use crate::error::AppResult;
-use crate::filesystem::watcher::WatcherHandle;
+use crate::filesystem::watcher::{WatcherHandle, WorkspaceEventTargets};
 
 /// Long-lived state shared across all command handlers via [`tauri::State`].
 #[derive(Default)]
@@ -23,7 +23,7 @@ pub struct AppState {
 #[derive(Default)]
 struct AppStateInner {
     /// Workspaces (folders) currently opened in the renderer, keyed by path.
-    workspaces: HashMap<PathBuf, Workspace>,
+    workspaces: WorkspaceRegistry<WatcherHandle>,
 
     /// Recent files (most-recent first), capped to ~20 entries.
     recent_files: Vec<PathBuf>,
@@ -36,9 +36,135 @@ struct AppStateInner {
     github_token: Option<String>,
 }
 
-pub struct Workspace {
-    pub root: PathBuf,
-    pub watcher: WatcherHandle,
+struct RegisteredWorkspace<W> {
+    watcher: W,
+    targets: WorkspaceEventTargets,
+}
+
+struct WorkspaceRegistry<W> {
+    by_root: HashMap<PathBuf, RegisteredWorkspace<W>>,
+}
+
+impl<W> Default for WorkspaceRegistry<W> {
+    fn default() -> Self {
+        Self {
+            by_root: HashMap::new(),
+        }
+    }
+}
+
+impl<W> WorkspaceRegistry<W> {
+    /// Add one window as an owner of a canonical workspace. The factory is
+    /// called only for the first owner, so concurrent renderer invokes cannot
+    /// replace an already-running watcher for the same root.
+    fn register<E>(
+        &mut self,
+        root: PathBuf,
+        owner: String,
+        renderer_root: PathBuf,
+        create_watcher: impl FnOnce(WorkspaceEventTargets) -> Result<W, E>,
+    ) -> Result<bool, E> {
+        if let Some(workspace) = self.by_root.get_mut(&root) {
+            workspace.targets.write().insert(owner, renderer_root);
+            return Ok(false);
+        }
+
+        let targets = WorkspaceEventTargets::default();
+        targets.write().insert(owner, renderer_root);
+        let watcher = create_watcher(targets.clone())?;
+        self.by_root
+            .insert(root, RegisteredWorkspace { watcher, targets });
+        Ok(true)
+    }
+
+    fn roots(&self) -> Vec<PathBuf> {
+        self.by_root.keys().cloned().collect()
+    }
+
+    /// Remove one owner. `canonical_root` is preferred while the path still
+    /// exists; `renderer_root` is the deletion-safe fallback retained at
+    /// registration time for roots that were renamed or removed externally.
+    fn unregister_owner(
+        &mut self,
+        canonical_root: Option<&Path>,
+        renderer_root: &Path,
+        owner: &str,
+    ) -> Option<W> {
+        let root = canonical_root
+            .filter(|root| {
+                self.by_root
+                    .get(*root)
+                    .is_some_and(|workspace| workspace.targets.read().contains_key(owner))
+            })
+            .map(Path::to_path_buf)
+            .or_else(|| {
+                self.by_root.iter().find_map(|(root, workspace)| {
+                    let targets = workspace.targets.read();
+                    targets
+                        .get(owner)
+                        .filter(|registered| renderer_paths_match(registered, renderer_root))
+                        .map(|_| root.clone())
+                })
+            })?;
+
+        let remove_workspace = {
+            let workspace = self.by_root.get_mut(&root)?;
+            workspace.targets.write().remove(owner);
+            workspace.targets.read().is_empty()
+        };
+        if remove_workspace {
+            self.by_root
+                .remove(&root)
+                .map(|workspace| workspace.watcher)
+        } else {
+            None
+        }
+    }
+
+    fn unregister_owner_everywhere(&mut self, owner: &str) -> Vec<W> {
+        let mut empty_roots = Vec::new();
+        for (root, workspace) in &mut self.by_root {
+            let mut targets = workspace.targets.write();
+            targets.remove(owner);
+            if targets.is_empty() {
+                empty_roots.push(root.clone());
+            }
+        }
+        empty_roots
+            .into_iter()
+            .filter_map(|root| {
+                self.by_root
+                    .remove(&root)
+                    .map(|workspace| workspace.watcher)
+            })
+            .collect()
+    }
+}
+
+fn renderer_paths_match(first: &Path, second: &Path) -> bool {
+    if first == second {
+        return true;
+    }
+    #[cfg(windows)]
+    {
+        fn windows_key(path: &Path) -> String {
+            let mut value = path.to_string_lossy().replace('\\', "/");
+            if let Some(rest) = value.strip_prefix("//?/UNC/") {
+                value = format!("//{rest}");
+            } else if let Some(rest) = value.strip_prefix("//?/") {
+                value = rest.to_string();
+            }
+            while value.len() > 1 && value.ends_with('/') {
+                value.pop();
+            }
+            value.to_lowercase()
+        }
+        windows_key(first) == windows_key(second)
+    }
+    #[cfg(not(windows))]
+    {
+        false
+    }
 }
 
 impl AppState {
@@ -64,12 +190,50 @@ impl AppState {
         self.inner.read().recent_folders.clone()
     }
 
-    pub fn add_workspace(&self, ws: Workspace) {
-        self.inner.write().workspaces.insert(ws.root.clone(), ws);
+    pub fn register_workspace(
+        &self,
+        root: PathBuf,
+        owner: String,
+        renderer_root: PathBuf,
+        create_watcher: impl FnOnce(WorkspaceEventTargets) -> AppResult<WatcherHandle>,
+    ) -> AppResult<bool> {
+        self.inner
+            .write()
+            .workspaces
+            .register(root, owner, renderer_root, create_watcher)
     }
 
-    pub fn remove_workspace(&self, root: &std::path::Path) -> Option<Workspace> {
-        self.inner.write().workspaces.remove(root)
+    pub fn unregister_workspace_owner(
+        &self,
+        canonical_root: Option<&Path>,
+        renderer_root: &Path,
+        owner: &str,
+    ) {
+        let watcher =
+            self.inner
+                .write()
+                .workspaces
+                .unregister_owner(canonical_root, renderer_root, owner);
+        drop(watcher);
+    }
+
+    /// Drop every workspace lease held by a renderer that has been destroyed.
+    /// This is idempotent with an explicit `cmd_unwatch_folder` call.
+    pub fn unregister_all_workspaces_for_owner(&self, owner: &str) {
+        let watchers = self
+            .inner
+            .write()
+            .workspaces
+            .unregister_owner_everywhere(owner);
+        drop(watchers);
+    }
+
+    /// Return a snapshot of the roots currently registered by renderer
+    /// workspaces. Filesystem commands canonicalize these paths before doing
+    /// containment checks, so a caller cannot widen its authority by merely
+    /// supplying an arbitrary `root` argument.
+    pub fn workspace_roots(&self) -> Vec<PathBuf> {
+        self.inner.read().workspaces.roots()
     }
 
     pub fn set_github_token(&self, token: String) {
@@ -84,7 +248,10 @@ impl AppState {
 
 #[cfg(test)]
 mod tests {
-    use super::AppState;
+    use std::cell::Cell;
+    use std::path::PathBuf;
+
+    use super::{AppState, WorkspaceRegistry};
 
     #[test]
     fn github_token_is_process_memory_only_state() {
@@ -94,6 +261,132 @@ mod tests {
         assert_eq!(state.github_token().as_deref(), Some("secret"));
         state.set_github_token(String::new());
         assert_eq!(state.github_token(), None);
+    }
+
+    #[test]
+    fn workspace_registry_shares_one_watcher_until_the_last_owner_leaves() {
+        let mut registry = WorkspaceRegistry::<usize>::default();
+        let canonical = PathBuf::from("/canonical/notes");
+        let main_root = PathBuf::from("/renderer/main/notes");
+        let child_root = PathBuf::from("/renderer/child/notes");
+        let created = Cell::new(0);
+
+        assert!(registry
+            .register(canonical.clone(), "main".into(), main_root.clone(), |_| {
+                created.set(created.get() + 1);
+                Ok::<_, ()>(41)
+            },)
+            .unwrap());
+        assert!(!registry
+            .register(
+                canonical.clone(),
+                "editor-2".into(),
+                child_root.clone(),
+                |_| {
+                    created.set(created.get() + 1);
+                    Ok::<_, ()>(99)
+                },
+            )
+            .unwrap());
+
+        assert_eq!(created.get(), 1, "the second owner must reuse the watcher");
+        assert_eq!(registry.roots(), vec![canonical.clone()]);
+        assert_eq!(
+            registry.unregister_owner(Some(&canonical), &main_root, "main"),
+            None,
+            "one owner leaving must retain watcher authority for the other",
+        );
+        assert_eq!(registry.roots(), vec![canonical.clone()]);
+        let targets = registry.by_root[&canonical].targets.read();
+        assert_eq!(targets.len(), 1);
+        assert_eq!(targets.get("editor-2"), Some(&child_root));
+        drop(targets);
+
+        assert_eq!(
+            registry.unregister_owner(Some(&canonical), &child_root, "editor-2"),
+            Some(41),
+        );
+        assert!(registry.roots().is_empty());
+    }
+
+    #[test]
+    fn repeated_watch_by_one_owner_is_idempotent_and_updates_its_spelling() {
+        let mut registry = WorkspaceRegistry::<usize>::default();
+        let canonical = PathBuf::from("/canonical/notes");
+        registry
+            .register(
+                canonical.clone(),
+                "main".into(),
+                PathBuf::from("/old-spelling"),
+                |_| Ok::<_, ()>(7),
+            )
+            .unwrap();
+
+        assert!(!registry
+            .register(
+                canonical.clone(),
+                "main".into(),
+                PathBuf::from("/new-spelling"),
+                |_| -> Result<usize, ()> { panic!("idempotent watch created a second watcher") },
+            )
+            .unwrap());
+        assert_eq!(
+            registry.by_root[&canonical].targets.read().get("main"),
+            Some(&PathBuf::from("/new-spelling")),
+        );
+    }
+
+    #[test]
+    fn deleted_root_unregisters_by_the_owners_saved_renderer_path() {
+        let mut registry = WorkspaceRegistry::<usize>::default();
+        let canonical = PathBuf::from("/canonical/deleted");
+        let renderer = PathBuf::from("/renderer/deleted");
+        registry
+            .register(canonical, "main".into(), renderer.clone(), |_| {
+                Ok::<_, ()>(5)
+            })
+            .unwrap();
+
+        assert_eq!(registry.unregister_owner(None, &renderer, "main"), Some(5),);
+        assert!(registry.roots().is_empty());
+    }
+
+    #[test]
+    fn destroyed_owner_is_removed_from_every_workspace_without_revoking_peers() {
+        let mut registry = WorkspaceRegistry::<usize>::default();
+        let first = PathBuf::from("/canonical/first");
+        let second = PathBuf::from("/canonical/second");
+        registry
+            .register(
+                first.clone(),
+                "main".into(),
+                PathBuf::from("/first"),
+                |_| Ok::<_, ()>(1),
+            )
+            .unwrap();
+        registry
+            .register(
+                first.clone(),
+                "editor-2".into(),
+                PathBuf::from("/first-alias"),
+                |_| Ok::<_, ()>(9),
+            )
+            .unwrap();
+        registry
+            .register(
+                second.clone(),
+                "main".into(),
+                PathBuf::from("/second"),
+                |_| Ok::<_, ()>(2),
+            )
+            .unwrap();
+
+        assert_eq!(registry.unregister_owner_everywhere("main"), vec![2]);
+        assert_eq!(registry.roots(), vec![first.clone()]);
+        assert!(registry.by_root[&first]
+            .targets
+            .read()
+            .contains_key("editor-2"));
     }
 }
 

@@ -389,6 +389,16 @@
     "type": "boolean",
     "default": false
   },
+  "toolBarVisibility": {
+    "description": "View--Whether the editor toolbar is shown.",
+    "type": "boolean",
+    "default": true
+  },
+  "statusBarVisibility": {
+    "description": "View--Whether the editor status bar is shown.",
+    "type": "boolean",
+    "default": true
+  },
   "sourceCodeModeEnabled": {
     "description": "View--Whether the source-code mode is enabled by default.",
     "type": "boolean",

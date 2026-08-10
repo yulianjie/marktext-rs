@@ -43,6 +43,9 @@ pub struct MenuStrings {
     pub theme_github_blue: &'static str,
 
     // edit
+    pub undo: &'static str,
+    pub redo: &'static str,
+    pub select_all: &'static str,
     pub find: &'static str,
     pub replace: &'static str,
 
@@ -74,6 +77,8 @@ pub struct MenuStrings {
     // view
     pub toggle_sidebar: &'static str,
     pub toggle_tab_bar: &'static str,
+    pub toggle_toolbar: &'static str,
+    pub toggle_status_bar: &'static str,
     pub toggle_source_code: &'static str,
     pub toggle_typewriter: &'static str,
     pub toggle_focus: &'static str,
@@ -130,6 +135,9 @@ pub const EN: MenuStrings = MenuStrings {
     theme_graphite_light: "Graphite Light",
     theme_github_blue: "GitHub Blue",
 
+    undo: "Undo",
+    redo: "Redo",
+    select_all: "Select All",
     find: "Find",
     replace: "Find & Replace",
 
@@ -158,6 +166,8 @@ pub const EN: MenuStrings = MenuStrings {
 
     toggle_sidebar: "Toggle Sidebar",
     toggle_tab_bar: "Toggle Tab Bar",
+    toggle_toolbar: "Toggle Toolbar",
+    toggle_status_bar: "Toggle Status Bar",
     toggle_source_code: "Toggle Source Code Mode",
     toggle_typewriter: "Toggle Typewriter Mode",
     toggle_focus: "Toggle Focus Mode",
@@ -212,6 +222,9 @@ pub const ZH_CN: MenuStrings = MenuStrings {
     theme_graphite_light: "Graphite Light",
     theme_github_blue: "GitHub 蓝",
 
+    undo: "撤销",
+    redo: "重做",
+    select_all: "全选",
     find: "查找",
     replace: "查找和替换",
 
@@ -240,6 +253,8 @@ pub const ZH_CN: MenuStrings = MenuStrings {
 
     toggle_sidebar: "切换侧边栏",
     toggle_tab_bar: "切换标签栏",
+    toggle_toolbar: "切换工具栏",
+    toggle_status_bar: "切换状态栏",
     toggle_source_code: "切换源码模式",
     toggle_typewriter: "切换打字机模式",
     toggle_focus: "切换专注模式",
@@ -294,6 +309,9 @@ pub const JA: MenuStrings = MenuStrings {
     theme_graphite_light: "Graphite Light",
     theme_github_blue: "GitHub Blue",
 
+    undo: "元に戻す",
+    redo: "やり直す",
+    select_all: "すべて選択",
     find: "検索",
     replace: "検索と置換",
 
@@ -322,6 +340,8 @@ pub const JA: MenuStrings = MenuStrings {
 
     toggle_sidebar: "サイドバー切替",
     toggle_tab_bar: "タブバー切替",
+    toggle_toolbar: "ツールバー切替",
+    toggle_status_bar: "ステータスバー切替",
     toggle_source_code: "ソースコードモード切替",
     toggle_typewriter: "タイプライターモード切替",
     toggle_focus: "集中モード切替",

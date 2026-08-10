@@ -27,6 +27,7 @@ import {
   type UserTheme,
 } from '@/services/tauri-invoke'
 import { appIconOptions, type AppIconId } from '@/services/app-icon'
+import type { TrailingNewlinePolicy } from '@/services/trailing-newline'
 import { useI18n } from '@/i18n'
 
 const prefs = usePreferencesStore()
@@ -783,6 +784,18 @@ watchEffect(() => {
           <el-form-item :label="t('prefs.editor.autoGuessEncoding')">
             <el-switch :model-value="prefs.autoGuessEncoding" @update:model-value="v => prefs.set('autoGuessEncoding', !!v)" />
           </el-form-item>
+          <el-form-item :label="t('prefs.editor.trimTrailingNewline')">
+            <el-select
+              :model-value="prefs.trimTrailingNewline"
+              style="width: 300px"
+              @update:model-value="v => prefs.set('trimTrailingNewline', Number(v) as TrailingNewlinePolicy)"
+            >
+              <el-option :label="t('prefs.editor.trimTrailingNewlineTrimAll')" :value="0" />
+              <el-option :label="t('prefs.editor.trimTrailingNewlineEnsureOne')" :value="1" />
+              <el-option :label="t('prefs.editor.trimTrailingNewlinePreserve')" :value="2" />
+              <el-option :label="t('prefs.editor.trimTrailingNewlineNothing')" :value="3" />
+            </el-select>
+          </el-form-item>
           <el-form-item :label="t('prefs.editor.textDirection')">
             <el-select
               :model-value="prefs.textDirection"
@@ -1172,6 +1185,12 @@ watchEffect(() => {
           </el-form-item>
           <el-form-item :label="t('prefs.view.tabBarVisibility')">
             <el-switch :model-value="prefs.tabBarVisibility" @update:model-value="v => prefs.set('tabBarVisibility', !!v)" />
+          </el-form-item>
+          <el-form-item :label="t('prefs.view.toolBarVisibility')">
+            <el-switch :model-value="prefs.toolBarVisibility" @update:model-value="v => prefs.set('toolBarVisibility', !!v)" />
+          </el-form-item>
+          <el-form-item :label="t('prefs.view.statusBarVisibility')">
+            <el-switch :model-value="prefs.statusBarVisibility" @update:model-value="v => prefs.set('statusBarVisibility', !!v)" />
           </el-form-item>
           <el-form-item :label="t('prefs.view.sourceCodeMode')">
             <el-switch :model-value="prefs.sourceCodeModeEnabled" @update:model-value="v => prefs.set('sourceCodeModeEnabled', !!v)" />

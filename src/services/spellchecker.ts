@@ -2,7 +2,7 @@
  * Spellchecker — bridges Muya's UI to the Rust Hunspell backend.
  *
  * Muya itself doesn't know about IPC; it asks for a synchronous-ish API
- * (`enabled`, `language`, `setEnabled`, `setLanguage`, `replaceMisspelling`).
+ * (`enabled`, `language`, `setEnabled`, `setLanguage`).
  * We satisfy that surface and additionally expose `check()` / `suggest()` /
  * `addWord()` / `removeWord()` for the rest of the app (context menu,
  * preferences UI).
@@ -18,14 +18,11 @@ import {
   spellcheckSuggest,
   spellcheckWords,
 } from './tauri-invoke'
-import { bus } from '@/bus'
-
 export interface SpellcheckerLike {
   enabled: boolean
   language: string
   setEnabled(value: boolean): Promise<void>
   setLanguage(lang: string): Promise<void>
-  replaceMisspelling(word: string, replacement: string): void
   /** Returns the subset of `words` that the dictionary doesn't recognise. */
   check(words: string[]): Promise<string[]>
   suggest(word: string): Promise<string[]>
@@ -34,7 +31,7 @@ export interface SpellcheckerLike {
   availableLanguages(): Promise<string[]>
 }
 
-class Spellchecker implements SpellcheckerLike {
+export class Spellchecker implements SpellcheckerLike {
   enabled = false
   language = 'en_US'
 
@@ -44,11 +41,6 @@ class Spellchecker implements SpellcheckerLike {
 
   async setLanguage(lang: string): Promise<void> {
     this.language = lang
-    bus.emit('switch-spellchecker-language', lang)
-  }
-
-  replaceMisspelling(word: string, replacement: string): void {
-    bus.emit('replace-misspelling', { word, replacement })
   }
 
   async check(words: string[]): Promise<string[]> {

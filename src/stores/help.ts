@@ -9,6 +9,7 @@
  */
 
 import { v4 as uuid } from '@/util/uuid'
+import type { TrailingNewlinePolicy } from '@/services/trailing-newline'
 
 export interface Encoding {
   encoding: string
@@ -33,6 +34,15 @@ export interface SearchMatches {
   value: string
 }
 
+export interface ExternalDocumentChange {
+  kind: 'modified' | 'renamed'
+  path: string
+  previousPath?: string
+  markdown: string
+  encoding: Encoding
+  lineEnding: 'lf' | 'crlf'
+}
+
 export interface DocumentState {
   id: string
   isSaved: boolean
@@ -40,15 +50,29 @@ export interface DocumentState {
   pathname: string
   filename: string
   markdown: string
+  /** Last complete Markdown snapshot known to be on disk. */
+  lastSavedMarkdown: string
   encoding: Encoding
   lineEnding: 'lf' | 'crlf'
-  trimTrailingNewline: number
+  trimTrailingNewline: TrailingNewlinePolicy
   adjustLineEndingOnSave: boolean
   history: HistoryStack
+  /** Markdown snapshot that the Muya history stack was built against. */
+  historyMarkdown: string
+  /** CodeMirror's JSON state, including its history field, for this tab. */
+  sourceEditorState: unknown | null
+  /** Compact CodeMirror selection JSON persisted independently of its history. */
+  sourceSelection: unknown | null
+  /** View mode belongs to the tab rather than to the window as a whole. */
+  sourceMode: boolean
   cursor: unknown
   wordCount: WordCount
   searchMatches: SearchMatches
   notifications: Notification[]
+  /** Pending external content that must be resolved before a manual save. */
+  externalChange: ExternalDocumentChange | null
+  /** Pauses autosave after an external conflict until the user saves manually. */
+  autoSaveBlocked: boolean
 }
 
 export interface Notification {
@@ -65,22 +89,29 @@ export const defaultFileState = (): DocumentState => ({
   pathname: '',
   filename: 'Untitled-1',
   markdown: '',
+  lastSavedMarkdown: '',
   encoding: { encoding: 'utf8', isBom: false },
   lineEnding: 'lf',
   trimTrailingNewline: 3,
   adjustLineEndingOnSave: false,
   history: { stack: [], index: -1 },
+  historyMarkdown: '',
+  sourceEditorState: null,
+  sourceSelection: null,
+  sourceMode: false,
   cursor: null,
   wordCount: { paragraph: 0, word: 0, character: 0, all: 0 },
   searchMatches: { index: -1, matches: [], value: '' },
   notifications: [],
+  externalChange: null,
+  autoSaveBlocked: false,
 })
 
 export interface DocumentOptions {
   encoding: Encoding
   lineEnding: 'lf' | 'crlf'
   adjustLineEndingOnSave: boolean
-  trimTrailingNewline: number
+  trimTrailingNewline: TrailingNewlinePolicy
 }
 
 export function getOptionsFromState(file: DocumentState): DocumentOptions {
@@ -108,6 +139,8 @@ export function getBlankFileState(
   fileState.id = uuid()
   fileState.filename = `Untitled-${highest + 1}`
   fileState.markdown = markdown ?? ''
+  fileState.lastSavedMarkdown = fileState.markdown
+  fileState.historyMarkdown = fileState.markdown
   fileState.encoding.encoding = defaultEncoding
   fileState.lineEnding = lineEnding
   fileState.adjustLineEndingOnSave = lineEnding.toLowerCase() === 'crlf'
@@ -121,7 +154,7 @@ export interface CreateFromDataArgs {
   encoding: Encoding
   lineEnding: 'lf' | 'crlf'
   adjustLineEndingOnSave?: boolean
-  trimTrailingNewline?: number
+  trimTrailingNewline?: TrailingNewlinePolicy
 }
 
 export function getFileStateFromData(data: CreateFromDataArgs): DocumentState {
@@ -139,6 +172,8 @@ export function getFileStateFromData(data: CreateFromDataArgs): DocumentState {
   return Object.assign(fileState, {
     id: uuid(),
     markdown,
+    lastSavedMarkdown: markdown,
+    historyMarkdown: markdown,
     filename,
     pathname,
     encoding,

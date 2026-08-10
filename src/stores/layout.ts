@@ -1,5 +1,5 @@
 /**
- * Layout — sidebar/tab-bar visibility and sidebar width.
+ * Layout — editor chrome visibility and sidebar width.
  *
  * Persists `sideBarWidth` to localStorage (cheap and synchronous, same as the
  * legacy module). Visibility flags round-trip through the preferences store
@@ -43,6 +43,14 @@ export const useLayoutStore = defineStore('layout', () => {
     get: () => prefs.tabBarVisibility,
     set: value => { void prefs.set('tabBarVisibility', value) },
   })
+  const showToolBar = computed({
+    get: () => prefs.toolBarVisibility,
+    set: value => { void prefs.set('toolBarVisibility', value) },
+  })
+  const showStatusBar = computed({
+    get: () => prefs.statusBarVisibility,
+    set: value => { void prefs.set('statusBarVisibility', value) },
+  })
   const sideBarWidth = ref(readStoredWidth())
 
   /** Effective sidebar width — 0 when hidden, 45 when only the icon rail shows. */
@@ -52,14 +60,24 @@ export const useLayoutStore = defineStore('layout', () => {
     return sideBarWidth.value
   })
 
-  function setLayout(patch: Partial<{ rightColumn: RightColumn; showSideBar: boolean; showTabBar: boolean }>) {
+  function setLayout(patch: Partial<{
+    rightColumn: RightColumn
+    showSideBar: boolean
+    showTabBar: boolean
+    showToolBar: boolean
+    showStatusBar: boolean
+  }>) {
     if (patch.rightColumn !== undefined) rightColumn.value = patch.rightColumn
     if (patch.showSideBar !== undefined) showSideBar.value = patch.showSideBar
     if (patch.showTabBar !== undefined) showTabBar.value = patch.showTabBar
+    if (patch.showToolBar !== undefined) showToolBar.value = patch.showToolBar
+    if (patch.showStatusBar !== undefined) showStatusBar.value = patch.showStatusBar
   }
 
   function toggleSideBar() { setLayout({ showSideBar: !showSideBar.value }) }
   function toggleTabBar() { setLayout({ showTabBar: !showTabBar.value }) }
+  function toggleToolBar() { setLayout({ showToolBar: !showToolBar.value }) }
+  function toggleStatusBar() { setLayout({ showStatusBar: !showStatusBar.value }) }
 
   function setSideBarWidth(width: number) {
     const clamped = Math.min(Math.max(width, SIDEBAR_MIN), SIDEBAR_MAX)
@@ -74,11 +92,15 @@ export const useLayoutStore = defineStore('layout', () => {
     rightColumn,
     showSideBar,
     showTabBar,
+    showToolBar,
+    showStatusBar,
     sideBarWidth,
     effectiveSideBarWidth,
     setLayout,
     toggleSideBar,
     toggleTabBar,
+    toggleToolBar,
+    toggleStatusBar,
     setSideBarWidth,
     syncFromPreferences,
   }

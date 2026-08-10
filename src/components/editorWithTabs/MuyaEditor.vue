@@ -25,14 +25,16 @@
  *   5. Prism light/dark CSS is hot-swapped from `muya-preferences-applier.ts`'s
  *      `theme` watcher — no static `import`.
  *   6. Extra bus handlers (`duplicate`, `insertParagraph`, `insert-image`,
- *      `invalidate-image-cache`, `switch-spellchecker-language`, …) are
+ *      `invalidate-image-cache`, …) are
  *      installed in `installBusHandlers()`.
  */
 import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
-import { writeText } from '@tauri-apps/plugin-clipboard-manager'
+import { readText, writeText } from '@tauri-apps/plugin-clipboard-manager'
 import { open as openExternal } from '@tauri-apps/plugin-shell'
 import { useEditorStore } from '@/stores/editor'
+import type { DocumentState, HistoryStack } from '@/stores/help'
 import { usePreferencesStore } from '@/stores/preferences'
+import { useI18n } from '@/i18n'
 import { muyaImageAction } from '@/services/muya-image-action'
 import { resolveLocalImageSrc } from '@/services/local-image-src'
 import {
@@ -44,16 +46,237 @@ import { applyPreferencesToMuya } from '@/services/muya-preferences-applier'
 import { effectiveThemeId } from '@/services/preferences-applier'
 import { setFormatMenuState } from '@/services/tauri-invoke'
 import { spellchecker } from '@/services/spellchecker'
+import {
+  buildEditorContextMenuItems,
+  extractContextWord,
+  LatestContextMenuRequest,
+  normalizeSpellingSuggestions,
+  type ContextSelection,
+  type EditorContextMenuActions,
+  type EditorContextSpellingState,
+} from '@/services/editor-context-menu'
+import {
+  emptySearchRevealGuard,
+  enqueueSearchReveal,
+  searchCoordinatesToEditorRange,
+  settleSearchReveal,
+} from '@/services/search-reveal'
 import { bus } from '@/bus'
 
 const editor = useEditorStore()
 const prefs = usePreferencesStore()
+const { t } = useI18n()
 
 const editorRoot = ref<HTMLDivElement | null>(null)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const muyaRef = shallowRef<any>(null)
 const activeBoundId = ref<string | null>(null)
 let disposePrefsApplier: (() => void) | null = null
+const contextMenuRequests = new LatestContextMenuRequest()
+let revealGuard = emptySearchRevealGuard()
+
+interface CapturedMuyaCursor {
+  anchor: { key: string; offset: number }
+  focus: { key: string; offset: number }
+  start: { key: string; offset: number }
+  end: { key: string; offset: number }
+}
+
+function captureContextCursor(selection: ContextSelection): CapturedMuyaCursor | null {
+  const { start, end } = selection
+  if (!start?.key || !end?.key) return null
+  if (typeof start.offset !== 'number' || typeof end.offset !== 'number') return null
+  const capturedStart = { key: start.key, offset: start.offset }
+  const capturedEnd = { key: end.key, offset: end.offset }
+  return {
+    anchor: capturedStart,
+    focus: capturedEnd,
+    start: capturedStart,
+    end: capturedEnd,
+  }
+}
+
+function contextMenuShortcuts() {
+  const isMac = navigator.platform.toLowerCase().includes('mac')
+  const mod = isMac ? '⌘' : 'Ctrl+'
+  return {
+    undo: `${mod}Z`,
+    redo: isMac ? '⇧⌘Z' : 'Ctrl+Y',
+    cut: `${mod}X`,
+    copy: `${mod}C`,
+    paste: `${mod}V`,
+    selectAll: `${mod}A`,
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function contextMenuCapabilities(muya: any, selection: ContextSelection) {
+  const history = muya.contentState?.history
+  const hasPendingHistory = Boolean(history?.pending)
+  const stackLength = Array.isArray(history?.stack) ? history.stack.length : 0
+  const historyIndex = typeof history?.index === 'number' ? history.index : -1
+  const hasRange = selection.start?.key !== selection.end?.key
+    || selection.start?.offset !== selection.end?.offset
+  const hasSpecialSelection = Boolean(
+    muya.contentState?.selectedTableCells || muya.contentState?.selectedImage,
+  )
+  const hasSelection = hasRange || hasSpecialSelection
+  return {
+    undo: hasPendingHistory || historyIndex > 0,
+    redo: !hasPendingHistory && historyIndex >= 0 && historyIndex < stackLength - 1,
+    cut: hasSelection,
+    copy: hasSelection,
+    paste: typeof muya.contentState?.pasteHandler === 'function',
+    selectAll: Boolean(muya.getMarkdown?.()),
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function restoreContext(muya: any, cursor: CapturedMuyaCursor, tabId: string): boolean {
+  if (editor.sourceCodeMode || muyaRef.value !== muya || activeBoundId.value !== tabId) return false
+  muya.contentState.cursor = {
+    anchor: { ...cursor.anchor },
+    focus: { ...cursor.focus },
+    start: { ...cursor.start },
+    end: { ...cursor.end },
+  }
+  muya.focus?.()
+  return true
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function copyOrCut(muya: any, cursor: CapturedMuyaCursor, tabId: string, command: 'copy' | 'cut') {
+  if (!restoreContext(muya, cursor, tabId)) return
+  const before = muya.getMarkdown?.()
+  let fallbackText = ''
+  try {
+    fallbackText = muya.contentState?.getClipBoardData?.()?.text
+      ?? window.getSelection()?.toString()
+      ?? ''
+  } catch { /* use an empty fallback */ }
+
+  let executed = false
+  try { executed = Boolean(document.execCommand?.(command)) } catch { /* use host clipboard */ }
+  const changedByCut = command === 'cut' && muya.getMarkdown?.() !== before
+  if (executed || changedByCut || !fallbackText) return
+
+  // WebView clipboard command support varies. Preserve a plain-text fallback
+  // through the Tauri plugin, and mutate only after the write succeeds.
+  try {
+    await writeText(fallbackText)
+    if (command === 'cut' && restoreContext(muya, cursor, tabId)) {
+      muya.contentState?.cutHandler?.()
+      muya.dispatchSelectionChange?.()
+      muya.dispatchSelectionFormats?.()
+      muya.dispatchChange?.()
+    }
+  } catch { /* clipboard unavailable: leave document unchanged */ }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function pasteFromClipboard(muya: any, cursor: CapturedMuyaCursor, tabId: string) {
+  if (!restoreContext(muya, cursor, tabId)) return
+  const before = muya.getMarkdown?.()
+  try {
+    const text = await readText()
+    if (!restoreContext(muya, cursor, tabId)) return
+    const pasteHandler = muya.contentState?.pasteHandler
+    if (typeof pasteHandler === 'function') {
+      const event = {
+        preventDefault() {},
+        stopPropagation() {},
+        clipboardData: {
+          items: [],
+          getData: (format: string) => format === 'text/plain' ? text : '',
+        },
+      }
+      await pasteHandler.call(muya.contentState, event, 'pasteAsPlainText', text, '')
+      return
+    }
+  } catch {
+    // Fall through to the WebView command when the Tauri clipboard is not
+    // available (for example in browser-only development mode).
+  }
+  if (muya.getMarkdown?.() !== before || !restoreContext(muya, cursor, tabId)) return
+  try { document.execCommand?.('paste') } catch { /* no safe paste channel */ }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function handleEditorContextMenu(muya: any, event: MouseEvent, selection: ContextSelection) {
+  if (editor.sourceCodeMode) return
+  event.preventDefault()
+
+  const cursor = captureContextCursor(selection)
+  const tabId = activeBoundId.value
+  if (!cursor || !tabId) return
+
+  const token = contextMenuRequests.begin()
+  const position = { x: event.clientX, y: event.clientY }
+  const wordInfo = prefs.spellcheckerEnabled ? extractContextWord(selection) : null
+  const closeRequest = () => contextMenuRequests.invalidate(token)
+
+  const restore = () => restoreContext(muya, cursor, tabId)
+  const actions: EditorContextMenuActions = {
+    undo: () => { if (restore()) muya.undo?.() },
+    redo: () => { if (restore()) muya.redo?.() },
+    cut: () => copyOrCut(muya, cursor, tabId, 'cut'),
+    copy: () => copyOrCut(muya, cursor, tabId, 'copy'),
+    paste: () => pasteFromClipboard(muya, cursor, tabId),
+    selectAll: () => { if (restore()) muya.selectAll?.() },
+    replaceWord: replacement => {
+      if (wordInfo && restore()) {
+        muya._replaceCurrentWordInlineUnsafe?.(wordInfo.word, replacement)
+      }
+    },
+    addToDictionary: () => wordInfo ? spellchecker.addWord(wordInfo.word) : undefined,
+  }
+
+  const showMenu = (spelling?: EditorContextSpellingState) => {
+    if (!contextMenuRequests.isCurrent(token)) return
+    bus.emit('openContextMenu', {
+      ...position,
+      onClose: closeRequest,
+      items: buildEditorContextMenuItems({
+        labels: {
+          undo: t('editorContextMenu.undo'),
+          redo: t('editorContextMenu.redo'),
+          cut: t('editorContextMenu.cut'),
+          copy: t('editorContextMenu.copy'),
+          paste: t('editorContextMenu.paste'),
+          selectAll: t('editorContextMenu.selectAll'),
+          checkingSpelling: t('editorContextMenu.checkingSpelling'),
+          noSuggestions: t('editorContextMenu.noSuggestions'),
+          addToDictionary: t('editorContextMenu.addToDictionary', { word: wordInfo?.word ?? '' }),
+        },
+        capabilities: contextMenuCapabilities(muya, selection),
+        actions,
+        spelling,
+        shortcuts: contextMenuShortcuts(),
+      }),
+    })
+  }
+
+  if (!wordInfo) {
+    showMenu()
+    return
+  }
+
+  showMenu({ word: wordInfo.word, checking: true })
+  void (async () => {
+    const misspelled = await spellchecker.check([wordInfo.word])
+    if (!contextMenuRequests.isCurrent(token)) return
+    if (!misspelled.includes(wordInfo.word)) {
+      showMenu()
+      return
+    }
+    const suggestions = normalizeSpellingSuggestions(
+      wordInfo.word,
+      await spellchecker.suggest(wordInfo.word),
+    )
+    if (!contextMenuRequests.isCurrent(token)) return
+    showMenu({ word: wordInfo.word, misspelled: true, suggestions })
+  })()
+}
 
 async function loadMuya() {
   const { default: Muya } = await import('muya/lib')
@@ -168,12 +391,19 @@ async function construct() {
   // Resolve the active tab at event-fire time, not closure time — the single
   // instance survives tab switches so the listener must always write into
   // whichever tab is currently mounted.
-  muya.on('change', (changes: { markdown: string; wordCount?: unknown; cursor?: unknown; toc?: unknown }) => {
+  muya.on('change', (changes: {
+    markdown: string
+    wordCount?: unknown
+    cursor?: unknown
+    history?: HistoryStack
+    toc?: unknown
+  }) => {
     const id = activeBoundId.value
     if (!id) return
     editor.applyContentChange(id, changes.markdown, {
       wordCount: changes.wordCount as never,
       cursor: changes.cursor,
+      history: changes.history,
       toc: changes.toc as { lvl: number; content: string; slug?: string }[] | undefined,
     })
   })
@@ -226,6 +456,12 @@ async function construct() {
     }
   })
 
+  // Muya suppresses the WebView's native menu. Route its normalized cursor
+  // payload into our single global menu, including async Hunspell results.
+  muya.on('contextmenu', (event: MouseEvent, selection: ContextSelection) => {
+    handleEditorContextMenu(muya, event, selection)
+  })
+
   muyaRef.value = muya
   editor.setMuyaInstance(muya)
   disposePrefsApplier = applyPreferencesToMuya(muya)
@@ -248,10 +484,33 @@ function animatedScrollTo(el: HTMLElement, to: number, durationMs: number) {
   requestAnimationFrame(step)
 }
 
-/** Swap the displayed document. Mirrors the original setMarkdownToEditor. */
-function loadFile(tab: { id: string; pathname: string; markdown: string; cursor?: unknown }) {
+function cloneMuyaHistory(history: HistoryStack): HistoryStack {
+  return JSON.parse(JSON.stringify(history)) as HistoryStack
+}
+
+function persistActiveSession() {
+  const muya = muyaRef.value
+  const id = activeBoundId.value
+  if (!muya || !id) return
+  const tab = editor.tabs.find(candidate => candidate.id === id)
+  if (!tab) return
+
+  const markdown = muya.getMarkdown?.()
+  // Source mode may have updated the shared document while Muya was hidden.
+  // Never attach an old block history to that newer Markdown snapshot.
+  if (typeof markdown !== 'string' || markdown !== tab.markdown) return
+  muya.contentState?.history?.commitPending?.()
+  const history = muya.getHistory?.()
+  if (history) tab.history = cloneMuyaHistory(history)
+  tab.historyMarkdown = markdown
+  tab.cursor = muya.getCursor?.() ?? tab.cursor
+}
+
+/** Swap the displayed document and restore only that tab's Muya history. */
+function loadFile(tab: DocumentState, persistCurrent = true) {
   const muya = muyaRef.value
   if (!muya) return
+  if (persistCurrent) persistActiveSession()
   // Suspend `change` writes until the new tab is bound — otherwise the
   // setMarkdown round-trip's dispatchChange fires under the *old* tab id.
   activeBoundId.value = null
@@ -262,6 +521,12 @@ function loadFile(tab: { id: string; pathname: string; markdown: string; cursor?
   } else {
     muya.setMarkdown(tab.markdown)
   }
+  if (tab.historyMarkdown === tab.markdown && tab.history.stack.length) {
+    muya.setHistory(cloneMuyaHistory(tab.history))
+  } else {
+    tab.history = { stack: [], index: -1 }
+    tab.historyMarkdown = tab.markdown
+  }
   activeBoundId.value = tab.id
 }
 
@@ -269,13 +534,38 @@ function loadFile(tab: { id: string; pathname: string; markdown: string; cursor?
 watch(
   () => editor.currentFileId,
   (id) => {
-    if (!id) return
+    if (!id) { tryRevealSearchHit(); return }
     const tab = editor.tabs.find(t => t.id === id)
-    if (!tab) return
-    if (activeBoundId.value === id) return
-    loadFile(tab)
+    if (tab && activeBoundId.value !== id) loadFile(tab)
+    tryRevealSearchHit()
   },
   { immediate: false },
+)
+
+function syncActiveMarkdownFromStore() {
+  const tab = editor.currentFile
+  const muya = muyaRef.value
+  if (!tab || !muya || activeBoundId.value !== tab.id) return
+  if (muya.getMarkdown?.() === tab.markdown) return
+  // Disk reloads and source-mode edits deliberately reset Muya's incompatible
+  // block history rather than allowing an undo to resurrect stale content.
+  loadFile(tab, false)
+}
+
+// A clean external reload while WYSIWYG is visible must appear immediately.
+// Source-mode keystrokes are synced once when that mode is left, avoiding a
+// costly hidden Muya parse on every character.
+watch(
+  () => editor.currentFile?.markdown,
+  () => { if (!editor.sourceCodeMode) syncActiveMarkdownFromStore() },
+)
+
+watch(
+  () => editor.sourceCodeMode,
+  enabled => {
+    if (!enabled) syncActiveMarkdownFromStore()
+    tryRevealSearchHit()
+  },
 )
 
 // Save As gives an untitled document its first base directory without changing
@@ -303,66 +593,100 @@ function withMuya(fn: (muya: any) => void) {
   try { fn(m) } catch (err) { console.warn('[Muya action failed]', err) }
 }
 
+// The Muya instance remains mounted behind source mode. Mutating it while it
+// is hidden would write stale Markdown back into the active tab.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function withVisibleMuya(fn: (muya: any) => void) {
+  if (editor.sourceCodeMode) return
+  withMuya(fn)
+}
+
+function centerMuyaSelection() {
+  const root = editorRoot.value
+  const focusNode = document.getSelection()?.focusNode
+  const element = focusNode instanceof Element ? focusNode : focusNode?.parentElement
+  if (!root || !element || !root.contains(element)) return
+  const paragraph = element.closest('.ag-paragraph') ?? element
+  paragraph.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' })
+}
+
+function tryRevealSearchHit() {
+  const settlement = settleSearchReveal(revealGuard, {
+    currentTabId: editor.currentFileId,
+    boundTabId: activeBoundId.value,
+    consumerMode: 'wysiwyg',
+    activeMode: editor.sourceCodeMode ? 'source' : 'wysiwyg',
+  })
+  revealGuard = settlement.state
+  const request = settlement.request
+  const muya = muyaRef.value
+  if (!request || !muya) return
+
+  const markdown = muya.getMarkdown?.() ?? editor.currentFile?.markdown ?? ''
+  const range = searchCoordinatesToEditorRange(markdown, request)
+  muya.setCursor({
+    anchor: { line: range.line, ch: range.startCh },
+    focus: { line: range.line, ch: range.endCh },
+  })
+  muya.focus()
+  window.requestAnimationFrame(centerMuyaSelection)
+}
+
 function installBusHandlers() {
   // ── paragraph / format / clipboard ────────────────────────────
-  busUnsubs.push(bus.on('paragraph', (type) => withMuya(m => m.updateParagraph(type))))
-  busUnsubs.push(bus.on('format', (type) => withMuya(m => m.format(type))))
-  busUnsubs.push(bus.on('undo', () => withMuya(m => m.undo())))
-  busUnsubs.push(bus.on('redo', () => withMuya(m => m.redo())))
-  busUnsubs.push(bus.on('selectAll', () => withMuya(m => m.selectAll())))
-  busUnsubs.push(bus.on('copyAsMarkdown', () => withMuya(m => m.copyAsMarkdown?.())))
-  busUnsubs.push(bus.on('copyAsHtml', () => withMuya(m => m.copyAsHtml?.())))
-  busUnsubs.push(bus.on('pasteAsPlainText', () => withMuya(m => m.pasteAsPlainText?.())))
+  busUnsubs.push(bus.on('paragraph', (type) => withVisibleMuya(m => m.updateParagraph(type))))
+  busUnsubs.push(bus.on('format', (type) => withVisibleMuya(m => m.format(type))))
+  busUnsubs.push(bus.on('undo', () => withVisibleMuya(m => m.undo())))
+  busUnsubs.push(bus.on('redo', () => withVisibleMuya(m => m.redo())))
+  busUnsubs.push(bus.on('selectAll', () => withVisibleMuya(m => m.selectAll())))
+  busUnsubs.push(bus.on('copyAsMarkdown', () => withVisibleMuya(m => m.copyAsMarkdown?.())))
+  busUnsubs.push(bus.on('copyAsHtml', () => withVisibleMuya(m => m.copyAsHtml?.())))
+  busUnsubs.push(bus.on('pasteAsPlainText', () => withVisibleMuya(m => m.pasteAsPlainText?.())))
 
   // ── paragraph manipulation (mirrors upstream bus channels) ────
-  busUnsubs.push(bus.on('duplicate', () => withMuya(m => m.duplicate?.())))
-  busUnsubs.push(bus.on('createParagraph', () => withMuya(m => m.insertParagraph?.('after'))))
-  busUnsubs.push(bus.on('deleteParagraph', () => withMuya(m => m.deleteParagraph?.())))
+  busUnsubs.push(bus.on('duplicate', () => withVisibleMuya(m => m.duplicate?.())))
+  busUnsubs.push(bus.on('createParagraph', () => withVisibleMuya(m => m.insertParagraph?.('after'))))
+  busUnsubs.push(bus.on('deleteParagraph', () => withVisibleMuya(m => m.deleteParagraph?.())))
   busUnsubs.push(bus.on('insertParagraph', ({ location, text, outMost }) =>
-    withMuya(m => m.insertParagraph?.(location, text, outMost))))
+    withVisibleMuya(m => m.insertParagraph?.(location, text, outMost))))
 
   // ── images ─────────────────────────────────────────────────────
-  busUnsubs.push(bus.on('insert-image', (imageInfo) => withMuya(m => m.insertImage?.(imageInfo))))
-  busUnsubs.push(bus.on('invalidate-image-cache', () => withMuya(m => m.invalidateImageCache?.())))
+  busUnsubs.push(bus.on('insert-image', (imageInfo) => withVisibleMuya(m => m.insertImage?.(imageInfo))))
+  busUnsubs.push(bus.on('invalidate-image-cache', () => withVisibleMuya(m => m.invalidateImageCache?.())))
 
   // ── tables (dialog-driven) ────────────────────────────────────
   busUnsubs.push(bus.on('insert-table', ({ rows, columns }) =>
-    withMuya(m => m.createTable?.({ rows, columns }))))
-
-  // ── spellchecker (Muya owns the contenteditable attribute) ────
-  busUnsubs.push(bus.on('switch-spellchecker-language', (lang) => {
-    void spellchecker.setLanguage(lang)
-    withMuya(m => m.setOptions?.({ spellcheckEnabled: spellchecker.enabled }))
-  }))
-  busUnsubs.push(bus.on('replace-misspelling', ({ word, replacement }) => {
-    spellchecker.replaceMisspelling(word, replacement)
-  }))
+    withVisibleMuya(m => m.createTable?.({ rows, columns }))))
 
   // ── find / replace ────────────────────────────────────────────
-  busUnsubs.push(bus.on('find', ({ value, opt }) => withMuya(m => {
+  busUnsubs.push(bus.on('find', ({ value, opt }) => withVisibleMuya(m => {
     const matches = m.search(value, opt)
     if (matches) editor.applySearchResult(matches)
     scrollToHighlight()
   })))
-  busUnsubs.push(bus.on('replace', ({ value, opt }) => withMuya(m => {
+  busUnsubs.push(bus.on('replace', ({ value, opt }) => withVisibleMuya(m => {
     const matches = m.replace(value, opt)
     if (matches) editor.applySearchResult(matches)
   })))
-  busUnsubs.push(bus.on('findNext', () => withMuya(m => {
+  busUnsubs.push(bus.on('findNext', () => withVisibleMuya(m => {
     const matches = m.find('next')
     if (matches) editor.applySearchResult(matches)
     scrollToHighlight()
   })))
-  busUnsubs.push(bus.on('findPrev', () => withMuya(m => {
+  busUnsubs.push(bus.on('findPrev', () => withVisibleMuya(m => {
     const matches = m.find('prev')
     if (matches) editor.applySearchResult(matches)
     scrollToHighlight()
   })))
-  busUnsubs.push(bus.on('find-action', (action) => withMuya(m => {
+  busUnsubs.push(bus.on('find-action', (action) => withVisibleMuya(m => {
     const matches = m.find(action)
     if (matches) editor.applySearchResult(matches)
     scrollToHighlight()
   })))
+  busUnsubs.push(bus.on('reveal-search-hit', (request) => {
+    revealGuard = enqueueSearchReveal(revealGuard, request)
+    tryRevealSearchHit()
+  }))
 
   // ── TOC click navigation ──────────────────────────────────────
   busUnsubs.push(bus.on('scroll-to-header', (slug) => {
@@ -388,6 +712,8 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  contextMenuRequests.invalidate()
+  persistActiveSession()
   for (const off of busUnsubs) { try { off() } catch { /* ignore */ } }
   busUnsubs.length = 0
   try { disposePrefsApplier?.() } catch { /* ignore */ }

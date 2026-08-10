@@ -9,6 +9,7 @@
 import { defineStore } from 'pinia'
 import preferenceSchema from '@/common/preferences-schema.json'
 import type { AppIconId } from '@/services/app-icon'
+import type { TrailingNewlinePolicy } from '@/services/trailing-newline'
 import {
   getPreferences,
   setPreference,
@@ -54,7 +55,7 @@ interface PersistedPreferences {
   endOfLine: 'default' | 'lf' | 'crlf'
   defaultEncoding: string
   autoGuessEncoding: boolean
-  trimTrailingNewline: 0 | 1 | 2 | 3
+  trimTrailingNewline: TrailingNewlinePolicy
   textDirection: 'ltr' | 'rtl'
   hideQuickInsertHint: boolean
   imageInsertAction: 'folder' | 'path' | 'upload'
@@ -89,6 +90,8 @@ interface PersistedPreferences {
   // View
   sideBarVisibility: boolean
   tabBarVisibility: boolean
+  toolBarVisibility: boolean
+  statusBarVisibility: boolean
   sourceCodeModeEnabled: boolean
 
   // Search / watcher
@@ -207,6 +210,8 @@ const fallbackPreferences: PersistedPreferences = {
   spellcheckerLanguage: 'en_US',
   sideBarVisibility: true,
   tabBarVisibility: false,
+  toolBarVisibility: true,
+  statusBarVisibility: true,
   sourceCodeModeEnabled: false,
   searchExclusions: [],
   searchMaxFileSize: '',

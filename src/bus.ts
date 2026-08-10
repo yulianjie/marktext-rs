@@ -33,10 +33,6 @@ export interface BusEventMap {
   'deleteParagraph': void
   'insertParagraph': { location: 'before' | 'after'; text?: string; outMost?: boolean }
 
-  // Spellchecker
-  'switch-spellchecker-language': string
-  'replace-misspelling': { word: string; replacement: string }
-
   // Image preview modal (opened by Ctrl/Cmd-click on an image in Muya)
   'image-preview/open': { src: string; alt?: string }
 
@@ -49,6 +45,7 @@ export interface BusEventMap {
   'searchValue': string
   'replaceValue': string
   'findInFolder': void
+  'reveal-search-hit': import('./services/search-reveal').SearchRevealRequest
 
   // Tabs
   'TABS::close-this': string
@@ -101,7 +98,13 @@ export interface BusEventMap {
   'scroll-to-header': string
 
   // Context menu (one global handler in ContextMenu.vue subscribes here)
-  'openContextMenu': { x: number; y: number; items: import('./components/contextMenu/ContextMenu.vue').ContextMenuItem[] }
+  'openContextMenu': {
+    x: number
+    y: number
+    items: import('./components/contextMenu/ContextMenu.vue').ContextMenuItem[]
+    /** Called once when this menu session is dismissed or superseded. */
+    onClose?: () => void
+  }
 }
 
 export interface SearchOpt {
