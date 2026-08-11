@@ -728,7 +728,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="muya-host">
+  <div class="muya-host" data-editor-shortcut-scope="true">
     <div ref="editorRoot" class="muya-container">
       <div></div>
     </div>

@@ -5,9 +5,10 @@
 //! drive the editor emit `mt://menu/<id>` events to the focused webview;
 //! the renderer maps them to the corresponding store action.
 //!
-//! Native shortcuts attached here are visible in the menu UI. Tauri windows
-//! rely on these menu accelerators; the renderer installs its matching
-//! `keydown` handler only in browser-only development mode.
+//! Most application shortcuts are native menu accelerators. Focus-sensitive
+//! editor mutations (undo/redo/select-all, headings, and inline formatting)
+//! intentionally stay accelerator-free here so the renderer can route them to
+//! Muya, CodeMirror, or a focused text input without mixing history systems.
 //!
 //! Menu labels are localised via [`i18n::MenuStrings`]. The active locale is
 //! read from the persisted `language` preference at install time, and the
@@ -487,17 +488,6 @@ fn unclaimed_fixed_accel<'a>(
     }
 }
 
-fn fixed_edit_accelerators(cmd_or_ctrl: &str, macos: bool) -> (String, String, String) {
-    let undo = format!("{cmd_or_ctrl}+Z");
-    let redo = if macos {
-        format!("{cmd_or_ctrl}+Shift+Z")
-    } else {
-        format!("{cmd_or_ctrl}+Y")
-    };
-    let select_all = format!("{cmd_or_ctrl}+A");
-    (undo, redo, select_all)
-}
-
 fn build_menu(
     app: &AppHandle<Wry>,
     s: &i18n::MenuStrings,
@@ -598,38 +588,19 @@ fn build_menu(
         ])
         .build()?;
 
-    // Undo/redo/select-all must be ordinary menu items, not Tauri/muda
-    // `PredefinedMenuItem`s. On Windows the predefined variants consume the
-    // accelerator and synthesize Ctrl+Z/Y/A in the WebView without emitting a
-    // menu event. That bypasses the editor's per-tab Muya/CodeMirror history.
-    // Normal items emit their stable ids through `mt://menu/action`, where the
-    // renderer routes each operation to the active editor exactly once.
-    let (undo_accel, redo_accel, select_all_accel) =
-        fixed_edit_accelerators(cmd_or_ctrl, cfg!(target_os = "macos"));
+    // These stay ordinary items so clicks emit stable ids through
+    // `mt://menu/action`. They intentionally have no native accelerators:
+    // Ctrl/Cmd+Z, redo, and select-all must reach the focused DOM control so
+    // the renderer can choose Muya, CodeMirror, or native input history.
     let edit = SubmenuBuilder::new(app, s.edit)
         .items(&[
-            &mi(
-                app,
-                "edit.undo",
-                s.undo,
-                unclaimed_fixed_accel(&undo_accel, &keybindings),
-            )?,
-            &mi(
-                app,
-                "edit.redo",
-                s.redo,
-                unclaimed_fixed_accel(&redo_accel, &keybindings),
-            )?,
+            &mi(app, "edit.undo", s.undo, None)?,
+            &mi(app, "edit.redo", s.redo, None)?,
             &PredefinedMenuItem::separator(app)?,
             &PredefinedMenuItem::cut(app, None)?,
             &PredefinedMenuItem::copy(app, None)?,
             &PredefinedMenuItem::paste(app, None)?,
-            &mi(
-                app,
-                "edit.selectAll",
-                s.select_all,
-                unclaimed_fixed_accel(&select_all_accel, &keybindings),
-            )?,
+            &mi(app, "edit.selectAll", s.select_all, None)?,
             &PredefinedMenuItem::separator(app)?,
             &mi(app, "edit.find", s.find, custom_accel("edit.find"))?,
             &mi(app, "edit.replace", s.replace, custom_accel("edit.replace"))?,
@@ -638,42 +609,12 @@ fn build_menu(
 
     let paragraph = SubmenuBuilder::new(app, s.paragraph)
         .items(&[
-            &mi(
-                app,
-                "paragraph.h1",
-                s.heading_1,
-                unclaimed_fixed_accel(&format!("{cmd_or_ctrl}+1"), &keybindings),
-            )?,
-            &mi(
-                app,
-                "paragraph.h2",
-                s.heading_2,
-                unclaimed_fixed_accel(&format!("{cmd_or_ctrl}+2"), &keybindings),
-            )?,
-            &mi(
-                app,
-                "paragraph.h3",
-                s.heading_3,
-                unclaimed_fixed_accel(&format!("{cmd_or_ctrl}+3"), &keybindings),
-            )?,
-            &mi(
-                app,
-                "paragraph.h4",
-                s.heading_4,
-                unclaimed_fixed_accel(&format!("{cmd_or_ctrl}+4"), &keybindings),
-            )?,
-            &mi(
-                app,
-                "paragraph.h5",
-                s.heading_5,
-                unclaimed_fixed_accel(&format!("{cmd_or_ctrl}+5"), &keybindings),
-            )?,
-            &mi(
-                app,
-                "paragraph.h6",
-                s.heading_6,
-                unclaimed_fixed_accel(&format!("{cmd_or_ctrl}+6"), &keybindings),
-            )?,
+            &mi(app, "paragraph.h1", s.heading_1, None)?,
+            &mi(app, "paragraph.h2", s.heading_2, None)?,
+            &mi(app, "paragraph.h3", s.heading_3, None)?,
+            &mi(app, "paragraph.h4", s.heading_4, None)?,
+            &mi(app, "paragraph.h5", s.heading_5, None)?,
+            &mi(app, "paragraph.h6", s.heading_6, None)?,
             &PredefinedMenuItem::separator(app)?,
             &mi(app, "paragraph.paragraph", s.paragraph_item, None)?,
             &mi(app, "paragraph.blockquote", s.blockquote, None)?,
@@ -689,30 +630,10 @@ fn build_menu(
     // Inline-format check items — handles are returned so the renderer can
     // flip ✓ marks via `cmd_set_format_menu_state`. The 3 link/image/clear
     // items remain plain MenuItems since they're actions, not states.
-    let bold = check_mi(
-        app,
-        "format.bold",
-        s.bold,
-        unclaimed_fixed_accel(&format!("{cmd_or_ctrl}+B"), &keybindings),
-    )?;
-    let italic = check_mi(
-        app,
-        "format.italic",
-        s.italic,
-        unclaimed_fixed_accel(&format!("{cmd_or_ctrl}+I"), &keybindings),
-    )?;
-    let strikethrough = check_mi(
-        app,
-        "format.strikethrough",
-        s.strikethrough,
-        unclaimed_fixed_accel(&format!("{cmd_or_ctrl}+D"), &keybindings),
-    )?;
-    let inline_code = check_mi(
-        app,
-        "format.inlineCode",
-        s.inline_code,
-        unclaimed_fixed_accel(&format!("{cmd_or_ctrl}+`"), &keybindings),
-    )?;
+    let bold = check_mi(app, "format.bold", s.bold, None)?;
+    let italic = check_mi(app, "format.italic", s.italic, None)?;
+    let strikethrough = check_mi(app, "format.strikethrough", s.strikethrough, None)?;
+    let inline_code = check_mi(app, "format.inlineCode", s.inline_code, None)?;
 
     let format = SubmenuBuilder::new(app, s.format)
         .items(&[
@@ -721,18 +642,8 @@ fn build_menu(
             &strikethrough,
             &inline_code,
             &PredefinedMenuItem::separator(app)?,
-            &mi(
-                app,
-                "format.link",
-                s.hyperlink,
-                unclaimed_fixed_accel(&format!("{cmd_or_ctrl}+L"), &keybindings),
-            )?,
-            &mi(
-                app,
-                "format.image",
-                s.image,
-                unclaimed_fixed_accel(&format!("{cmd_or_ctrl}+Shift+I"), &keybindings),
-            )?,
+            &mi(app, "format.link", s.hyperlink, None)?,
+            &mi(app, "format.image", s.image, None)?,
             &PredefinedMenuItem::separator(app)?,
             &mi(app, "format.clear", s.clear_formatting, None)?,
         ])
@@ -978,26 +889,15 @@ mod tests {
     }
 
     #[test]
-    fn fixed_edit_accelerators_match_platform_conventions_and_avoid_conflicts() {
-        assert_eq!(
-            fixed_edit_accelerators("Ctrl", false),
-            ("Ctrl+Z".into(), "Ctrl+Y".into(), "Ctrl+A".into())
-        );
-        assert_eq!(
-            fixed_edit_accelerators("Cmd", true),
-            ("Cmd+Z".into(), "Cmd+Shift+Z".into(), "Cmd+A".into())
-        );
-
-        let mut bindings = keybindings_from_value(None, "Ctrl");
-        bindings.insert("file.save".into(), "Ctrl+Z".into());
-        assert_eq!(unclaimed_fixed_accel("Ctrl+Z", &bindings), None);
-        assert_eq!(unclaimed_fixed_accel("Ctrl+Y", &bindings), Some("Ctrl+Y"));
-    }
-
-    #[test]
     fn reserved_accelerators_and_unknown_keys_are_rejected() {
         let bold = normalize_user_accelerator("Ctrl+B").expect("valid fixed shortcut");
         assert!(is_reserved_accelerator(&bold));
+
+        for accelerator in ["Ctrl+Z", "Ctrl+Y", "Ctrl+Shift+Z", "Ctrl+A", "Ctrl+1"] {
+            let normalized = normalize_user_accelerator(accelerator)
+                .expect("valid renderer-owned editor shortcut");
+            assert!(is_reserved_accelerator(&normalized));
+        }
 
         let save = normalize_user_accelerator("Ctrl+S").expect("valid remappable shortcut");
         assert!(!is_reserved_accelerator(&save));

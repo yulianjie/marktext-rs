@@ -315,7 +315,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="source-pane">
+  <div class="source-pane" data-editor-shortcut-scope="true">
     <div ref="hostRef" class="cm-host" />
   </div>
 </template>

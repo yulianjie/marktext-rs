@@ -47,6 +47,11 @@ import {
 import { listenTyped } from '@/services/tauri-bridge'
 import { resolveEditorMenuCommand } from '@/services/editor-menu-actions'
 import {
+  isEditorShortcutTarget,
+  isTextEditingTarget,
+  resolveFixedEditorShortcut,
+} from '@/services/editor-shortcuts'
+import {
   BUILTIN_COMMAND_IDS,
   BUILTIN_COMMAND_SPECS,
   commandCategoryOrder,
@@ -75,7 +80,7 @@ const keys = useKeybindingsStore()
 const project = useProjectStore()
 
 const dragOver = ref(false)
-const rendererHandlesShortcuts = typeof window !== 'undefined'
+const rendererHandlesRemappableShortcuts = typeof window !== 'undefined'
   && !('__TAURI_INTERNALS__' in window)
 let closeWindowPromise: Promise<void> | null = null
 let startupReady: Promise<void> | null = null
@@ -132,11 +137,26 @@ function requestWindowClose(): Promise<void> {
 
 /* ── shortcuts ───────────────────────────────────────────────── */
 function onKey(ev: KeyboardEvent) {
+  if (!ev.defaultPrevented) {
+    const fixedAction = resolveFixedEditorShortcut(
+      eventAccel(ev),
+      navigator.platform.toLowerCase().includes('mac'),
+    )
+    if (fixedAction && isEditorShortcutTarget(ev.target)) {
+      ev.preventDefault()
+      void executeMenuAction(fixedAction, 'shortcut')
+      return
+    }
+  }
+
+  // Remappable application shortcuts are native menu accelerators in Tauri.
+  // Browser-only development has no native menu, so it uses the renderer map.
+  if (!rendererHandlesRemappableShortcuts || ev.defaultPrevented) return
   const accel = eventAccel(ev)
   const actionId = keys.byAccel[accel]
   if (!actionId) return
   ev.preventDefault()
-  void executeMenuAction(actionId)
+  void executeMenuAction(actionId, 'shortcut')
 }
 
 async function doOpen() {
@@ -478,9 +498,6 @@ const MENU_ACTIONS: Record<string, () => void | Promise<void>> = {
   'file.closeWindow': requestWindowClose,
   'edit.find': () => { editor.findReplaceOpen = true },
   'edit.replace': () => { editor.findReplaceOpen = true },
-  'edit.undo': () => bus.emit('undo', undefined),
-  'edit.redo': () => bus.emit('redo', undefined),
-  'edit.selectAll': () => bus.emit('selectAll', undefined),
   'edit.copyAsMarkdown': () => bus.emit('copyAsMarkdown', undefined),
   'edit.copyAsHtml': () => bus.emit('copyAsHtml', undefined),
   'edit.pasteAsPlainText': () => bus.emit('pasteAsPlainText', undefined),
@@ -513,7 +530,44 @@ const MENU_ACTIONS: Record<string, () => void | Promise<void>> = {
   'help.checkForUpdates': () => bus.emit('show-updater-dialog', undefined),
 }
 
-async function routeMenuAction(id: string): Promise<void> {
+type MenuActionSource = 'menu' | 'shortcut' | 'palette'
+type EditBusAction = 'undo' | 'redo' | 'selectAll'
+
+const EDIT_ACTIONS: Readonly<Record<string, EditBusAction>> = Object.freeze({
+  'edit.undo': 'undo',
+  'edit.redo': 'redo',
+  'edit.selectAll': 'selectAll',
+})
+
+function executeFocusedNativeEdit(action: EditBusAction): void {
+  const active = document.activeElement
+  if (action === 'selectAll' && (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement)) {
+    active.select()
+    return
+  }
+  try { document.execCommand(action) } catch { /* focused control has no native edit history */ }
+}
+
+function routeEditAction(action: EditBusAction, source: MenuActionSource): void {
+  const active = document.activeElement
+  if (
+    source === 'menu'
+    && active instanceof Element
+    && isTextEditingTarget(active)
+    && !isEditorShortcutTarget(active)
+  ) {
+    executeFocusedNativeEdit(action)
+    return
+  }
+  bus.emit(action, undefined)
+}
+
+async function routeMenuAction(id: string, source: MenuActionSource = 'menu'): Promise<void> {
+  const editAction = EDIT_ACTIONS[id]
+  if (editAction) {
+    routeEditAction(editAction, source)
+    return
+  }
   const editorCommand = resolveEditorMenuCommand(id)
   if (editorCommand?.kind === 'table') {
     // Ask for rows/columns before insertion instead of relying on Muya's
@@ -548,9 +602,9 @@ async function routeMenuAction(id: string): Promise<void> {
   else console.warn('[menu] no handler for action', id)
 }
 
-async function executeMenuAction(id: string): Promise<void> {
+async function executeMenuAction(id: string, source: MenuActionSource = 'menu'): Promise<void> {
   try {
-    await routeMenuAction(id)
+    await routeMenuAction(id, source)
   } catch (error) {
     notify.pushToast({
       type: 'error',
@@ -578,7 +632,7 @@ function registerBuiltinCommands() {
       description: () => t(spec.labelKey),
       keywords: [() => t(categoryKey)],
       shortcut: shortcut(spec.id),
-      execute: () => routeMenuAction(spec.id),
+      execute: () => routeMenuAction(spec.id, 'palette'),
       when: () => isBuiltinCommandAvailable(spec),
     })
   }
@@ -603,10 +657,9 @@ onMounted(async () => {
   // Global bootstrap has already subscribed, then loaded the preference and
   // keybinding snapshots before mounting this page.
   registerBuiltinCommands()
-  // Native Tauri menus own accelerators and emit `mt://menu/action`. Keeping
-  // this listener there executes the same action twice. Browser-only Vite
-  // development has no native menu, so it still uses the renderer map.
-  if (rendererHandlesShortcuts) window.addEventListener('keydown', onKey)
+  // Focus-sensitive editor shortcuts are renderer-owned in every runtime.
+  // Tauri still owns remappable application accelerators and emits menu events.
+  window.addEventListener('keydown', onKey)
 
   const currentWindow = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
     ? getCurrentWindow()

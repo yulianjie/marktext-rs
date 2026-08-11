@@ -13,6 +13,8 @@ function readSource(relativePath: string): string {
 
 const editorPage = readSource('../../src/pages/EditorPage.vue')
 const nativeMenu = readSource('../../src-tauri/src/menu/mod.rs')
+const muyaEditor = readSource('../../src/components/editorWithTabs/MuyaEditor.vue')
+const sourceEditor = readSource('../../src/components/editorWithTabs/SourceCodePane.vue')
 
 describe('editor page chrome integration', () => {
   it('mounts preference-controlled toolbar/status chrome around the editor stage', () => {
@@ -29,6 +31,26 @@ describe('editor page chrome integration', () => {
 })
 
 describe('native menu to Muya command mapping', () => {
+  it('leaves focus-sensitive editor shortcuts to the renderer', () => {
+    expect(nativeMenu).toContain('&mi(app, "edit.undo", s.undo, None)?')
+    expect(nativeMenu).toContain('&mi(app, "edit.redo", s.redo, None)?')
+    expect(nativeMenu).toContain('&mi(app, "edit.selectAll", s.select_all, None)?')
+    expect(nativeMenu).toContain('&mi(app, "paragraph.h1", s.heading_1, None)?')
+    expect(nativeMenu).toContain('&mi(app, "format.link", s.hyperlink, None)?')
+    expect(editorPage).toContain('isEditorShortcutTarget(ev.target)')
+    expect(editorPage).toContain("executeMenuAction(fixedAction, 'shortcut')")
+    expect(editorPage).toContain("routeMenuAction(spec.id, 'palette')")
+    expect(muyaEditor).toContain('data-editor-shortcut-scope="true"')
+    expect(sourceEditor).toContain('data-editor-shortcut-scope="true"')
+  })
+
+  it('keeps native Edit menu clicks scoped to a focused non-editor input', () => {
+    expect(editorPage).toContain("source === 'menu'")
+    expect(editorPage).toContain('isTextEditingTarget(active)')
+    expect(editorPage).toContain('!isEditorShortcutTarget(active)')
+    expect(editorPage).toContain('executeFocusedNativeEdit(action)')
+  })
+
   it('covers the complete paragraph and format action set emitted by the native menu', () => {
     const nativeEditorActions = [...nativeMenu.matchAll(/"((?:paragraph|format)\.[A-Za-z0-9]+)"/g)]
       .map(match => match[1])

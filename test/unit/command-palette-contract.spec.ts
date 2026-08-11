@@ -89,7 +89,7 @@ describe('command palette action contract', () => {
 
   it('routes every registered command through the same menu action function', () => {
     expect(editorPage).toContain('for (const spec of BUILTIN_COMMAND_SPECS)')
-    expect(editorPage).toContain('execute: () => routeMenuAction(spec.id)')
+    expect(editorPage).toContain("execute: () => routeMenuAction(spec.id, 'palette')")
     expect(editorPage).toContain('when: () => isBuiltinCommandAvailable(spec)')
   })
 

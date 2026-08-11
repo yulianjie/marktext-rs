@@ -35,3 +35,41 @@ test('source-code mode toggle wires to the editor', async ({ page }) => {
   await page.keyboard.press('Enter')
   await expect(page.locator('.source-pane')).toBeVisible()
 })
+
+test('WYSIWYG undo and both Windows redo shortcuts use Muya history', async ({ page }) => {
+  await page.goto('/')
+  const editor = page.locator('.muya-host [contenteditable="true"]')
+  await editor.waitFor()
+  await editor.click()
+  await page.keyboard.type('abc')
+  await expect(editor).toContainText('abc')
+
+  await page.keyboard.press('Control+Z')
+  await expect(editor).not.toContainText('abc')
+  await page.keyboard.press('Control+Y')
+  await expect(editor).toContainText('abc')
+
+  await page.keyboard.press('Control+Z')
+  await expect(editor).not.toContainText('abc')
+  await page.keyboard.press('Control+Shift+Z')
+  await expect(editor).toContainText('abc')
+})
+
+test('editing shortcuts stay inside a focused command-palette input', async ({ page }) => {
+  await page.goto('/')
+  const editor = page.locator('.muya-host [contenteditable="true"]')
+  await editor.waitFor()
+  await editor.click()
+  await page.keyboard.type('document')
+
+  await page.keyboard.press('Control+Shift+P')
+  const input = page.locator('.cp-input')
+  await input.fill('')
+  await input.pressSequentially('query')
+  await page.keyboard.press('Control+A')
+  await page.keyboard.type('x')
+  await expect(input).toHaveValue('x')
+  await page.keyboard.press('Control+Z')
+  await expect(input).toHaveValue('query')
+  await expect(editor).toContainText('document')
+})
