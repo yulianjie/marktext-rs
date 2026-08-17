@@ -10,11 +10,10 @@ import { test, expect } from '@playwright/test'
 
 test('renderer boots and shows the editor page', async ({ page }) => {
   await page.goto('/')
-  // The TitleBar word-count label is the most reliable "boot ok" signal —
-  // if Pinia or Muya failed, this never shows up.
+  // The title bar is mounted only after the editor page and stores are ready.
   await expect(page.locator('.title-bar')).toBeVisible({ timeout: 10_000 })
-  // The canonical preference hides the optional tab bar by default. Assert
-  // the editor surface instead so this smoke test does not contradict it.
+  // The editor surface remains the stable renderer-ready signal even though
+  // the tab bar can be hidden through the persisted view preference.
   await expect(page.locator('.editor-stage')).toBeVisible()
 })
 

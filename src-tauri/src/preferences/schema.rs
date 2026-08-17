@@ -252,6 +252,7 @@ mod tests {
         assert_eq!(defaults.get("autoSave"), Some(&json!(false)));
         assert_eq!(defaults.get("fontSize"), Some(&json!(16)));
         assert_eq!(defaults.get("defaultDirectoryToOpen"), Some(&json!("")));
+        assert_eq!(defaults.get("tabBarVisibility"), Some(&json!(true)));
         assert_eq!(defaults.get("toolBarVisibility"), Some(&json!(true)));
         assert_eq!(defaults.get("statusBarVisibility"), Some(&json!(true)));
     }

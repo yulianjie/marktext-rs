@@ -524,6 +524,36 @@ table {
 }
 
 /*
+ * Keep long report tables readable without forcing the complete document to
+ * scroll horizontally. Editing keeps Muya's original overflow behavior so
+ * its row/column handles remain visible; the stable, non-active rendering is
+ * allowed to size columns to their content and scroll inside the table block.
+ */
+figure[data-role=TABLE]:not(.ag-active) {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 10px;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--editorColor30) transparent;
+}
+
+figure[data-role=TABLE]:not(.ag-active)::-webkit-scrollbar {
+  height: 8px;
+}
+
+figure[data-role=TABLE]:not(.ag-active)::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: var(--editorColor30);
+}
+
+figure[data-role=TABLE]:not(.ag-active) > table {
+  width: max-content;
+  min-width: 100%;
+}
+
+/*
  * Table cell borders + in-editor table tooling (drag handles, cell
  * selection). These rules live in `muya/themes/default.css` upstream, but
  * that file is only copied to `dist/themes/` as a static asset and is never
@@ -539,6 +569,11 @@ table tr td {
 
 table tr th {
   font-weight: bold;
+  background: color-mix(in srgb, var(--themeColor) 7%, var(--editorBgColor));
+}
+
+figure[data-role=TABLE] tbody tr:hover td {
+  background: color-mix(in srgb, var(--themeColor) 4%, var(--editorBgColor));
 }
 
 table tr th::before,

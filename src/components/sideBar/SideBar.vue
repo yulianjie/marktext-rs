@@ -20,6 +20,9 @@ const layout = useLayoutStore()
 const { t } = useI18n()
 
 const panelWidth = computed(() => layout.sideBarWidth)
+const SIDEBAR_MIN = 220
+const SIDEBAR_MAX = 800
+const KEYBOARD_RESIZE_STEP = 16
 
 interface RailItem { key: RightColumn; icon: typeof Folder; titleKey: string }
 const rails: RailItem[] = [
@@ -35,13 +38,24 @@ function switchTo(key: RightColumn) {
 
 /* ── resize drag ─────────────────────────────────────────────── */
 const dragging = ref(false)
+let stopResize: (() => void) | null = null
+
+function endResize() {
+  stopResize?.()
+  stopResize = null
+  dragging.value = false
+}
+
 function onResizeDown(ev: PointerEvent) {
+  if (ev.button !== 0) return
+  ev.preventDefault()
+  endResize()
   dragging.value = true
   const start = ev.clientX
   const initial = layout.sideBarWidth
   const onMove = (m: PointerEvent) => layout.setSideBarWidth(initial + (m.clientX - start))
-  const onUp = () => {
-    dragging.value = false
+  const onUp = () => endResize()
+  stopResize = () => {
     window.removeEventListener('pointermove', onMove)
     window.removeEventListener('pointerup', onUp)
   }
@@ -49,7 +63,24 @@ function onResizeDown(ev: PointerEvent) {
   window.addEventListener('pointerup', onUp)
 }
 
-onBeforeUnmount(() => { dragging.value = false })
+function onResizeKeydown(ev: KeyboardEvent) {
+  const step = ev.shiftKey ? KEYBOARD_RESIZE_STEP * 3 : KEYBOARD_RESIZE_STEP
+  if (ev.key === 'ArrowLeft') {
+    ev.preventDefault()
+    layout.setSideBarWidth(layout.sideBarWidth - step)
+  } else if (ev.key === 'ArrowRight') {
+    ev.preventDefault()
+    layout.setSideBarWidth(layout.sideBarWidth + step)
+  } else if (ev.key === 'Home') {
+    ev.preventDefault()
+    layout.setSideBarWidth(SIDEBAR_MIN)
+  } else if (ev.key === 'End') {
+    ev.preventDefault()
+    layout.setSideBarWidth(SIDEBAR_MAX)
+  }
+}
+
+onBeforeUnmount(endResize)
 </script>
 
 <template>
@@ -58,20 +89,32 @@ onBeforeUnmount(() => { dragging.value = false })
       <button
         v-for="item in rails"
         :key="item.key"
+        type="button"
         class="rail-icon"
         :class="{ active: layout.rightColumn === item.key }"
         :title="t(item.titleKey)"
+        :aria-label="t(item.titleKey)"
+        :aria-pressed="layout.rightColumn === item.key"
+        :aria-expanded="layout.rightColumn === item.key"
+        :aria-controls="`${item.key}-sidebar-panel`"
         @click="switchTo(item.key)"
       >
         <el-icon :size="18"><component :is="item.icon" /></el-icon>
       </button>
       <div class="spacer" />
-      <button class="rail-icon" :title="t('sideBar.preferences')" @click="openSettings">
+      <button
+        type="button"
+        class="rail-icon"
+        :title="t('sideBar.preferences')"
+        :aria-label="t('sideBar.preferences')"
+        @click="openSettings"
+      >
         <el-icon :size="18"><Setting /></el-icon>
       </button>
     </div>
     <div
       v-if="layout.rightColumn"
+      :id="`${layout.rightColumn}-sidebar-panel`"
       class="panel"
       :style="{ width: panelWidth + 'px' }"
     >
@@ -79,7 +122,19 @@ onBeforeUnmount(() => { dragging.value = false })
       <TocPane v-else-if="layout.rightColumn === 'toc'" />
       <SearchPane v-else-if="layout.rightColumn === 'search'" />
       <div v-else class="placeholder" />
-      <div class="resizer" :class="{ dragging }" @pointerdown="onResizeDown" />
+      <div
+        class="resizer"
+        :class="{ dragging }"
+        role="separator"
+        aria-orientation="vertical"
+        :aria-label="`${t('sideBar.files')} · ${panelWidth}px`"
+        :aria-valuemin="SIDEBAR_MIN"
+        :aria-valuemax="SIDEBAR_MAX"
+        :aria-valuenow="panelWidth"
+        tabindex="0"
+        @keydown="onResizeKeydown"
+        @pointerdown="onResizeDown"
+      />
     </div>
   </aside>
 </template>
@@ -156,4 +211,11 @@ onBeforeUnmount(() => { dragging.value = false })
 }
 .resizer:hover,
 .resizer.dragging { background: var(--mt-accent); opacity: 0.4; }
+.resizer:focus-visible {
+  width: 5px;
+  right: -3px;
+  background: var(--mt-accent);
+  opacity: 0.65;
+  outline: none;
+}
 </style>

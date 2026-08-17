@@ -72,6 +72,7 @@ export default {
     rename: 'Rename',
     copyPath: 'Copy path',
     showInFolder: 'Show in folder',
+    unsaved: 'Unsaved',
   },
   editorContextMenu: {
     undo: 'Undo',

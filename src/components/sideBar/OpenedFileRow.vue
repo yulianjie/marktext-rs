@@ -19,6 +19,13 @@ function activate() { editor.setCurrent(props.tab.id) }
 function close(ev: MouseEvent) { ev.stopPropagation(); void editor.closeTab(props.tab.id) }
 function onMiddle(ev: MouseEvent) { if (ev.button === 1) { ev.preventDefault(); void editor.closeTab(props.tab.id) } }
 
+function onRowKeydown(ev: KeyboardEvent) {
+  if (ev.target !== ev.currentTarget) return
+  if (ev.key !== 'Enter' && ev.key !== ' ') return
+  ev.preventDefault()
+  activate()
+}
+
 function parentDirOf(p: string): string {
   const idx = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\'))
   return idx >= 0 ? p.slice(0, idx) : p
@@ -57,14 +64,25 @@ function onContextMenu(ev: MouseEvent) {
     class="row"
     :class="{ active, dirty: !tab.isSaved }"
     :title="tab.pathname || tab.filename"
+    role="listitem"
+    tabindex="0"
+    :aria-label="tab.isSaved ? tab.filename : `${tab.filename} · ${t('tabs.unsaved')}`"
+    :aria-current="active ? 'page' : undefined"
     @click="activate"
+    @keydown="onRowKeydown"
     @mousedown.middle="onMiddle"
     @contextmenu="onContextMenu"
   >
     <span class="indicator">
       <span class="dot" />
-      <button class="close" @click="close" :aria-label="t('tabs.closeTab')">
-        <el-icon :size="10"><Close /></el-icon>
+      <button
+        type="button"
+        class="close"
+        :title="t('tabs.closeTab')"
+        :aria-label="`${t('tabs.closeTab')}: ${tab.filename}`"
+        @click="close"
+      >
+        <el-icon :size="12"><Close /></el-icon>
       </button>
     </span>
     <el-icon class="icon"><Document /></el-icon>
@@ -76,9 +94,9 @@ function onContextMenu(ev: MouseEvent) {
 .row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  height: 28px;
-  padding: 0 12px;
+  gap: 5px;
+  min-height: 32px;
+  padding: 0 8px;
   cursor: pointer;
   font-size: 12px;
   color: var(--mt-fg);
@@ -88,12 +106,17 @@ function onContextMenu(ev: MouseEvent) {
 }
 .row:hover { background: var(--mt-row-hover); }
 .row.active {
+  background: color-mix(in srgb, var(--mt-accent) 7%, transparent);
   box-shadow: inset 2px 0 0 var(--mt-accent);
   color: var(--mt-accent);
 }
+.row:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--mt-accent) 72%, transparent);
+  outline-offset: -2px;
+}
 .indicator {
-  width: 12px;
-  height: 12px;
+  width: 24px;
+  height: 24px;
   position: relative;
   flex-shrink: 0;
   display: inline-flex;
@@ -102,33 +125,45 @@ function onContextMenu(ev: MouseEvent) {
 }
 .dot {
   display: none;
-  width: 7px;
-  height: 7px;
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  z-index: 1;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--mt-accent);
+  box-shadow: 0 0 0 1px var(--mt-sidebar-bg);
 }
 .close {
-  display: none;
+  display: inline-flex;
   border: none;
   background: transparent;
   color: var(--mt-fg-muted);
   cursor: pointer;
   padding: 0;
-  width: 12px;
-  height: 12px;
+  width: 24px;
+  height: 24px;
   align-items: center;
   justify-content: center;
-  border-radius: 2px;
+  border-radius: 4px;
+  opacity: 0.58;
 }
-.close:hover { color: var(--mt-fg); background: var(--mt-row-hover); }
+.close:hover,
+.close:focus-visible {
+  color: var(--mt-fg);
+  background: var(--mt-row-hover);
+  opacity: 1;
+}
+.close:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--mt-accent) 72%, transparent);
+  outline-offset: -2px;
+}
+.row:hover .close,
+.row:focus-within .close { opacity: 1; }
 
-/* Saved tabs: show close on row hover. */
-.row:not(.dirty):hover .close { display: inline-flex; }
-
-/* Dirty tabs: show dot by default; swap to close on hover. */
+/* Dirty tabs retain their unsaved marker without hiding the close action. */
 .row.dirty .dot { display: inline-block; }
-.row.dirty:hover .dot { display: none; }
-.row.dirty:hover .close { display: inline-flex; }
 
 .icon {
   color: var(--mt-fg-muted);

@@ -70,6 +70,7 @@ export default {
     rename: '名前を変更',
     copyPath: 'パスをコピー',
     showInFolder: 'フォルダーに表示',
+    unsaved: '未保存',
   },
   editorContextMenu: {
     undo: '元に戻す',

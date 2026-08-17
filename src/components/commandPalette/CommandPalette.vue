@@ -159,11 +159,16 @@ defineExpose({ open })
   width: 100%;
   padding: 8px 12px;
   font-size: 15px;
-  border: 1px solid #d1d5da;
+  border: 1px solid var(--mt-border, #d1d5da);
   border-radius: 6px;
   outline: none;
+  color: var(--mt-fg, #24292e);
+  background: var(--mt-bg, #fff);
 }
-.cp-input:focus { border-color: #0366d6; }
+.cp-input:focus {
+  border-color: var(--mt-accent, #0366d6);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--mt-accent, #0366d6) 18%, transparent);
+}
 .cp-list { max-height: 360px; overflow-y: auto; }
 .cp-row {
   display: flex;
@@ -174,7 +179,10 @@ defineExpose({ open })
   font-size: 13px;
   border-radius: 4px;
 }
-.cp-row.selected { background: #f1f8ff; }
+.cp-row.selected {
+  background: var(--mt-row-active, #f1f8ff);
+  background: color-mix(in srgb, var(--mt-accent, #0366d6) 11%, transparent);
+}
 .cp-row.disabled {
   cursor: not-allowed;
   opacity: 0.48;
@@ -185,20 +193,20 @@ defineExpose({ open })
   min-width: 0;
 }
 .cp-category {
-  color: #6a737d;
+  color: var(--mt-fg-muted, #6a737d);
   margin-right: 8px;
   flex: 0 0 auto;
 }
-.cp-desc { color: #24292e; }
+.cp-desc { color: var(--mt-fg, #24292e); }
 .cp-shortcut {
-  color: #6a737d;
+  color: var(--mt-fg-muted, #6a737d);
   font-size: 11px;
   font-family: ui-monospace, monospace;
 }
 .cp-empty {
   padding: 16px;
   text-align: center;
-  color: #959da5;
+  color: var(--mt-fg-muted, #959da5);
   font-size: 13px;
 }
 </style>

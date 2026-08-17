@@ -2,7 +2,7 @@
 /**
  * TOC pane — shows the heading tree of the active document.
  */
-import { computed } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useEditorStore } from '@/stores/editor'
 import { usePreferencesStore } from '@/stores/preferences'
 import type { TocItem } from '@/stores/editor'
@@ -10,6 +10,10 @@ import { t } from '@/i18n'
 
 const editor = useEditorStore()
 const prefs = usePreferencesStore()
+const activeSlug = ref<string | null>(null)
+const rowRefs = new Map<string, HTMLButtonElement>()
+let scrollHost: HTMLElement | null = null
+let scrollFrame = 0
 
 interface FlatItem {
   level: number
@@ -28,6 +32,16 @@ function flatten(items: TocItem[], out: FlatItem[] = []): FlatItem[] {
 
 const flat = computed(() => flatten(editor.toc))
 
+function itemKey(item: FlatItem, index: number): string {
+  return item.slug || `${item.level}:${item.content}:${index}`
+}
+
+function setRowRef(item: FlatItem, index: number, element: unknown) {
+  const key = itemKey(item, index)
+  if (element instanceof HTMLButtonElement) rowRefs.set(key, element)
+  else rowRefs.delete(key)
+}
+
 function visualLevel(level: number): number {
   return Math.min(Math.max(level, 1), 6)
 }
@@ -38,9 +52,80 @@ function rowIndent(level: number): string {
 
 function scrollTo(item: FlatItem) {
   if (!item.slug) return
+  activeSlug.value = item.slug
   const target = document.getElementById(item.slug)
   target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
+
+function updateActiveHeading() {
+  scrollFrame = 0
+  const headings = flat.value.filter((item): item is FlatItem & { slug: string } => Boolean(item.slug))
+  if (!headings.length) {
+    activeSlug.value = null
+    return
+  }
+  const threshold = (scrollHost?.getBoundingClientRect().top ?? 0) + 56
+  let current = headings[0].slug
+  for (const item of headings) {
+    const element = document.getElementById(item.slug)
+    if (!element) continue
+    if (element.getBoundingClientRect().top <= threshold) current = item.slug
+    else break
+  }
+  activeSlug.value = current
+}
+
+function scheduleActiveHeadingUpdate() {
+  if (scrollFrame) return
+  scrollFrame = requestAnimationFrame(updateActiveHeading)
+}
+
+function connectScrollHost() {
+  scrollHost?.removeEventListener('scroll', scheduleActiveHeadingUpdate)
+  scrollHost = document.querySelector<HTMLElement>('.muya-host')
+  scrollHost?.addEventListener('scroll', scheduleActiveHeadingUpdate, { passive: true })
+  scheduleActiveHeadingUpdate()
+}
+
+function focusRow(index: number) {
+  const item = flat.value[index]
+  if (!item) return
+  rowRefs.get(itemKey(item, index))?.focus()
+}
+
+function onRowKeydown(index: number, ev: KeyboardEvent) {
+  let target = index
+  if (ev.key === 'ArrowDown') target = Math.min(index + 1, flat.value.length - 1)
+  else if (ev.key === 'ArrowUp') target = Math.max(index - 1, 0)
+  else if (ev.key === 'Home') target = 0
+  else if (ev.key === 'End') target = flat.value.length - 1
+  else return
+  ev.preventDefault()
+  focusRow(target)
+}
+
+watch([flat, () => editor.currentFileId], async () => {
+  await nextTick()
+  connectScrollHost()
+}, { flush: 'post' })
+
+watch(activeSlug, async slug => {
+  if (!slug) return
+  await nextTick()
+  const index = flat.value.findIndex(item => item.slug === slug)
+  const item = flat.value[index]
+  if (item) rowRefs.get(itemKey(item, index))?.scrollIntoView({ block: 'nearest' })
+})
+
+onMounted(async () => {
+  await nextTick()
+  connectScrollHost()
+})
+
+onBeforeUnmount(() => {
+  scrollHost?.removeEventListener('scroll', scheduleActiveHeadingUpdate)
+  if (scrollFrame) cancelAnimationFrame(scrollFrame)
+})
 </script>
 
 <template>
@@ -49,14 +134,21 @@ function scrollTo(item: FlatItem) {
     <div class="toc-list">
       <button
         v-for="(item, idx) in flat"
-        :key="idx"
+        :key="itemKey(item, idx)"
+        :ref="element => setRowRef(item, idx, element)"
         type="button"
         class="toc-row"
-        :class="[`level-${visualLevel(item.level)}`, { wrap: prefs.wordWrapInToc }]"
+        :class="[
+          `level-${visualLevel(item.level)}`,
+          { wrap: prefs.wordWrapInToc, current: item.slug && item.slug === activeSlug },
+        ]"
         :style="{ paddingInlineStart: rowIndent(item.level) }"
         :title="item.content"
         :aria-label="`H${item.level}: ${item.content}`"
+        :aria-current="item.slug && item.slug === activeSlug ? 'location' : undefined"
+        :tabindex="item.slug === activeSlug || (!activeSlug && idx === 0) ? 0 : -1"
         @click="scrollTo(item)"
+        @keydown="onRowKeydown(idx, $event)"
       >
         <span class="toc-marker" aria-hidden="true" />
         <span class="toc-label">{{ item.content }}</span>
@@ -133,6 +225,15 @@ function scrollTo(item: FlatItem) {
 .toc-row:hover {
   background: color-mix(in srgb, var(--mt-accent, #21b56f) 9%, transparent);
   color: var(--mt-fg, #24292e);
+}
+.toc-row.current {
+  color: var(--mt-fg, #24292e);
+  background: color-mix(in srgb, var(--mt-accent, #21b56f) 13%, transparent);
+  box-shadow: inset 3px 0 0 var(--mt-accent, #21b56f);
+}
+.toc-row.current .toc-marker {
+  color: var(--mt-accent, #21b56f);
+  opacity: 1;
 }
 .toc-row:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--mt-accent, #0366d6) 72%, transparent);

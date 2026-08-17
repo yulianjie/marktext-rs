@@ -209,7 +209,7 @@ const fallbackPreferences: PersistedPreferences = {
   spellcheckerNoUnderline: false,
   spellcheckerLanguage: 'en_US',
   sideBarVisibility: true,
-  tabBarVisibility: false,
+  tabBarVisibility: true,
   toolBarVisibility: true,
   statusBarVisibility: true,
   sourceCodeModeEnabled: false,

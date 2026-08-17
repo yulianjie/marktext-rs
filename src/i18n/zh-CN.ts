@@ -70,6 +70,7 @@ export default {
     rename: '重命名',
     copyPath: '复制路径',
     showInFolder: '在文件夹中显示',
+    unsaved: '未保存',
   },
   editorContextMenu: {
     undo: '撤销',

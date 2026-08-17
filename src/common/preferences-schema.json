@@ -387,7 +387,7 @@
   "tabBarVisibility": {
     "description": "View--Whether the tabs are shown.",
     "type": "boolean",
-    "default": false
+    "default": true
   },
   "toolBarVisibility": {
     "description": "View--Whether the editor toolbar is shown.",

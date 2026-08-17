@@ -1,8 +1,7 @@
 <script setup lang="ts">
 /**
- * Title bar — shows the active file as a clickable breadcrumb path, dirty
- * indicator, and a multi-stat word-count chip (paragraphs / words /
- * characters) shown as a tooltip on hover.
+ * Title bar — shows the active file as a compact, keyboard-accessible
+ * breadcrumb path and a non-colour-only dirty indicator.
  *
  * Mirrors the upstream Electron build's title bar (file path is broken into
  * segments; clicking a segment navigates the sidebar to that directory).
@@ -41,57 +40,49 @@ const segments = computed<Segment[]>(() => {
 const isDirty = computed(() => editor.currentFile && !editor.currentFile.isSaved)
 const displayName = computed(() => editor.currentFile?.filename || t('titleBar.untitled'))
 
-const stats = computed(() => {
-  const wc = editor.currentFile?.wordCount
-  return {
-    words: wc?.word ?? 0,
-    characters: wc?.character ?? 0,
-    paragraphs: wc?.paragraph ?? 0,
-  }
-})
-
-const tooltip = computed(() => {
-  const { paragraphs, words, characters } = stats.value
-  return [
-    `${paragraphs} ${t('titleBar.paragraphs')}`,
-    `${words} ${t('titleBar.words')}`,
-    `${characters} ${t('titleBar.characters')}`,
-  ].join('  ·  ')
-})
-
 async function copyFullPath() {
   const p = editor.currentFile?.pathname
   if (p) await writeText(p)
 }
 
-async function revealSegment(seg: Segment) {
-  try { await openShell(seg.fullPath) } catch { /* not a directory or no app */ }
+function parentDirOf(path: string): string {
+  const index = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'))
+  return index > 0 ? path.slice(0, index) : path
+}
+
+async function revealSegment(seg: Segment, index: number) {
+  const isFile = index === segments.value.length - 1
+  const target = isFile ? parentDirOf(seg.fullPath) : seg.fullPath
+  try { await openShell(target) } catch { /* not a directory or no app */ }
 }
 </script>
 
 <template>
   <header class="title-bar" data-tauri-drag-region>
     <div class="title-content" data-tauri-drag-region>
-      <span v-if="isDirty" class="dirty-dot" data-tauri-drag-region>●</span>
+      <span v-if="isDirty" class="dirty-dot" aria-hidden="true" data-tauri-drag-region>●</span>
       <template v-if="segments.length > 1">
-        <span class="breadcrumb" data-tauri-drag-region>
+        <nav class="breadcrumb" :aria-label="displayName">
           <template v-for="(seg, i) in segments" :key="seg.fullPath">
-            <span
+            <button
+              type="button"
               class="bc-seg"
               :class="{ active: i === segments.length - 1 }"
-              :title="seg.fullPath"
-              @dblclick="copyFullPath"
-              @click="revealSegment(seg)"
-            >{{ seg.label }}</span>
+              :title="i === segments.length - 1
+                ? `${t('titleBar.revealInFolder')} · ${seg.fullPath}`
+                : seg.fullPath"
+              :aria-current="i === segments.length - 1 ? 'page' : undefined"
+              @dblclick.stop="copyFullPath"
+              @click="revealSegment(seg, i)"
+            >
+              {{ seg.label }}
+            </button>
             <span v-if="i < segments.length - 1" class="bc-sep" data-tauri-drag-region>›</span>
           </template>
-        </span>
+        </nav>
       </template>
-      <span v-else class="title-text" data-tauri-drag-region>{{ displayName }}</span>
+      <span v-else class="title-text" :title="displayName" data-tauri-drag-region>{{ displayName }}</span>
     </div>
-    <span class="word-count" :title="tooltip" data-tauri-drag-region>
-      {{ stats.words }} {{ t('titleBar.words') }}
-    </span>
   </header>
 </template>
 
@@ -100,7 +91,7 @@ async function revealSegment(seg: Segment) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 32px;
+  height: 30px;
   background: var(--mt-sidebar-bg, #fafbfc);
   border-bottom: 1px solid var(--mt-border, #eaecef);
   user-select: none;
@@ -136,28 +127,42 @@ async function revealSegment(seg: Segment) {
   min-width: 0;
 }
 .bc-seg {
+  appearance: none;
+  border: 0;
+  border-radius: 4px;
+  padding: 2px 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
   cursor: pointer;
   white-space: nowrap;
   max-width: 160px;
   overflow: hidden;
   text-overflow: ellipsis;
   flex-shrink: 1;
+  text-align: left;
 }
-.bc-seg:hover { color: var(--mt-accent, #0366d6); }
+.bc-seg:hover {
+  color: var(--mt-fg, #24292e);
+  background: var(--mt-row-hover, #f1f3f5);
+}
+.bc-seg:focus-visible {
+  outline: 2px solid var(--mt-accent, #0366d6);
+  outline-offset: 1px;
+}
 .bc-seg.active {
   font-weight: 600;
   color: var(--mt-fg, #24292e);
+  background: color-mix(in srgb, var(--mt-accent, #0366d6) 8%, transparent);
   flex-shrink: 0;
 }
 .bc-sep {
-  color: var(--mt-border, #d1d5da);
+  color: var(--mt-fg-muted, #6a737d);
+  opacity: 0.58;
   flex-shrink: 0;
 }
-.word-count {
-  color: var(--mt-fg-muted, #959da5);
-  font-size: 11px;
-  margin-left: auto;
-  padding: 0 12px;
-  cursor: help;
+
+@media (max-width: 900px) {
+  .bc-seg:not(.active) { max-width: 84px; }
 }
 </style>

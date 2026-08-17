@@ -137,12 +137,27 @@ async function closeProject() {
 
 <template>
   <div class="tree-pane">
-    <section class="section">
-      <header class="section-header" @click="openedCollapsed = !openedCollapsed">
-        <el-icon class="caret" :class="{ open: !openedCollapsed }"><CaretRight /></el-icon>
-        <span class="label">{{ t('sideBar.openedFiles') }}</span>
+    <section class="section" aria-labelledby="opened-files-heading">
+      <header class="section-header">
+        <button
+          id="opened-files-heading"
+          type="button"
+          class="section-toggle"
+          :aria-expanded="!openedCollapsed"
+          aria-controls="opened-files-content"
+          @click="openedCollapsed = !openedCollapsed"
+        >
+          <el-icon class="caret" :class="{ open: !openedCollapsed }"><CaretRight /></el-icon>
+          <span class="label">{{ t('sideBar.openedFiles') }}</span>
+        </button>
       </header>
-      <div v-show="!openedCollapsed" class="section-body">
+      <div
+        v-show="!openedCollapsed"
+        id="opened-files-content"
+        class="section-body"
+        :role="editor.tabs.length ? 'list' : undefined"
+        :aria-label="editor.tabs.length ? t('sideBar.openedFiles') : undefined"
+      >
         <div v-if="editor.tabs.length === 0" class="empty-line">{{ t('sideBar.noOpenedFiles') }}</div>
         <OpenedFileRow
           v-for="tab in editor.tabs"
@@ -153,15 +168,28 @@ async function closeProject() {
       </div>
     </section>
 
-    <section class="section project-section">
-      <header class="section-header" @click="projectCollapsed = !projectCollapsed">
-        <el-icon class="caret" :class="{ open: !projectCollapsed }"><CaretRight /></el-icon>
-        <span class="label">{{ project.projectTree ? project.projectTree.name : t('sideBar.project') }}</span>
+    <section
+      class="section project-section"
+      :class="{ 'has-project': project.projectTree }"
+      aria-labelledby="project-heading"
+    >
+      <header class="section-header">
+        <button
+          id="project-heading"
+          type="button"
+          class="section-toggle"
+          :aria-expanded="!projectCollapsed"
+          aria-controls="project-content"
+          @click="projectCollapsed = !projectCollapsed"
+        >
+          <el-icon class="caret" :class="{ open: !projectCollapsed }"><CaretRight /></el-icon>
+          <span class="label">{{ project.projectTree ? project.projectTree.name : t('sideBar.project') }}</span>
+        </button>
         <el-button v-if="project.projectTree" size="small" link class="change-btn" @click.stop="pickFolder">
           {{ t('sideBar.change') }}
         </el-button>
       </header>
-      <div v-show="!projectCollapsed" class="section-body project-body">
+      <div v-show="!projectCollapsed" id="project-content" class="section-body project-body">
         <div v-if="!project.projectTree" class="empty-state">
           <p class="empty-msg">{{ t('sideBar.noFolderOpen') }}</p>
           <el-button size="small" type="primary" @click="pickFolder">{{ t('sideBar.openFolder') }}</el-button>
@@ -260,17 +288,15 @@ async function closeProject() {
   border-bottom: 1px solid var(--mt-border);
 }
 .section.project-section {
-  flex: 1;
   min-height: 0;
   border-bottom: none;
 }
+.section.project-section.has-project { flex: 1; }
 .section-header {
   display: flex;
   align-items: center;
-  gap: 4px;
-  height: 26px;
-  padding: 0 12px;
-  cursor: pointer;
+  min-height: 30px;
+  padding: 0 8px;
   user-select: none;
   font-size: 11px;
   font-weight: 600;
@@ -280,17 +306,42 @@ async function closeProject() {
   flex-shrink: 0;
 }
 .section-header:hover { background: var(--mt-row-hover); }
-.section-header .label {
+.section-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  min-height: 28px;
+  flex: 1;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 4px;
+  color: inherit;
+  font: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  text-transform: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+.section-toggle:focus-visible,
+.project-actions button:focus-visible,
+.filter-status button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--mt-accent) 72%, transparent);
+  outline-offset: -2px;
+}
+.section-toggle .label {
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.section-header .caret {
+.section-toggle .caret {
   transition: transform 100ms;
   font-size: 10px;
 }
-.section-header .caret.open { transform: rotate(90deg); }
+.section-toggle .caret.open { transform: rotate(90deg); }
 .change-btn { margin-left: 4px; }
 .section-body {
   display: flex;
@@ -365,12 +416,17 @@ async function closeProject() {
   font-style: italic;
 }
 .empty-state {
-  padding: 24px 16px;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  text-align: left;
 }
 .empty-msg {
-  margin-bottom: 12px;
+  min-width: 0;
+  flex: 1;
+  margin: 0;
   color: var(--mt-fg-muted);
-  font-size: 13px;
+  font-size: 12px;
 }
 </style>
