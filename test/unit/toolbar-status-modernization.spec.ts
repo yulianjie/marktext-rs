@@ -20,21 +20,31 @@ describe('modern editor toolbar contract', () => {
     expect(toolbar).not.toContain('class="tool-button text-button heading-button"')
   })
 
-  it('keeps frequent editing actions visible and moves secondary actions into More', () => {
+  it('fills and centers the wide toolbar while keeping narrow overflow in More', () => {
     const persistentToolbar = toolbar.slice(
       toolbar.indexOf('<nav'),
       toolbar.indexOf('<Teleport'),
     )
     const moreMenu = toolbar.slice(toolbar.indexOf('<template v-else>'))
 
-    for (const action of ['undo', 'redo', 'format:link', 'find', 'more-menu']) {
-      expect(persistentToolbar).toContain(`data-action="${action}"`)
-    }
     for (const action of [
-      'format:del',
-      'format:inline_code',
+      'undo',
+      'redo',
+      'format:link',
+      'paragraph:ul-task',
       'format:image',
       'insert-table',
+      'find',
+      'more-menu',
+    ]) {
+      expect(persistentToolbar).toContain(`data-action="${action}"`)
+    }
+    for (const type of ['del', 'inline_code', 'blockquote', 'pre']) {
+      expect(persistentToolbar).toContain(`type: '${type}'`)
+    }
+    expect(persistentToolbar).toContain(':data-action="`format:${action.type}`"')
+    expect(persistentToolbar).toContain(':data-action="`paragraph:${action.type}`"')
+    for (const action of [
       'toggle-source',
       'toggle-focus',
       'toggle-typewriter',
@@ -44,7 +54,10 @@ describe('modern editor toolbar contract', () => {
     }
 
     expect(toolbar).toContain('container-type: inline-size')
+    expect(toolbar).toContain('@container (max-width: 820px)')
     expect(toolbar).toContain('@container (max-width: 560px)')
+    expect(toolbar).toMatch(/\.toolbar-content\s*\{[\s\S]*?justify-content:\s*center;/)
+    expect(toolbar).toMatch(/\.toolbar-expanded-action\s*\{\s*display:\s*none;/)
     expect(toolbar).toMatch(/\.compact-collapsible\s*\{\s*display:\s*none;/)
     expect(toolbar).toMatch(/\.compact-menu-action\s*\{\s*display:\s*flex;/)
   })

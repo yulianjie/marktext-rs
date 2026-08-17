@@ -13,6 +13,10 @@ describe('wide report table styling', () => {
     expect(styles).toMatch(/figure\[data-role=TABLE\]:not\(\.ag-active\)\s*>\s*table\s*\{[\s\S]*?width:\s*max-content;/)
   })
 
+  it('does not create a scrollbar solely for the final cell border', () => {
+    expect(styles).toMatch(/table\s+tr\s*>\s*:last-child::before\s*\{[\s\S]*?width:\s*100%;/)
+  })
+
   it('distinguishes table headers and hovered rows without rewriting content', () => {
     expect(styles).toContain('background: color-mix(in srgb, var(--themeColor) 7%, var(--editorBgColor));')
     expect(styles).toContain('figure[data-role=TABLE] tbody tr:hover td')

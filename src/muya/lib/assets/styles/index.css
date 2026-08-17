@@ -591,6 +591,11 @@ table tr td::before {
   pointer-events: none;
 }
 
+/* Do not let the outermost border create a one-pixel horizontal overflow. */
+table tr > :last-child::before {
+  width: 100%;
+}
+
 table tr .ag-drag-handler.left {
   position: absolute;
   top: 50%;

@@ -377,6 +377,25 @@ onBeforeUnmount(() => {
             {{ action.glyph }}
           </button>
           <button
+            v-for="action in [
+              { type: 'del', glyph: 'S', label: copy.strike, className: 'strike' },
+              { type: 'inline_code', glyph: '</>', label: copy.inlineCode, className: 'code' },
+            ]"
+            :key="action.type"
+            type="button"
+            class="tool-button text-button toolbar-expanded-action"
+            :class="[action.className, { active: formatActive(action.type) }]"
+            :data-action="`format:${action.type}`"
+            :disabled="wysiwygDisabled"
+            :aria-label="action.label"
+            :aria-pressed="formatActive(action.type)"
+            :title="action.label"
+            @mousedown.prevent
+            @click="emitFormat(action.type)"
+          >
+            {{ action.glyph }}
+          </button>
+          <button
             type="button"
             class="tool-button"
             :class="{ active: formatActive('link') }"
@@ -409,9 +428,67 @@ onBeforeUnmount(() => {
           >
             {{ action.glyph }}
           </button>
+          <button
+            type="button"
+            class="tool-button text-button toolbar-expanded-action"
+            data-action="paragraph:ul-task"
+            :disabled="wysiwygDisabled"
+            :aria-label="copy.taskList"
+            :title="copy.taskList"
+            @mousedown.prevent
+            @click="emitParagraph('ul-task')"
+          >
+            ☑
+          </button>
         </div>
 
-        <div class="toolbar-spacer" aria-hidden="true" />
+        <div class="toolbar-divider toolbar-expanded-action" aria-hidden="true" />
+
+        <div class="toolbar-group toolbar-expanded-action" role="group" :aria-label="copy.moreInsert">
+          <button
+            v-for="action in [
+              { type: 'blockquote', glyph: '❞', label: copy.quote },
+              { type: 'pre', glyph: '{ }', label: copy.codeBlock },
+            ]"
+            :key="action.type"
+            type="button"
+            class="tool-button text-button"
+            :data-action="`paragraph:${action.type}`"
+            :disabled="wysiwygDisabled"
+            :aria-label="action.label"
+            :title="action.label"
+            @mousedown.prevent
+            @click="emitParagraph(action.type)"
+          >
+            {{ action.glyph }}
+          </button>
+          <button
+            type="button"
+            class="tool-button"
+            data-action="format:image"
+            :disabled="wysiwygDisabled"
+            :aria-label="copy.image"
+            :title="copy.image"
+            @mousedown.prevent
+            @click="emitFormat('image')"
+          >
+            <el-icon><Picture /></el-icon>
+          </button>
+          <button
+            type="button"
+            class="tool-button"
+            data-action="insert-table"
+            :disabled="wysiwygDisabled"
+            :aria-label="copy.table"
+            :title="copy.table"
+            @mousedown.prevent
+            @click="insertTable"
+          >
+            <el-icon><Grid /></el-icon>
+          </button>
+        </div>
+
+        <div class="toolbar-divider" aria-hidden="true" />
 
         <div class="toolbar-group" role="group" :aria-label="copy.moreView">
           <button
@@ -644,6 +721,7 @@ onBeforeUnmount(() => {
   height: 100%;
   padding: 0 9px;
   box-sizing: border-box;
+  justify-content: center;
 }
 
 .toolbar-group {
@@ -660,8 +738,6 @@ onBeforeUnmount(() => {
   flex: 0 0 auto;
   background: var(--mt-border, #dfe2e5);
 }
-
-.toolbar-spacer { flex: 1 1 20px; }
 
 .tool-button {
   display: inline-flex;
@@ -717,6 +793,12 @@ onBeforeUnmount(() => {
 
 .text-button.strong { font-weight: 800; }
 .text-button.emphasis { font-family: Georgia, 'Times New Roman', serif; font-style: italic; }
+.text-button.strike { text-decoration: line-through; }
+.text-button.code {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 10px;
+  letter-spacing: -0.08em;
+}
 
 .paragraph-trigger {
   justify-content: flex-start;
@@ -810,6 +892,10 @@ onBeforeUnmount(() => {
 }
 
 .compact-menu-action { display: flex; }
+
+@container (max-width: 820px) {
+  .toolbar-expanded-action { display: none; }
+}
 
 @container (max-width: 560px) {
   .compact-collapsible { display: none; }

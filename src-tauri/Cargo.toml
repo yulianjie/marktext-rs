@@ -1,6 +1,6 @@
 [package]
 name = "marktext-rs"
-version = "0.2.0"
+version = "0.2.1"
 description = "MarkText rewritten with Tauri 2 + Vue 3"
 authors = ["MarkText contributors"]
 license = "MIT"
