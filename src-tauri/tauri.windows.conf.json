@@ -1,0 +1,19 @@
+{
+  "bundle": {
+    "resources": {
+      "../resources/icons/md.ico": "icons/md.ico"
+    },
+    "windows": {
+      "wix": {
+        "fragmentPaths": ["windows/markdown-file-icon.wxs"],
+        "componentRefs": [
+          "MarkdownFileIconRegistry",
+          "MarkdownCurrentUserApplicationRegistration"
+        ]
+      },
+      "nsis": {
+        "installerHooks": "windows/markdown-file-icon.nsh"
+      }
+    }
+  }
+}
