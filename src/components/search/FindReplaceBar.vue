@@ -126,15 +126,20 @@ onBeforeUnmount(() => { /* nothing to clean — listeners are inline */ })
   gap: 4px;
   font-size: 12px;
   width: 440px;
+  max-width: calc(100% - 32px);
+  box-sizing: border-box;
+  container-type: inline-size;
 }
 .row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 4px;
 }
 .row-icon { color: var(--mt-fg-muted, #6a737d); padding: 0 4px; }
 .input {
   flex: 1;
+  min-width: 80px;
   border: 1px solid var(--mt-border, #d1d5da);
   border-radius: 4px;
   padding: 4px 8px;
@@ -173,4 +178,9 @@ onBeforeUnmount(() => { /* nothing to clean — listeners are inline */ })
   border-color: var(--mt-accent, #79b8ff);
 }
 .btn.close:hover { background: var(--mt-row-hover, #f1f3f5); }
+
+@container (max-width: 400px) {
+  .row .input { flex-basis: calc(100% - 48px); min-width: 0; }
+  .match-info { margin-inline-start: auto; }
+}
 </style>

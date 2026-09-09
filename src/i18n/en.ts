@@ -4,6 +4,29 @@
  * Keys are nested by feature area. Mirror the same shape in `zh-CN.ts` and `ja.ts`.
  */
 export default {
+  chrome: {
+    file: 'File',
+    edit: 'Edit',
+    paragraph: 'Paragraph',
+    format: 'Format',
+    view: 'View',
+    theme: 'Theme',
+    window: 'Window',
+    help: 'Help',
+    menu: 'Application menu',
+    minimize: 'Minimize',
+    maximize: 'Maximize',
+    restore: 'Restore',
+    nativeMenu: 'Open the Tauri desktop app to use the native menus.',
+    outline: 'Document outline',
+    headings: '{count} headings',
+    searchHeadings: 'Search headings…',
+    collapseOutline: 'Collapse outline',
+    noMatches: 'No matching headings',
+    progress: 'Reading progress',
+    expandHeading: 'Expand {heading}',
+    collapseHeading: 'Collapse {heading}',
+  },
   app: {
     name: 'MarkText',
     untitled: 'Untitled',

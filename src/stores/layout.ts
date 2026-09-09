@@ -10,7 +10,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { usePreferencesStore } from './preferences'
 
-const SIDEBAR_DEFAULT = 280
+const SIDEBAR_DEFAULT = 320
 const SIDEBAR_MIN = 220
 const SIDEBAR_MAX = 800
 const STORAGE_KEY = 'mt:sideBarWidth'
@@ -32,7 +32,7 @@ export type RightColumn = '' | 'files' | 'search' | 'toc'
 export const useLayoutStore = defineStore('layout', () => {
   const prefs = usePreferencesStore()
 
-  const rightColumn = ref<RightColumn>('files')
+  const rightColumn = ref<RightColumn>('toc')
   // Keep visibility as a direct view of the preferences store.  A local copy
   // goes stale when another window changes the same preference.
   const showSideBar = computed({
@@ -53,11 +53,11 @@ export const useLayoutStore = defineStore('layout', () => {
   })
   const sideBarWidth = ref(readStoredWidth())
 
-  /** Effective sidebar width — 0 when hidden, 45 when only the icon rail shows. */
+  /** Effective width includes the 64px activity rail. */
   const effectiveSideBarWidth = computed(() => {
     if (!showSideBar.value) return 0
-    if (!rightColumn.value) return 45
-    return sideBarWidth.value
+    if (!rightColumn.value) return 64
+    return sideBarWidth.value + 64
   })
 
   function setLayout(patch: Partial<{

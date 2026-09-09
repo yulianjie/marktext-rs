@@ -15,6 +15,7 @@ import { usePreferencesStore } from './stores/preferences'
 import { t } from './i18n'
 
 import './assets/styles/global.css'
+import './assets/styles/editor-glass.css'
 
 // Install the debug bridge BEFORE creating the Vue app so we catch even
 // errors thrown during component initialisation.

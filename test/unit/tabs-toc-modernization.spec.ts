@@ -7,7 +7,6 @@ function readSource(relativePath: string): string {
 }
 
 const tabs = readSource('../../src/components/editorWithTabs/TabsBar.vue')
-const toc = readSource('../../src/components/sideBar/TocPane.vue')
 const title = readSource('../../src/components/titleBar/TitleBar.vue')
 const schema = JSON.parse(readSource('../../src/common/preferences-schema.json')) as Record<string, { default?: unknown }>
 const legacyDefaults = JSON.parse(readSource('../../static/preference.json')) as Record<string, unknown>
@@ -29,20 +28,13 @@ describe('modern editor navigation chrome', () => {
     expect(tabs).toMatch(/\.close\s*\{[\s\S]*?width:\s*24px;[\s\S]*?height:\s*24px;/)
   })
 
-  it('keeps the document outline synchronized and keyboard navigable', () => {
-    expect(toc).toContain("document.querySelector<HTMLElement>('.muya-host')")
-    expect(toc).toContain("addEventListener('scroll', scheduleActiveHeadingUpdate")
-    expect(toc).toContain(":aria-current=\"item.slug && item.slug === activeSlug ? 'location' : undefined\"")
-    expect(toc).toContain("ev.key === 'ArrowDown'")
-    expect(toc).toContain("ev.key === 'ArrowUp'")
-    expect(toc).toContain('class="toc-row"')
-    expect(toc).toMatch(/\.toc-row\.current\s*\{/)
-  })
-
-  it('uses real breadcrumb controls and keeps word statistics in one surface', () => {
-    expect(title).toContain('<nav class="breadcrumb"')
+  // Outline navigation is exercised against the rendered editor in
+  // test/e2e/editor-glass.spec.ts, including filtering and collapsed branches.
+  it('uses a unified menu title bar without exposing the document path', () => {
+    expect(title).toContain('role="menubar"')
     expect(title).toContain('<button')
-    expect(title).toContain(':aria-current=')
+    expect(title).not.toContain('class="breadcrumb"')
+    expect(title).not.toContain('pathname')
     expect(title).not.toContain('class="word-count"')
   })
 })

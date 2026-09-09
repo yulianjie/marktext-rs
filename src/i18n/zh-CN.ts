@@ -2,6 +2,29 @@
  * 简体中文 locale 字符串。结构必须与 en.ts 一致。
  */
 export default {
+  chrome: {
+    file: '文件',
+    edit: '编辑',
+    paragraph: '段落',
+    format: '格式',
+    view: '视图',
+    theme: '主题',
+    window: '窗口',
+    help: '帮助',
+    menu: '应用菜单',
+    minimize: '最小化',
+    maximize: '最大化',
+    restore: '还原',
+    nativeMenu: '请在 Tauri 桌面应用中使用原生菜单。',
+    outline: '文章目录',
+    headings: '{count} 个章节',
+    searchHeadings: '搜索标题…',
+    collapseOutline: '收起目录',
+    noMatches: '没有匹配的标题',
+    progress: '阅读进度',
+    expandHeading: '展开 {heading}',
+    collapseHeading: '折叠 {heading}',
+  },
   app: {
     name: 'MarkText',
     untitled: '未命名',

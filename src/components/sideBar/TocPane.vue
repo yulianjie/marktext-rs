@@ -1,302 +1,250 @@
 <script setup lang="ts">
-/**
- * TOC pane — shows the heading tree of the active document.
- */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useEditorStore } from '@/stores/editor'
+import { Search, DArrowLeft, ArrowRight } from '@element-plus/icons-vue'
+import { useEditorStore, type TocItem } from '@/stores/editor'
 import { usePreferencesStore } from '@/stores/preferences'
-import type { TocItem } from '@/stores/editor'
+import { useLayoutStore } from '@/stores/layout'
 import { t } from '@/i18n'
 
 const editor = useEditorStore()
 const prefs = usePreferencesStore()
+const layout = useLayoutStore()
+const query = ref('')
+const collapsed = ref(new Set<string>())
 const activeSlug = ref<string | null>(null)
+const progress = ref(0)
 const rowRefs = new Map<string, HTMLButtonElement>()
 let scrollHost: HTMLElement | null = null
 let scrollFrame = 0
+let observer: ResizeObserver | undefined
 
-interface FlatItem {
+interface OutlineRow {
+  key: string
   level: number
+  depth: number
   content: string
   slug?: string
+  ancestors: string[]
+  hasChildren: boolean
 }
-
-// Flatten TOC tree so we can render with `v-for` and indent by level.
-function flatten(items: TocItem[], out: FlatItem[] = []): FlatItem[] {
-  for (const it of items) {
-    out.push({ level: it.level, content: it.content, slug: it.slug })
-    if (it.children?.length) flatten(it.children, out)
-  }
-  return out
+function flatten(items: TocItem[], ancestors: string[] = [], depth = 0): OutlineRow[] {
+  return items.flatMap((item, index) => {
+    const key = item.slug || ancestors.join('/') + ':' + index + ':' + item.content
+    return [{
+      key, level: item.level, depth, content: item.content, slug: item.slug,
+      ancestors, hasChildren: Boolean(item.children?.length),
+    }, ...flatten(item.children || [], [...ancestors, key], depth + 1)]
+  })
 }
-
 const flat = computed(() => flatten(editor.toc))
-
-function itemKey(item: FlatItem, index: number): string {
-  return item.slug || `${item.level}:${item.content}:${index}`
+const visible = computed(() => {
+  const term = query.value.trim().toLocaleLowerCase()
+  if (term) {
+    const matches = new Set<string>()
+    flat.value.forEach(item => {
+      if (item.content.toLocaleLowerCase().includes(term)) {
+        matches.add(item.key)
+        item.ancestors.forEach(key => matches.add(key))
+      }
+    })
+    return flat.value.filter(item => matches.has(item.key))
+  }
+  return flat.value.filter(item => !item.ancestors.some(key => collapsed.value.has(key)))
+})
+const currentKey = computed(() => {
+  const active = flat.value.find(item => item.slug === activeSlug.value)
+  if (!active) return visible.value[0]?.key
+  return visible.value.find(item => item.key === active.key)?.key
+    || [...active.ancestors].reverse().find(key => visible.value.some(item => item.key === key))
+    || visible.value[0]?.key
+})
+function toggle(item: OutlineRow) {
+  const next = new Set(collapsed.value)
+  if (next.has(item.key)) next.delete(item.key)
+  else next.add(item.key)
+  collapsed.value = next
 }
-
-function setRowRef(item: FlatItem, index: number, element: unknown) {
-  const key = itemKey(item, index)
+function setRowRef(key: string, element: unknown) {
   if (element instanceof HTMLButtonElement) rowRefs.set(key, element)
   else rowRefs.delete(key)
 }
-
-function visualLevel(level: number): number {
-  return Math.min(Math.max(level, 1), 6)
-}
-
-function rowIndent(level: number): string {
-  return `${10 + (visualLevel(level) - 1) * 16}px`
-}
-
-function scrollTo(item: FlatItem) {
+function scrollTo(item: OutlineRow) {
   if (!item.slug) return
   activeSlug.value = item.slug
-  const target = document.getElementById(item.slug)
-  target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  document.getElementById(item.slug)?.scrollIntoView({
+    behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+    block: 'start',
+  })
 }
-
 function updateActiveHeading() {
   scrollFrame = 0
-  const headings = flat.value.filter((item): item is FlatItem & { slug: string } => Boolean(item.slug))
-  if (!headings.length) {
-    activeSlug.value = null
-    return
+  if (scrollHost) {
+    const range = scrollHost.scrollHeight - scrollHost.clientHeight
+    progress.value = range > 0 ? Math.round(Math.min(1, Math.max(0, scrollHost.scrollTop / range)) * 100) : 100
   }
+  const headings = flat.value.filter(item => item.slug)
   const threshold = (scrollHost?.getBoundingClientRect().top ?? 0) + 56
-  let current = headings[0].slug
+  let current = headings[0]?.slug ?? null
   for (const item of headings) {
-    const element = document.getElementById(item.slug)
+    const element = document.getElementById(item.slug!)
     if (!element) continue
-    if (element.getBoundingClientRect().top <= threshold) current = item.slug
+    if (element.getBoundingClientRect().top <= threshold) current = item.slug!
     else break
   }
   activeSlug.value = current
 }
-
-function scheduleActiveHeadingUpdate() {
-  if (scrollFrame) return
-  scrollFrame = requestAnimationFrame(updateActiveHeading)
+function scheduleUpdate() {
+  if (!scrollFrame) scrollFrame = requestAnimationFrame(updateActiveHeading)
 }
-
 function connectScrollHost() {
-  scrollHost?.removeEventListener('scroll', scheduleActiveHeadingUpdate)
+  scrollHost?.removeEventListener('scroll', scheduleUpdate)
+  observer?.disconnect()
   scrollHost = document.querySelector<HTMLElement>('.muya-host')
-  scrollHost?.addEventListener('scroll', scheduleActiveHeadingUpdate, { passive: true })
-  scheduleActiveHeadingUpdate()
+  scrollHost?.addEventListener('scroll', scheduleUpdate, { passive: true })
+  if (scrollHost) observer?.observe(scrollHost)
+  const content = scrollHost?.querySelector('.muya-container')
+  if (content) observer?.observe(content)
+  scheduleUpdate()
 }
-
-function focusRow(index: number) {
-  const item = flat.value[index]
-  if (!item) return
-  rowRefs.get(itemKey(item, index))?.focus()
-}
-
-function onRowKeydown(index: number, ev: KeyboardEvent) {
+function onRowKeydown(index: number, event: KeyboardEvent) {
+  const item = visible.value[index]
   let target = index
-  if (ev.key === 'ArrowDown') target = Math.min(index + 1, flat.value.length - 1)
-  else if (ev.key === 'ArrowUp') target = Math.max(index - 1, 0)
-  else if (ev.key === 'Home') target = 0
-  else if (ev.key === 'End') target = flat.value.length - 1
-  else return
-  ev.preventDefault()
-  focusRow(target)
+  switch (event.key) {
+    case 'ArrowDown': target = Math.min(index + 1, visible.value.length - 1); break
+    case 'ArrowUp': target = Math.max(index - 1, 0); break
+    case 'Home': target = 0; break
+    case 'End': target = visible.value.length - 1; break
+    case 'ArrowRight':
+      if (!query.value && item.hasChildren && collapsed.value.has(item.key)) toggle(item)
+      else target = Math.min(index + 1, visible.value.length - 1)
+      break
+    case 'ArrowLeft':
+      if (!query.value && item.hasChildren && !collapsed.value.has(item.key)) toggle(item)
+      else {
+        const parent = visible.value.findIndex(row => row.key === item.ancestors.at(-1))
+        if (parent >= 0) target = parent
+      }
+      break
+    default: return
+  }
+  event.preventDefault()
+  nextTick(() => rowRefs.get(visible.value[target]?.key)?.focus())
 }
-
-watch([flat, () => editor.currentFileId], async () => {
+watch(() => editor.currentFileId, () => {
+  query.value = ''
+  collapsed.value = new Set()
+  activeSlug.value = null
+})
+watch([flat, () => editor.sourceCodeMode], async () => {
   await nextTick()
   connectScrollHost()
 }, { flush: 'post' })
-
-watch(activeSlug, async slug => {
-  if (!slug) return
+watch(currentKey, async key => {
   await nextTick()
-  const index = flat.value.findIndex(item => item.slug === slug)
-  const item = flat.value[index]
-  if (item) rowRefs.get(itemKey(item, index))?.scrollIntoView({ block: 'nearest' })
+  const row = key ? rowRefs.get(key) : undefined
+  const list = row?.closest('.toc-list')
+  if (row && list) {
+    const box = row.getBoundingClientRect()
+    const viewport = list.getBoundingClientRect()
+    if (box.top < viewport.top || box.bottom > viewport.bottom) row.scrollIntoView({ block: 'nearest' })
+  }
 })
-
 onMounted(async () => {
+  observer = new ResizeObserver(scheduleUpdate)
   await nextTick()
   connectScrollHost()
 })
-
 onBeforeUnmount(() => {
-  scrollHost?.removeEventListener('scroll', scheduleActiveHeadingUpdate)
+  scrollHost?.removeEventListener('scroll', scheduleUpdate)
+  observer?.disconnect()
   if (scrollFrame) cancelAnimationFrame(scrollFrame)
 })
 </script>
 
 <template>
-  <div class="toc-pane">
-    <div class="toc-header">{{ t('sideBar.toc') }}</div>
-    <div class="toc-list">
-      <button
-        v-for="(item, idx) in flat"
-        :key="itemKey(item, idx)"
-        :ref="element => setRowRef(item, idx, element)"
-        type="button"
-        class="toc-row"
-        :class="[
-          `level-${visualLevel(item.level)}`,
-          { wrap: prefs.wordWrapInToc, current: item.slug && item.slug === activeSlug },
-        ]"
-        :style="{ paddingInlineStart: rowIndent(item.level) }"
-        :title="item.content"
-        :aria-label="`H${item.level}: ${item.content}`"
-        :aria-current="item.slug && item.slug === activeSlug ? 'location' : undefined"
-        :tabindex="item.slug === activeSlug || (!activeSlug && idx === 0) ? 0 : -1"
-        @click="scrollTo(item)"
-        @keydown="onRowKeydown(idx, $event)"
-      >
-        <span class="toc-marker" aria-hidden="true" />
-        <span class="toc-label">{{ item.content }}</span>
-      </button>
-      <div v-if="!flat.length" class="empty">{{ t('sideBar.noHeadings') }}</div>
-    </div>
-  </div>
+  <section class="toc-pane" :aria-label="t('chrome.outline')">
+    <header class="toc-header">
+      <div><h2>{{ t('chrome.outline') }}</h2><span>{{ t('chrome.headings', { count: flat.length }) }}</span></div>
+      <button type="button" class="collapse-outline" :title="t('chrome.collapseOutline')"
+        :aria-label="t('chrome.collapseOutline')" @click="layout.setLayout({ rightColumn: '' })">
+<DArrowLeft />
+</button>
+    </header>
+    <label class="toc-search">
+      <Search aria-hidden="true" />
+      <input v-model="query" type="search" :placeholder="t('chrome.searchHeadings')"
+        :aria-label="t('chrome.searchHeadings')" @keydown.esc="query = ''">
+    </label>
+    <nav class="toc-list" :aria-label="t('chrome.outline')">
+      <div v-for="(item, index) in visible" :key="item.key" class="toc-entry"
+        :class="{ current: item.key === currentKey, root: item.depth === 0 }"
+        :style="{ '--outline-depth': Math.min(item.depth, 5) }">
+        <span v-if="item.depth" class="toc-guide" aria-hidden="true" />
+        <button v-if="item.hasChildren && !query.trim()" type="button" class="toc-toggle"
+          :aria-expanded="!collapsed.has(item.key)"
+          :aria-label="t(collapsed.has(item.key) ? 'chrome.expandHeading' : 'chrome.collapseHeading', { heading: item.content })"
+          @click="toggle(item)">
+<ArrowRight :class="{ expanded: !collapsed.has(item.key) }" />
+</button>
+        <span v-else class="toc-toggle-placeholder" />
+        <button :ref="element => setRowRef(item.key, element)" type="button" class="toc-row"
+          :class="{ wrap: prefs.wordWrapInToc }" :title="item.content"
+          :aria-label="'H' + item.level + ': ' + item.content"
+          :aria-current="item.key === currentKey ? 'location' : undefined"
+          :tabindex="item.key === currentKey ? 0 : -1" :disabled="editor.sourceCodeMode"
+          @click="scrollTo(item)" @keydown="onRowKeydown(index, $event)">
+          <span class="toc-level" aria-hidden="true">H{{ item.level }}</span>
+          <span class="toc-label">{{ item.content }}</span>
+        </button>
+      </div>
+      <p v-if="!visible.length" class="empty">{{ t(flat.length ? 'chrome.noMatches' : 'sideBar.noHeadings') }}</p>
+    </nav>
+    <footer v-if="flat.length && !editor.sourceCodeMode" class="toc-progress">
+      <span>{{ t('chrome.progress') }}</span><strong>{{ progress }}%</strong>
+      <progress :value="progress" max="100" :aria-label="t('chrome.progress')" />
+    </footer>
+  </section>
 </template>
 
 <style scoped>
-.toc-pane {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-.toc-header {
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  min-height: 38px;
-  padding: 0 14px;
-  font-size: 13px;
-  font-weight: 650;
-  color: var(--mt-fg, #24292e);
-  border-bottom: 1px solid var(--mt-border, #eaecef);
-  letter-spacing: 0.02em;
-}
-.toc-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 8px 7px 16px;
-}
-.toc-row {
-  box-sizing: border-box;
-  min-height: 30px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding-inline-end: 10px;
-  width: 100%;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
-  color: var(--mt-fg-muted, #586069);
-  font-family: inherit;
-  line-height: 18px;
-  transition: background-color 120ms, color 120ms;
-}
-.toc-row.level-1 {
-  margin-top: 5px;
-  color: var(--mt-fg, #24292e);
-  font-size: 14px;
-  font-weight: 650;
-}
-.toc-row.level-1:first-child { margin-top: 0; }
-.toc-row.level-2 {
-  color: color-mix(in srgb, var(--mt-fg, #24292e) 90%, transparent);
-  font-size: 13.5px;
-  font-weight: 600;
-}
-.toc-row.level-3 {
-  font-size: 13px;
-  font-weight: 450;
-}
-.toc-row.level-4,
-.toc-row.level-5,
-.toc-row.level-6 {
-  font-size: 12.5px;
-  font-weight: 400;
-  color: color-mix(in srgb, var(--mt-fg-muted, #586069) 82%, transparent);
-}
-.toc-row:hover {
-  background: color-mix(in srgb, var(--mt-accent, #21b56f) 9%, transparent);
-  color: var(--mt-fg, #24292e);
-}
-.toc-row.current {
-  color: var(--mt-fg, #24292e);
-  background: color-mix(in srgb, var(--mt-accent, #21b56f) 13%, transparent);
-  box-shadow: inset 3px 0 0 var(--mt-accent, #21b56f);
-}
-.toc-row.current .toc-marker {
-  color: var(--mt-accent, #21b56f);
-  opacity: 1;
-}
-.toc-row:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--mt-accent, #0366d6) 72%, transparent);
-  outline-offset: -2px;
-}
-.toc-marker {
-  width: 4px;
-  height: 4px;
-  flex: 0 0 auto;
-  border-radius: 50%;
-  background: currentColor;
-  opacity: 0.35;
-}
-.level-1 .toc-marker {
-  width: 3px;
-  height: 16px;
-  border-radius: 999px;
-  background: var(--mt-accent, #21b56f);
-  opacity: 1;
-}
-.level-2 .toc-marker {
-  width: 6px;
-  height: 6px;
-  opacity: 0.68;
-}
-.level-3 .toc-marker {
-  box-sizing: border-box;
-  width: 6px;
-  height: 6px;
-  border: 1.5px solid currentColor;
-  background: transparent;
-  opacity: 0.58;
-}
-.level-4 .toc-marker,
-.level-5 .toc-marker,
-.level-6 .toc-marker {
-  width: 5px;
-  height: 2px;
-  border-radius: 1px;
-  opacity: 0.42;
-}
-.toc-label {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-.toc-row.wrap {
-  height: auto;
-  min-height: 30px;
-  align-items: flex-start;
-  padding-top: 6px;
-  padding-bottom: 6px;
-}
-.toc-row.wrap .toc-marker { margin-top: 6px; }
-.toc-row.wrap .toc-label {
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-.empty {
-  padding: 24px 12px;
-  color: var(--mt-fg-muted, #959da5);
-  font-size: 13px;
-  text-align: center;
-}
+.toc-pane { height: 100%; min-height: 0; display: flex; flex-direction: column; }
+.toc-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 20px 16px; gap: 12px; }
+.toc-header h2 { margin: 0; font-size: 19px; line-height: 1.4; font-weight: 650; color: var(--mt-fg); }
+.toc-header span { font-size: 12px; color: var(--mt-fg-muted); }
+.collapse-outline { display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid var(--mt-glass-border); border-radius: 10px; background: var(--mt-glass-bg); color: var(--mt-fg-muted); cursor: pointer; flex-shrink: 0; }
+.collapse-outline svg { width: 16px; height: 16px; }
+.toc-search { margin: 0 18px 16px; min-height: 38px; display: flex; align-items: center; gap: 9px; padding: 0 11px; border: 1px solid var(--mt-border); border-radius: 11px; background: var(--mt-glass-bg); color: var(--mt-fg-muted); }
+.toc-search:focus-within { outline: 2px solid var(--mt-accent); outline-offset: 1px; }
+.toc-search svg { width: 17px; height: 17px; flex-shrink: 0; }
+.toc-search input { width: 100%; min-width: 0; background: none; border: none; outline: none; color: var(--mt-fg); font: inherit; font-size: 13px; }
+.toc-search input::placeholder { color: var(--mt-fg-muted); opacity: .8; }
+.toc-list { flex: 1; min-height: 0; overflow-y: auto; padding: 0 10px 16px; scrollbar-width: thin; scrollbar-color: var(--mt-border) transparent; }
+.toc-entry { position: relative; display: flex; align-items: center; min-height: 36px; padding-inline: calc(4px + var(--outline-depth) * 16px) 7px; border-radius: 8px; color: var(--mt-fg-muted); }
+.toc-entry:hover { background: var(--mt-row-hover); }
+.toc-entry.current { background: color-mix(in srgb, var(--mt-accent) 13%, transparent); color: color-mix(in srgb, var(--mt-accent) 65%, var(--mt-fg)); }
+.toc-entry.current::before { content: ''; position: absolute; inset: 7px auto 7px 0; width: 3px; border-radius: 3px; background: var(--mt-accent); }
+.toc-guide { position: absolute; left: calc(8px + var(--outline-depth) * 16px); top: 0; bottom: 0; border-left: 1px solid var(--mt-border); pointer-events: none; }
+.toc-guide::after { content: ''; position: absolute; left: 0; top: 18px; width: 6px; border-top: 1px solid var(--mt-border); }
+.toc-toggle, .toc-toggle-placeholder { display: grid; place-items: center; width: 24px; height: 28px; flex: 0 0 24px; z-index: 1; }
+.toc-toggle { border: 0; background: transparent; border-radius: 5px; color: inherit; cursor: pointer; }
+.toc-toggle:hover { background: var(--mt-row-hover); }
+.toc-toggle svg { width: 11px; height: 11px; transition: transform 120ms; }
+.toc-toggle svg.expanded { transform: rotate(90deg); }
+.toc-row { display: flex; align-items: center; gap: 9px; min-height: 36px; flex: 1; min-width: 0; border: 0; background: transparent; color: inherit; padding: 4px 0; text-align: start; font: inherit; font-size: 13px; line-height: 20px; cursor: pointer; }
+.toc-row:disabled { cursor: default; opacity: .65; }
+.toc-level { flex-shrink: 0; padding: 0 4px; border-radius: 4px; font-size: 10px; line-height: 18px; background: color-mix(in srgb, var(--mt-fg-muted) 8%, transparent); font-weight: 500; }
+.toc-label { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.root { margin: 4px 0; color: var(--mt-fg); }
+.root .toc-row { font-weight: 650; font-size: 14px; }
+.toc-row.wrap { align-items: flex-start; }
+.toc-row.wrap .toc-label { white-space: normal; overflow-wrap: anywhere; }
+button:focus-visible { outline: 2px solid var(--mt-accent); outline-offset: -2px; border-radius: 5px; }
+.empty { padding: 20px 10px; text-align: center; color: var(--mt-fg-muted); font-size: 13px; }
+.toc-progress { display: flex; align-items: center; gap: 8px; padding: 16px 20px; color: var(--mt-fg-muted); font-size: 11px; }
+.toc-progress strong { color: var(--mt-accent); font-size: 12px; font-variant-numeric: tabular-nums; }
+.toc-progress progress { flex: 1; min-width: 24px; width: 0; height: 5px; border: 0; border-radius: 8px; overflow: hidden; appearance: none; }
+progress::-webkit-progress-bar { background: var(--mt-border); }
+progress::-webkit-progress-value { background: var(--mt-accent); border-radius: 8px; }
+progress::-moz-progress-bar { background: var(--mt-accent); border-radius: 8px; }
+@media (prefers-reduced-motion: reduce) { .toc-toggle svg { transition: none; } }
 </style>

@@ -2,6 +2,29 @@
  * 日本語ロケール文字列。en.ts と同じ構造を保つこと。
  */
 export default {
+  chrome: {
+    file: 'ファイル',
+    edit: '編集',
+    paragraph: '段落',
+    format: '書式',
+    view: '表示',
+    theme: 'テーマ',
+    window: 'ウィンドウ',
+    help: 'ヘルプ',
+    menu: 'アプリメニュー',
+    minimize: '最小化',
+    maximize: '最大化',
+    restore: '元に戻す',
+    nativeMenu: 'ネイティブメニューは Tauri デスクトップアプリで利用できます。',
+    outline: '目次',
+    headings: '{count} 個の見出し',
+    searchHeadings: '見出しを検索…',
+    collapseOutline: '目次を閉じる',
+    noMatches: '一致する見出しがありません',
+    progress: '読書の進捗',
+    expandHeading: '{heading} を展開',
+    collapseHeading: '{heading} を折りたたむ',
+  },
   app: {
     name: 'MarkText',
     untitled: '無題',

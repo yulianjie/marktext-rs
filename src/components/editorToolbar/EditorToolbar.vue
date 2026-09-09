@@ -493,7 +493,7 @@ onBeforeUnmount(() => {
         <div class="toolbar-group" role="group" :aria-label="copy.moreView">
           <button
             type="button"
-            class="tool-button compact-collapsible"
+            class="tool-button toolbar-find"
             data-action="find"
             :disabled="!hasDocument"
             :aria-label="copy.find"

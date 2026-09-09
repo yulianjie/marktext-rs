@@ -149,6 +149,20 @@ impl FormatMenuHandles {
     }
 }
 
+/// Windows editors use a client title bar; utility windows retain OS chrome.
+pub fn configure_editor_chrome(app: &AppHandle<Wry>) -> AppResult<()> {
+    #[cfg(target_os = "windows")]
+    for (label, window) in app.webview_windows() {
+        if label == "main" || label.starts_with("editor-") {
+            window.set_decorations(false)?;
+            window.hide_menu()?;
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    let _ = app;
+    Ok(())
+}
+
 pub fn install(app: &mut App) -> AppResult<()> {
     let handle = app.handle();
     let locale = read_locale(handle);
@@ -156,6 +170,7 @@ pub fn install(app: &mut App) -> AppResult<()> {
     let (menu, format_items) =
         build_menu(handle, strings).map_err(|e| crate::error::AppError::Other(e.to_string()))?;
     app.set_menu(menu)?;
+    configure_editor_chrome(handle)?;
     if let Some(state) = app.try_state::<FormatMenuHandles>() {
         state.store(format_items);
     }
@@ -241,6 +256,7 @@ fn rebuild_unlocked(app: &AppHandle<Wry>, locale: &str) -> AppResult<()> {
     // platforms where the menu is hosted by the window (Windows / Linux).
     app.set_menu(menu)
         .map_err(|e| crate::error::AppError::Other(e.to_string()))?;
+    configure_editor_chrome(app)?;
     // `AppHandle::set_menu` propagates the app-wide menu to every window
     // whose menu is empty, including Preferences. Remove it again before the
     // rebuild completes so changing language/theme/keybindings never leaves

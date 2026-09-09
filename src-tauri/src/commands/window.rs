@@ -13,10 +13,13 @@ pub async fn cmd_new_window(app: AppHandle, label: Option<String>) -> AppResult<
     let window = WebviewWindowBuilder::new(&app, &label, WebviewUrl::App("index.html".into()))
         .title("MarkText")
         .inner_size(1200.0, 900.0)
+        .min_inner_size(800.0, 600.0)
+        .visible(false)
         .center()
         .build()
         .map_err(|e| AppError::Other(e.to_string()))?;
     install_editor_workspace_cleanup(&window);
+    crate::menu::configure_editor_chrome(&app)?;
     Ok(())
 }
 

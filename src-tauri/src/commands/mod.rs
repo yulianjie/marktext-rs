@@ -91,6 +91,7 @@ macro_rules! marktext_handler {
             $crate::commands::theme::cmd_read_theme_css,
             // menu
             $crate::commands::menu::cmd_set_format_menu_state,
+            $crate::commands::menu::cmd_popup_editor_menu,
         ]
     };
 }

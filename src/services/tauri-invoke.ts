@@ -14,6 +14,10 @@ import {
   type EditorSession,
 } from '@/services/editor-session'
 
+export function popupEditorMenu(index: number, x: number, y: number): Promise<void> {
+  return invoke('cmd_popup_editor_menu', { index, x, y })
+}
+
 /* ─── shared types ───────────────────────────────────────────── */
 
 export interface LoadedDocument {
