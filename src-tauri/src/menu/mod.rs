@@ -5,7 +5,9 @@
 //! drive the editor emit `mt://menu/<id>` events to the focused webview;
 //! the renderer maps them to the corresponding store action.
 //!
-//! Most application shortcuts are native menu accelerators. Focus-sensitive
+//! Windows remappable shortcuts are renderer-owned; their menu labels still
+//! show the configured keys without registering native accelerators. Other
+//! application shortcuts are native menu accelerators. Focus-sensitive
 //! editor mutations (undo/redo/select-all, headings, and inline formatting)
 //! intentionally stay accelerator-free here so the renderer can route them to
 //! Muya, CodeMirror, or a focused text input without mixing history systems.
@@ -812,6 +814,10 @@ fn display_recent_label(path: &str) -> String {
     }
 }
 
+fn renderer_owns_shortcut(id: &str) -> bool {
+    cfg!(target_os = "windows") && DEFAULT_KEYBINDINGS.iter().any(|(action, _)| *action == id)
+}
+
 /// Helper to build a labelled menu item with an optional accelerator.
 fn mi<R: Runtime>(
     app: &AppHandle<R>,
@@ -819,6 +825,15 @@ fn mi<R: Runtime>(
     label: &str,
     accel: Option<&str>,
 ) -> tauri::Result<tauri::menu::MenuItem<R>> {
+    if renderer_owns_shortcut(id) {
+        // A tab displays a Windows menu shortcut hint without registering it.
+        // Only the focused renderer executes it, including with a hidden menu.
+        let text = match accel {
+            Some(accel) => format!("{label}\t{accel}"),
+            None => label.to_string(),
+        };
+        return MenuItemBuilder::with_id(id, text).build(app);
+    }
     if ACCELERATORS_ENABLED.load(Ordering::SeqCst) {
         if let Some(a) = accel {
             match MenuItemBuilder::with_id(id, label)

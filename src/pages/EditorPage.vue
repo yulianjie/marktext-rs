@@ -46,6 +46,7 @@ import {
 } from '@/services/tauri-invoke'
 import { listenTyped } from '@/services/tauri-bridge'
 import { resolveEditorMenuCommand } from '@/services/editor-menu-actions'
+import { handleApplicationShortcut, rendererOwnsApplicationShortcuts } from '@/services/application-shortcuts'
 import {
   isEditorShortcutTarget,
   isTextEditingTarget,
@@ -81,7 +82,7 @@ const project = useProjectStore()
 
 const dragOver = ref(false)
 const rendererHandlesRemappableShortcuts = typeof window !== 'undefined'
-  && !('__TAURI_INTERNALS__' in window)
+  && rendererOwnsApplicationShortcuts('__TAURI_INTERNALS__' in window, navigator.platform)
 let closeWindowPromise: Promise<void> | null = null
 let startupReady: Promise<void> | null = null
 let startupAbortController: AbortController | null = null
@@ -136,6 +137,13 @@ function requestWindowClose(): Promise<void> {
 }
 
 /* ── shortcuts ───────────────────────────────────────────────── */
+function onApplicationKey(ev: KeyboardEvent) {
+  if (!rendererHandlesRemappableShortcuts) return
+  handleApplicationShortcut(ev, keys.byAccel, action => {
+    void executeMenuAction(action, 'shortcut')
+  })
+}
+
 function onKey(ev: KeyboardEvent) {
   if (!ev.defaultPrevented) {
     const fixedAction = resolveFixedEditorShortcut(
@@ -148,15 +156,6 @@ function onKey(ev: KeyboardEvent) {
       return
     }
   }
-
-  // Remappable application shortcuts are native menu accelerators in Tauri.
-  // Browser-only development has no native menu, so it uses the renderer map.
-  if (!rendererHandlesRemappableShortcuts || ev.defaultPrevented) return
-  const accel = eventAccel(ev)
-  const actionId = keys.byAccel[accel]
-  if (!actionId) return
-  ev.preventDefault()
-  void executeMenuAction(actionId, 'shortcut')
 }
 
 async function doOpen() {
@@ -658,7 +657,8 @@ onMounted(async () => {
   // keybinding snapshots before mounting this page.
   registerBuiltinCommands()
   // Focus-sensitive editor shortcuts are renderer-owned in every runtime.
-  // Tauri still owns remappable application accelerators and emits menu events.
+  // Windows application shortcuts run before Muya/CodeMirror keymaps.
+  window.addEventListener('keydown', onApplicationKey, true)
   window.addEventListener('keydown', onKey)
 
   const currentWindow = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
@@ -751,6 +751,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   startupAbortController?.abort()
   window.removeEventListener('keydown', onKey)
+  window.removeEventListener('keydown', onApplicationKey, true)
   unsubOpenFile?.()
   unsubDrop?.()
   unsubMenu?.()
