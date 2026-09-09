@@ -20,7 +20,7 @@ describe('modern editor toolbar contract', () => {
     expect(toolbar).not.toContain('class="tool-button text-button heading-button"')
   })
 
-  it('fills and centers the wide toolbar while keeping narrow overflow in More', () => {
+  it('keeps overflow commands available in More', () => {
     const persistentToolbar = toolbar.slice(
       toolbar.indexOf('<nav'),
       toolbar.indexOf('<Teleport'),
@@ -53,13 +53,8 @@ describe('modern editor toolbar contract', () => {
       expect(persistentToolbar).not.toContain(`data-action="${action}"`)
     }
 
-    expect(toolbar).toContain('container-type: inline-size')
-    expect(toolbar).toContain('@container (max-width: 820px)')
-    expect(toolbar).toContain('@container (max-width: 560px)')
-    expect(toolbar).toMatch(/\.toolbar-content\s*\{[\s\S]*?justify-content:\s*center;/)
-    expect(toolbar).toMatch(/\.toolbar-expanded-action\s*\{\s*display:\s*none;/)
-    expect(toolbar).toMatch(/\.compact-collapsible\s*\{\s*display:\s*none;/)
-    expect(toolbar).toMatch(/\.compact-menu-action\s*\{\s*display:\s*flex;/)
+    // Actual visibility, spacing, overflow and menu execution are covered by
+    // editor-glass.spec.ts across six editor widths, rather than CSS snapshots.
   })
 
   it('preserves the selection for pointer use and supports complete keyboard menu navigation', () => {

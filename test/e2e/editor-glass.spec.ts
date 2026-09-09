@@ -1,5 +1,44 @@
 import { test, expect, type Page } from '@playwright/test'
 
+test('toolbar keeps complete tightly spaced controls at normal editor widths', async ({ page }) => {
+  await seed(page)
+  const toolbar = page.locator('.editor-toolbar')
+  const actions = ['redo', 'format:del', 'format:inline_code', 'paragraph:ul-task', 'paragraph:blockquote', 'paragraph:pre', 'format:image', 'insert-table']
+  // Include the reported ~788px toolbar and both sides of the former 820px breakpoint.
+  for (const width of [700, 740, 788, 820, 821, 1000]) {
+    await page.setViewportSize({ width: width + 500, height: 900 })
+    await toolbar.evaluate((element, value) => { element.style.width = value + 'px' }, width)
+    for (const action of actions) await expect(toolbar.locator('[data-action="' + action + '"]')).toBeVisible()
+    const geometry = await toolbar.evaluate(element => {
+      const buttons = [...element.querySelectorAll<HTMLElement>('.tool-button')].filter(button => button.offsetParent)
+      const bounds = element.getBoundingClientRect()
+      return {
+        overflow: element.querySelector('.toolbar-scroll')!.scrollWidth - element.clientWidth,
+        buttonsInside: buttons.every(button => {
+          const rect = button.getBoundingClientRect()
+          return rect.left >= bounds.left && rect.right <= bounds.right
+        }),
+        groupGaps: [...element.querySelectorAll<HTMLElement>('.toolbar-group')].slice(0, -1).map(group => {
+          const next = group.nextElementSibling
+          return next ? next.getBoundingClientRect().left - group.getBoundingClientRect().right : 0
+        }),
+      }
+    })
+    expect(geometry.overflow, 'overflow at ' + width).toBeLessThanOrEqual(1)
+    expect(geometry.buttonsInside, 'buttons outside at ' + width).toBe(true)
+    expect(Math.max(...geometry.groupGaps), 'stretched group spacing at ' + width).toBeLessThanOrEqual(10)
+    if (width === 788) await toolbar.screenshot({ path: 'output/design/toolbar-fixed-788.png' })
+  }
+  await toolbar.evaluate(element => { element.style.width = '500px' })
+  await expect(toolbar.locator('[data-action="format:image"]')).toBeHidden()
+  await toolbar.locator('[data-action="more-menu"]').click()
+  await expect(page.locator('.toolbar-menu-more [data-action="format:image"]')).toBeVisible()
+  await page.locator('.toolbar-menu-more [data-action="paragraph:blockquote"]').click()
+  await expect(page.locator('.muya-host blockquote')).toBeVisible()
+  await toolbar.locator('[data-action="find"]').click()
+  await expect(page.locator('.find-bar')).toBeVisible()
+})
+
 const markdown = [
   '# 高德地图综合服务 Skill',
   '高德地图综合服务向开发者提供完整的地图数据服务，包括地点搜索、路径规划、旅游规划、周边搜索和热力图数据可视化等功能。',

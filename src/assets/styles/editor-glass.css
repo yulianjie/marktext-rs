@@ -29,8 +29,6 @@
 #mt-app .editor-page .tab { font-size: 13px; padding-left: 16px; gap: 10px; }
 #mt-app .editor-page .new-tab { width: 40px; opacity: 1; }
 #mt-app .editor-page .editor-toolbar { height: 54px; background: var(--mt-glass-bg); backdrop-filter: var(--mt-glass-filter); border-bottom: 1px solid var(--mt-glass-border); }
-#mt-app .editor-page .toolbar-content { justify-content: space-between; gap: 3px; padding-inline: 18px; }
-#mt-app .editor-page .toolbar-group { gap: 4px; }
 #mt-app .editor-page .tool-button { border-radius: 8px; }
 #mt-app .editor-page .tool-button .el-icon { font-size: 17px; }
 #mt-app .editor-page .toc-row { font-size: 14px; }
@@ -42,8 +40,6 @@
 #mt-app .editor-page .muya-host :is(pre, figure[data-role='CODE']) { border-radius: 10px; }
 
 @media (max-width: 1050px) {
-  #mt-app .editor-page .toolbar-content { padding-inline: 8px; gap: 2px; }
-  #mt-app .editor-page .toolbar-group { gap: 2px; }
   #mt-app .editor-page .tab-shell { min-width: 120px; }
 }
 @supports not (backdrop-filter: blur(1px)) {

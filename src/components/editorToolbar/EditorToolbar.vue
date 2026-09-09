@@ -721,7 +721,7 @@ onBeforeUnmount(() => {
   height: 100%;
   padding: 0 9px;
   box-sizing: border-box;
-  justify-content: center;
+  justify-content: flex-start;
 }
 
 .toolbar-group {
@@ -730,6 +730,9 @@ onBeforeUnmount(() => {
   gap: 3px;
   flex: 0 0 auto;
 }
+
+/* Only the search/more group consumes spare space, never the editing groups. */
+.toolbar-group:last-child { margin-inline-start: auto; }
 
 .toolbar-divider {
   width: 1px;
@@ -740,6 +743,7 @@ onBeforeUnmount(() => {
 }
 
 .tool-button {
+  box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -894,10 +898,19 @@ onBeforeUnmount(() => {
 .compact-menu-action { display: flex; }
 
 @container (max-width: 820px) {
+  .tool-button { width: 32px; }
+  .paragraph-trigger { width: auto; min-width: 96px; }
+  .toolbar-content { gap: 2px; padding-inline: 8px; }
+  .toolbar-group { gap: 2px; }
+  .toolbar-divider { margin-inline: 2px; }
+}
+
+/* The complete compact toolbar needs 689px, including search and separators. */
+@container (max-width: 699px) {
   .toolbar-expanded-action { display: none; }
 }
 
-@container (max-width: 560px) {
+@container (max-width: 459px) {
   .compact-collapsible { display: none; }
   .paragraph-trigger { min-width: 88px; }
   .paragraph-label { max-width: 50px; }
