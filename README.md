@@ -31,6 +31,10 @@ npm run tauri:build    # produces installer in src-tauri/target/release/bundle/
 
 ## Project layout
 
+Desktop title-bar/sidebar blur uses Windows Acrylic, macOS Vibrancy, and
+supported Linux X11/Wayland compositor protocols, with solid colors elsewhere.
+See [desktop blur support and verification](docs/DESKTOP_BLUR.md).
+
 ```
 marktext-rs/
 ├── src/                  # Vue 3 + Pinia frontend

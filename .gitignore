@@ -3,6 +3,7 @@
 /node_modules
 /src-tauri/target
 /src-tauri/target-design
+/src-tauri/target-acrylic-check
 /src-tauri/gen
 
 # Editor / OS

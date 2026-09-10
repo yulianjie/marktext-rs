@@ -1,5 +1,51 @@
 import { test, expect, type Page } from '@playwright/test'
 
+test('unsupported desktops stay opaque, including after native blur is withdrawn', async ({ page }) => {
+  await seed(page)
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate(value => { document.documentElement.dataset.theme = value }, theme)
+    for (const active of [false, true, false]) {
+      await page.evaluate(value => document.documentElement.classList.toggle('native-glass', value), active)
+      if (active) continue
+      for (const selector of ['.title-bar', '.side-bar']) {
+        const alpha = await page.locator(selector).evaluate(element => {
+          const context = document.createElement('canvas').getContext('2d')!
+          context.fillStyle = getComputedStyle(element).backgroundColor
+          context.fillRect(0, 0, 1, 1)
+          return context.getImageData(0, 0, 1, 1).data[3]
+        })
+        expect(alpha).toBe(255)
+        await expect(page.locator(selector)).toHaveCSS('backdrop-filter', 'none')
+      }
+    }
+  }
+})
+
+test('native glass exposes the desktop through chrome but keeps the document opaque', async ({ page }) => {
+  await seed(page)
+  // Browser QA checks alpha only; desktop blur requires a native compositor.
+  await page.evaluate(() => document.documentElement.classList.add('native-glass'))
+  for (const selector of ['html', 'body', '#app', '#mt-app', '.editor-page']) {
+    await expect(page.locator(selector)).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+    await expect(page.locator(selector)).toHaveCSS('background-image', 'none')
+  }
+  for (const selector of ['.title-bar', '.side-bar']) {
+    const alpha = await page.locator(selector).evaluate(element => {
+      const canvas = document.createElement('canvas')
+      canvas.width = canvas.height = 1
+      const context = canvas.getContext('2d')!
+      context.fillStyle = getComputedStyle(element).backgroundColor
+      context.fillRect(0, 0, 1, 1)
+      return context.getImageData(0, 0, 1, 1).data[3]
+    })
+    expect(alpha).toBeGreaterThan(0)
+    expect(alpha).toBeLessThan(255)
+  }
+  await expect(page.locator('.editor-column')).toHaveCSS('background-color', 'rgb(255, 255, 255)')
+  await page.emulateMedia({ forcedColors: 'active' })
+  await expect(page.locator('.editor-page')).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+})
+
 test('toolbar keeps complete tightly spaced controls at normal editor widths', async ({ page }) => {
   await seed(page)
   const toolbar = page.locator('.editor-toolbar')

@@ -4,10 +4,11 @@ import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
 import 'element-plus/theme-chalk/dark/css-vars.css'
 import { getCurrentWindow } from '@tauri-apps/api/window'
+import { enableWindowBackdrop } from './services/tauri-invoke'
 
 import App from './App.vue'
 import router from './router'
-import { initTauriBridge } from './services/tauri-bridge'
+import { initTauriBridge, listenTyped } from './services/tauri-bridge'
 import { installDebugBridge } from './services/debug-bridge'
 import { applyPreferencesToDom } from './services/preferences-applier'
 import { useListenForMainStore } from './stores/listenForMain'
@@ -47,6 +48,15 @@ async function bootstrap() {
   // Secondary windows are created visible by Tauri. Hide them immediately so
   // their default document colours cannot flash while preferences are loading.
   if (appWindow) await appWindow.hide().catch(() => undefined)
+  if (appWindow) {
+    const stopBackdrop = await listenTyped('mt://window/backdrop', active => {
+      document.documentElement.classList.toggle('native-glass', active)
+    })
+    window.addEventListener('beforeunload', stopBackdrop, { once: true })
+  }
+  if (appWindow && await enableWindowBackdrop().catch(() => false)) {
+    document.documentElement.classList.add('native-glass')
+  }
 
   // Load and apply preferences before the first render. This keeps every
   // window — including Preferences — from flashing the default English/light

@@ -18,6 +18,10 @@ export function popupEditorMenu(index: number, x: number, y: number): Promise<vo
   return invoke('cmd_popup_editor_menu', { index, x, y })
 }
 
+export function enableWindowBackdrop(): Promise<boolean> {
+  return invoke('cmd_window_enable_backdrop')
+}
+
 /* ─── shared types ───────────────────────────────────────────── */
 
 export interface LoadedDocument {

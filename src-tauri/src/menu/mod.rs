@@ -151,20 +151,20 @@ impl FormatMenuHandles {
     }
 }
 
-/// Windows editors use a client title bar; utility windows retain OS chrome.
+/// Windows/Linux editors use client chrome. macOS retains traffic lights and
+/// the application menu. Backdrops are negotiated separately before first paint.
 pub fn configure_editor_chrome(app: &AppHandle<Wry>) -> AppResult<()> {
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
     for (label, window) in app.webview_windows() {
         if label == "main" || label.starts_with("editor-") {
             window.set_decorations(false)?;
             window.hide_menu()?;
         }
     }
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
     let _ = app;
     Ok(())
 }
-
 pub fn install(app: &mut App) -> AppResult<()> {
     let handle = app.handle();
     let locale = read_locale(handle);

@@ -9,6 +9,7 @@
 //! `tauri::Builder::invoke_handler`. Add a `#[tauri::command]` here AND in
 //! the macro — the build fails fast if you forget either.
 
+pub mod backdrop;
 pub mod debug;
 pub mod export;
 pub mod file;
@@ -49,6 +50,7 @@ macro_rules! marktext_handler {
             $crate::commands::workspace::cmd_workspace_move,
             $crate::commands::workspace::cmd_workspace_trash,
             // window
+            $crate::commands::backdrop::cmd_window_enable_backdrop,
             $crate::commands::window::cmd_new_window,
             $crate::commands::window::cmd_close_window,
             $crate::commands::window::cmd_destroy_editor_window,

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { getCurrentWindow } from '@tauri-apps/api/window'
+import { platform } from '@tauri-apps/plugin-os'
 import { Minus, FullScreen, CopyDocument, Close } from '@element-plus/icons-vue'
 import { getAppIconOption } from '@/services/app-icon'
 import { popupEditorMenu } from '@/services/tauri-invoke'
@@ -13,7 +14,8 @@ const prefs = usePreferencesStore()
 const logo = computed(() => getAppIconOption(prefs.appIcon).src)
 const notify = useNotificationStore()
 const native = '__TAURI_INTERNALS__' in window
-const customChrome = !native || /win/i.test(navigator.platform)
+const nativeMac = native && platform() === 'macos'
+const customChrome = !native || ['windows', 'linux'].includes(platform())
 const appWindow = native ? getCurrentWindow() : null
 const maximized = ref(false)
 const menuButtons = ref<HTMLButtonElement[]>([])
@@ -75,12 +77,12 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <header v-if="customChrome" class="title-bar" data-tauri-drag-region>
+  <header v-if="customChrome || nativeMac" class="title-bar" :class="{ 'mac-title-bar': nativeMac }" data-tauri-drag-region>
     <div class="brand" data-tauri-drag-region>
       <img :src="logo" alt="" draggable="false" data-tauri-drag-region>
       <strong data-tauri-drag-region>MarkText</strong>
     </div>
-    <nav class="app-menu" role="menubar" :aria-label="t('chrome.menu')">
+    <nav v-if="customChrome" class="app-menu" role="menubar" :aria-label="t('chrome.menu')">
       <button v-for="(menu, index) in menus" :key="menu.mnemonic" ref="menuButtons"
         type="button" role="menuitem" aria-haspopup="menu" :tabindex="menuIndex === index ? 0 : -1"
         :aria-keyshortcuts="'Alt+' + menu.mnemonic.toUpperCase()"
@@ -89,7 +91,7 @@ onBeforeUnmount(() => {
       </button>
     </nav>
     <div class="drag-space" data-tauri-drag-region />
-    <div class="window-controls">
+    <div v-if="customChrome" class="window-controls">
       <button type="button" :aria-label="t('chrome.minimize')" :title="t('chrome.minimize')"
         :disabled="!appWindow" @click="run(() => appWindow!.minimize())">
 <Minus />
@@ -109,6 +111,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .title-bar { display: flex; align-items: center; height: 56px; flex: 0 0 56px; user-select: none; background: var(--mt-glass-bg); backdrop-filter: var(--mt-glass-filter); border-bottom: 1px solid var(--mt-glass-border); }
+.mac-title-bar { padding-left: 80px; }
 .brand { display: flex; align-items: center; gap: 10px; padding: 0 24px; color: var(--mt-fg); font-size: 15px; white-space: nowrap; }
 .brand img { width: 30px; height: 30px; object-fit: contain; }
 .app-menu { display: flex; align-items: center; gap: 2px; }

@@ -152,3 +152,8 @@ The Electron `file-drop` event on `BrowserWindow` is replaced by Tauri's
   use `WebviewWindow.emit(...)`.
 - All command payloads are JSON-serialisable via serde; no path strings need
   to be normalised (Rust `PathBuf` round-trips through serde as a string).
+# Desktop backdrop extension
+
+`cmd_window_enable_backdrop` negotiates native desktop blur for the calling
+editor window and returns a boolean. `mt://window/backdrop` emits a boolean when
+Linux compositor capabilities change. See [DESKTOP_BLUR.md](DESKTOP_BLUR.md).

@@ -10,7 +10,14 @@ use crate::error::{AppError, AppResult};
 #[tauri::command]
 pub async fn cmd_new_window(app: AppHandle, label: Option<String>) -> AppResult<()> {
     let label = label.unwrap_or_else(|| format!("editor-{}", uuid::Uuid::new_v4()));
-    let window = WebviewWindowBuilder::new(&app, &label, WebviewUrl::App("index.html".into()))
+    let builder = WebviewWindowBuilder::new(&app, &label, WebviewUrl::App("index.html".into()));
+    #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+    let builder = builder.transparent(true);
+    #[cfg(target_os = "macos")]
+    let builder = builder
+        .title_bar_style(tauri::TitleBarStyle::Overlay)
+        .hidden_title(true);
+    let window = builder
         .title("MarkText")
         .inner_size(1200.0, 900.0)
         .min_inner_size(800.0, 600.0)

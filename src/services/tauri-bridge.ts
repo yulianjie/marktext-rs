@@ -34,6 +34,7 @@ export interface EditorSelectionChange { windowLabel: string; selection: unknown
 export interface UpdaterAvailable { version: string; notes?: string }
 
 export interface EventRegistry {
+  'mt://window/backdrop': boolean
   'mt://second-instance': SecondInstance
   'mt://fs/change': FileWatchEvent
   'mt://prefs/changed': PrefsChanged
