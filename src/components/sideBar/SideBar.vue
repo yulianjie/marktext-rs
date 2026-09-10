@@ -8,7 +8,7 @@
  * pointermove/pointerup.
  */
 import { computed, onBeforeUnmount, ref } from 'vue'
-import { Folder, Compass, Search, Setting } from '@element-plus/icons-vue'
+import { Folder, ListTree, Search, Settings as Setting } from '@lucide/vue'
 import { useLayoutStore, type RightColumn } from '@/stores/layout'
 import { openSettings } from '@/services/tauri-invoke'
 import { useI18n } from '@/i18n'
@@ -27,7 +27,7 @@ const KEYBOARD_RESIZE_STEP = 16
 interface RailItem { key: RightColumn; icon: typeof Folder; titleKey: string }
 const rails: RailItem[] = [
   { key: 'files', icon: Folder, titleKey: 'sideBar.files' },
-  { key: 'toc', icon: Compass, titleKey: 'sideBar.toc' },
+  { key: 'toc', icon: ListTree, titleKey: 'sideBar.toc' },
   { key: 'search', icon: Search, titleKey: 'sideBar.search' },
 ]
 
@@ -84,7 +84,7 @@ onBeforeUnmount(endResize)
 </script>
 
 <template>
-  <aside class="side-bar">
+  <aside id="editor-sidebar" class="side-bar">
     <div class="rail">
       <button
         v-for="item in rails"
@@ -99,7 +99,7 @@ onBeforeUnmount(endResize)
         :aria-controls="`${item.key}-sidebar-panel`"
         @click="switchTo(item.key)"
       >
-        <el-icon :size="18"><component :is="item.icon" /></el-icon>
+        <component :is="item.icon" :size="20" :stroke-width="1.75" aria-hidden="true" />
       </button>
       <div class="spacer" />
       <button
@@ -109,7 +109,7 @@ onBeforeUnmount(endResize)
         :aria-label="t('sideBar.preferences')"
         @click="openSettings"
       >
-        <el-icon :size="18"><Setting /></el-icon>
+        <Setting :size="20" :stroke-width="1.75" aria-hidden="true" />
       </button>
     </div>
     <div

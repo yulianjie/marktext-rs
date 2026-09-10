@@ -3,17 +3,28 @@
   --mt-glass-bg: var(--mt-sidebar-bg);
   --mt-glass-border: color-mix(in srgb, var(--mt-border) 75%, var(--mt-bg));
   --mt-glass-filter: none;
+  --mt-chrome-opacity: 85%;
+  --mt-icon-fg: color-mix(in srgb, var(--mt-fg) 75%, var(--mt-fg-muted));
+  --mt-icon-hover-bg: color-mix(in srgb, var(--mt-fg) 8%, transparent);
+  --mt-icon-active-bg: color-mix(in srgb, var(--mt-accent) 16%, transparent);
+  color-scheme: light;
+}
+html.dark, [data-theme='dark'], [data-theme='one-dark'], [data-theme='material-dark'] {
+  --mt-chrome-opacity: 94%;
+  color-scheme: dark;
 }
 
 #mt-app .editor-page {
   background: var(--mt-bg);
   font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
-#mt-app .editor-page .page-body { gap: 5px; padding: 0 5px 5px; }
+#mt-app .editor-page .page-body { gap: 8px; padding: 8px; }
 #mt-app .editor-page .side-bar { border: 1px solid var(--mt-glass-border); border-radius: 16px; overflow: hidden; height: auto; background: var(--mt-glass-bg); backdrop-filter: var(--mt-glass-filter); }
 #mt-app .editor-page .rail { width: 62px; background: transparent; padding: 16px 0; gap: 12px; }
-#mt-app .editor-page .rail-icon { width: 42px; height: 42px; border-radius: 12px; }
-#mt-app .editor-page .rail-icon.active { box-shadow: inset 0 0 0 1px var(--mt-glass-border); background: color-mix(in srgb, var(--mt-accent) 12%, transparent); }
+#mt-app .editor-page .rail-icon { width: 40px; height: 40px; border-radius: 10px; position: relative; }
+#mt-app .editor-page .rail-icon.active { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mt-accent) 30%, transparent); background: color-mix(in srgb, var(--mt-accent) 12%, transparent); }
+#mt-app .editor-page .rail-icon.active::before { content: ''; position: absolute; left: -7px; width: 3px; height: 18px; border-radius: 3px; background: var(--mt-accent); }
+#mt-app .editor-page .rail-icon:focus-visible { outline: 2px solid var(--mt-accent); outline-offset: 1px; }
 #mt-app .editor-page .panel { background: transparent; box-shadow: none; max-width: calc(100vw - 470px); }
 #mt-app .editor-page .editor-column { border: 1px solid var(--mt-glass-border); border-radius: 16px; background: var(--mt-bg); }
 #mt-app .editor-page .tabs-bar { height: 52px; padding: 8px 10px 0; box-sizing: border-box; background: var(--mt-glass-bg); backdrop-filter: var(--mt-glass-filter); border: 0; box-shadow: none; }
@@ -24,7 +35,11 @@
 #mt-app .editor-page .new-tab { width: 40px; opacity: 1; }
 #mt-app .editor-page .editor-toolbar { height: 54px; background: var(--mt-glass-bg); backdrop-filter: var(--mt-glass-filter); border-bottom: 1px solid var(--mt-glass-border); }
 #mt-app .editor-page .tool-button { border-radius: 8px; }
-#mt-app .editor-page .tool-button .el-icon { font-size: 17px; }
+#mt-app .editor-page :is(.rail-icon, .tool-button) { color: var(--mt-icon-fg); }
+#mt-app .editor-page :is(.rail-icon, .tool-button):hover:not(:disabled) { color: var(--mt-fg); background: var(--mt-icon-hover-bg); }
+#mt-app .editor-page :is(.rail-icon, .tool-button).active,
+#mt-app .editor-page :is(.rail-icon, .tool-button).active:hover:not(:disabled) { color: var(--mt-accent); background: var(--mt-icon-active-bg); }
+#mt-app .editor-page .tool-button .el-icon { font-size: 18px; }
 #mt-app .editor-page .toc-row { font-size: 14px; }
 #mt-app .editor-page .toc-entry.root .toc-row { font-size: 15px; }
 #mt-app .editor-page .toolbar-group:last-child { position: sticky; right: 0; background: var(--mt-glass-bg); backdrop-filter: var(--mt-glass-filter); border-radius: 8px; }
@@ -47,7 +62,7 @@ html.native-glass:has(.editor-page),
   background: transparent;
 }
 .native-glass #mt-app .editor-page :is(.title-bar, .side-bar) {
-  background: color-mix(in srgb, var(--mt-sidebar-bg) 45%, transparent);
+  background: color-mix(in srgb, var(--mt-sidebar-bg) var(--mt-chrome-opacity), transparent);
   backdrop-filter: none;
 }
 

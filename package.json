@@ -1,6 +1,6 @@
 {
   "name": "marktext-rs",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "private": true,
   "description": "MarkText rewritten with Tauri 2 + Vue 3 + Rust",
   "type": "module",
@@ -26,6 +26,7 @@
     "@codemirror/view": "^6.43.0",
     "@element-plus/icons-vue": "^2.3.1",
     "@lezer/highlight": "^1.2.3",
+    "@lucide/vue": "^1.43.0",
     "@marktext/file-icons": "^1.0.6",
     "@tauri-apps/api": "^2.1.1",
     "@tauri-apps/plugin-cli": "^2.0.0",

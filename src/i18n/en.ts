@@ -5,6 +5,8 @@
  */
 export default {
   chrome: {
+    hideSidebar: 'Hide sidebar',
+    showSidebar: 'Show sidebar',
     file: 'File',
     edit: 'Edit',
     paragraph: 'Paragraph',

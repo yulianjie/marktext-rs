@@ -3,6 +3,8 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { platform } from '@tauri-apps/plugin-os'
 import { Minus, FullScreen, CopyDocument, Close } from '@element-plus/icons-vue'
+import { PanelLeftClose, PanelLeftOpen } from '@lucide/vue'
+import { useLayoutStore } from '@/stores/layout'
 import { getAppIconOption } from '@/services/app-icon'
 import { popupEditorMenu } from '@/services/tauri-invoke'
 import { usePreferencesStore } from '@/stores/preferences'
@@ -11,6 +13,7 @@ import { useI18n } from '@/i18n'
 
 const { t } = useI18n()
 const prefs = usePreferencesStore()
+const layout = useLayoutStore()
 const logo = computed(() => getAppIconOption(prefs.appIcon).src)
 const notify = useNotificationStore()
 const native = '__TAURI_INTERNALS__' in window
@@ -90,6 +93,13 @@ onBeforeUnmount(() => {
         {{ menu.label }}<span class="mnemonic">({{ menu.mnemonic.toUpperCase() }})</span>
       </button>
     </nav>
+    <button type="button" class="sidebar-toggle"
+      :aria-label="t(layout.showSideBar ? 'chrome.hideSidebar' : 'chrome.showSidebar')"
+      :title="t(layout.showSideBar ? 'chrome.hideSidebar' : 'chrome.showSidebar')"
+      :aria-expanded="layout.showSideBar" aria-controls="editor-sidebar"
+      @click="layout.toggleSideBar()">
+      <component :is="layout.showSideBar ? PanelLeftClose : PanelLeftOpen" :size="20" :stroke-width="1.75" aria-hidden="true" />
+    </button>
     <div class="drag-space" data-tauri-drag-region />
     <div v-if="customChrome" class="window-controls">
       <button type="button" :aria-label="t('chrome.minimize')" :title="t('chrome.minimize')"
@@ -119,6 +129,8 @@ onBeforeUnmount(() => {
 .app-menu button:hover, .app-menu button:focus-visible { background: var(--mt-row-hover); color: var(--mt-fg); }
 button:focus-visible { outline: 2px solid var(--mt-accent); outline-offset: -2px; }
 .drag-space { flex: 1; align-self: stretch; min-width: 24px; }
+.sidebar-toggle { display: grid; place-items: center; flex: 0 0 32px; height: 32px; margin-inline: 8px; padding: 0; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--mt-icon-fg); cursor: pointer; }
+.sidebar-toggle:hover { background: var(--mt-icon-hover-bg); color: var(--mt-fg); }
 .window-controls { display: flex; height: 100%; }
 .window-controls button { display: grid; place-items: center; width: 46px; padding: 0; border: 0; background: transparent; color: var(--mt-fg); }
 .window-controls svg { width: 16px; height: 16px; }

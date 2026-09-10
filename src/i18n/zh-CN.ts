@@ -3,6 +3,8 @@
  */
 export default {
   chrome: {
+    hideSidebar: '隐藏侧边栏',
+    showSidebar: '显示侧边栏',
     file: '文件',
     edit: '编辑',
     paragraph: '段落',

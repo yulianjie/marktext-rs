@@ -165,8 +165,8 @@ onBeforeUnmount(() => {
   <section class="toc-pane" :aria-label="t('chrome.outline')">
     <header class="toc-header">
       <div><h2>{{ t('chrome.outline') }}</h2><span>{{ t('chrome.headings', { count: flat.length }) }}</span></div>
-      <button type="button" class="collapse-outline" :title="t('chrome.collapseOutline')"
-        :aria-label="t('chrome.collapseOutline')" @click="layout.setLayout({ rightColumn: '' })">
+      <button type="button" class="collapse-outline" :title="t('chrome.hideSidebar')"
+        :aria-label="t('chrome.hideSidebar')" @click="layout.toggleSideBar()">
 <DArrowLeft />
 </button>
     </header>

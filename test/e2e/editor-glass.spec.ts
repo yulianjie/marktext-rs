@@ -1,5 +1,48 @@
 import { test, expect, type Page } from '@playwright/test'
 
+test('sidebar can be hidden completely and restored from the title bar', async ({ page }) => {
+  await seed(page)
+  const editorBefore = await page.locator('.editor-column').boundingBox()
+  await page.locator('.collapse-outline').click()
+  await expect(page.locator('.side-bar')).toHaveCount(0)
+  await expect(page.locator('.sidebar-toggle')).toHaveAttribute('aria-expanded', 'false')
+  const editorAfter = await page.locator('.editor-column').boundingBox()
+  expect(editorAfter!.width).toBeGreaterThan(editorBefore!.width)
+  await page.locator('.sidebar-toggle').click()
+  await expect(page.locator('.toc-row')).toHaveCount(10)
+  await expect(page.locator('.sidebar-toggle')).toHaveAttribute('aria-expanded', 'true')
+  await page.locator('.sidebar-toggle').click()
+  await expect(page.locator('.side-bar')).toHaveCount(0)
+  await page.locator('.sidebar-toggle').click()
+  await expect(page.locator('.side-bar')).toBeVisible()
+})
+
+test('all built-in themes tint native chrome and retain readable icon states', async ({ page }) => {
+  await seed(page)
+  await page.locator('.rail-icon.active').evaluate(element => { (element as HTMLElement).style.transition = 'none' })
+  for (const theme of ['light', 'dark', 'one-dark', 'material-dark', 'graphite-light', 'ulysses-light', 'github-blue']) {
+    await page.evaluate(value => {
+      document.documentElement.dataset.theme = value
+      document.documentElement.classList.toggle('dark', value.includes('dark'))
+      document.documentElement.classList.add('native-glass')
+    }, theme)
+    const dark = theme.includes('dark')
+    await expect(page.locator('html')).toHaveCSS('color-scheme', dark ? 'dark' : 'light')
+    const alpha = await page.locator('.side-bar').evaluate(element => {
+      const ctx = document.createElement('canvas').getContext('2d')!
+      ctx.fillStyle = getComputedStyle(element).backgroundColor
+      ctx.fillRect(0, 0, 1, 1)
+      return ctx.getImageData(0, 0, 1, 1).data[3] / 255
+    })
+    expect(alpha).toBeGreaterThan(dark ? 0.93 : 0.84)
+    expect(alpha).toBeLessThan(1)
+    const active = page.locator('.rail-icon.active')
+    const selectedColor = await active.evaluate(element => getComputedStyle(element).color)
+    await active.hover()
+    await expect(active).toHaveCSS('color', selectedColor)
+  }
+})
+
 test('unsupported desktops stay opaque, including after native blur is withdrawn', async ({ page }) => {
   await seed(page)
   for (const theme of ['light', 'dark']) {
@@ -160,9 +203,9 @@ test('glass outline filters, expands, navigates and tracks real scroll', async (
   await page.locator('.muya-host').evaluate(el => { el.scrollTop = 0 })
   await page.mouse.move(1500, 1030)
   await page.screenshot({ path: 'output/design/marktext-glass-implemented.png', animations: 'disabled' })
-  await page.getByRole('button', { name: '收起目录', exact: true }).click()
+  await page.locator('.collapse-outline').click()
   await expect(page.locator('.toc-pane')).toHaveCount(0)
-  await page.locator('.rail-icon[aria-controls="toc-sidebar-panel"]').click()
+  await page.locator('.sidebar-toggle').click()
   await expect(page.locator('.toc-pane')).toBeVisible()
 })
 

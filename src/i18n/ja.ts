@@ -3,6 +3,8 @@
  */
 export default {
   chrome: {
+    hideSidebar: 'サイドバーを非表示',
+    showSidebar: 'サイドバーを表示',
     file: 'ファイル',
     edit: '編集',
     paragraph: '段落',

@@ -4,6 +4,7 @@
 /src-tauri/target
 /src-tauri/target-design
 /src-tauri/target-acrylic-check
+/src-tauri/target-ui-preview
 /src-tauri/gen
 
 # Editor / OS

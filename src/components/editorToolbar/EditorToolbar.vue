@@ -9,17 +9,11 @@
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import {
-  Aim,
-  ArrowDown,
-  EditPen,
-  Grid,
-  Link,
-  MoreFilled,
-  Picture,
-  RefreshLeft,
-  RefreshRight,
-  Search,
-} from '@element-plus/icons-vue'
+  Focus as Aim, ChevronDown as ArrowDown, PencilLine as EditPen,
+  Table as Grid, Link, Ellipsis as MoreFilled, Image as Picture,
+  Undo2 as RefreshLeft, Redo2 as RefreshRight, Search,
+  Bold, Italic, Strikethrough, Code, List, ListOrdered, ListTodo, Quote, Braces,
+} from '@lucide/vue'
 import { bus } from '@/bus'
 import { useEditorStore } from '@/stores/editor'
 import { usePreferencesStore } from '@/stores/preferences'
@@ -155,13 +149,13 @@ const paragraphActions = computed(() => [
 ])
 
 const inlineActions = computed(() => [
-  { type: 'strong', glyph: 'B', label: copy.value.bold, className: 'strong' },
-  { type: 'em', glyph: 'I', label: copy.value.italic, className: 'emphasis' },
+  { type: 'strong', icon: Bold, label: copy.value.bold, className: 'strong' },
+  { type: 'em', icon: Italic, label: copy.value.italic, className: 'emphasis' },
 ])
 
 const listActions = computed(() => [
-  { type: 'ul-bullet', glyph: '•', label: copy.value.bulletList },
-  { type: 'ol-order', glyph: '1.', label: copy.value.orderedList },
+  { type: 'ul-bullet', icon: List, label: copy.value.bulletList },
+  { type: 'ol-order', icon: ListOrdered, label: copy.value.orderedList },
 ])
 
 function emitParagraph(type: string): void {
@@ -374,12 +368,12 @@ onBeforeUnmount(() => {
             @mousedown.prevent
             @click="emitFormat(action.type)"
           >
-            {{ action.glyph }}
+            <component :is="action.icon" aria-hidden="true" />
           </button>
           <button
             v-for="action in [
-              { type: 'del', glyph: 'S', label: copy.strike, className: 'strike' },
-              { type: 'inline_code', glyph: '</>', label: copy.inlineCode, className: 'code' },
+              { type: 'del', icon: Strikethrough, label: copy.strike, className: 'strike' },
+              { type: 'inline_code', icon: Code, label: copy.inlineCode, className: 'code' },
             ]"
             :key="action.type"
             type="button"
@@ -393,7 +387,7 @@ onBeforeUnmount(() => {
             @mousedown.prevent
             @click="emitFormat(action.type)"
           >
-            {{ action.glyph }}
+            <component :is="action.icon" aria-hidden="true" />
           </button>
           <button
             type="button"
@@ -426,7 +420,7 @@ onBeforeUnmount(() => {
             @mousedown.prevent
             @click="emitParagraph(action.type)"
           >
-            {{ action.glyph }}
+            <component :is="action.icon" aria-hidden="true" />
           </button>
           <button
             type="button"
@@ -438,7 +432,7 @@ onBeforeUnmount(() => {
             @mousedown.prevent
             @click="emitParagraph('ul-task')"
           >
-            ☑
+            <ListTodo aria-hidden="true" />
           </button>
         </div>
 
@@ -447,8 +441,8 @@ onBeforeUnmount(() => {
         <div class="toolbar-group toolbar-expanded-action" role="group" :aria-label="copy.moreInsert">
           <button
             v-for="action in [
-              { type: 'blockquote', glyph: '❞', label: copy.quote },
-              { type: 'pre', glyph: '{ }', label: copy.codeBlock },
+              { type: 'blockquote', icon: Quote, label: copy.quote },
+              { type: 'pre', icon: Braces, label: copy.codeBlock },
             ]"
             :key="action.type"
             type="button"
@@ -460,7 +454,7 @@ onBeforeUnmount(() => {
             @mousedown.prevent
             @click="emitParagraph(action.type)"
           >
-            {{ action.glyph }}
+            <component :is="action.icon" aria-hidden="true" />
           </button>
           <button
             type="button"
@@ -572,7 +566,7 @@ onBeforeUnmount(() => {
           data-action="format:del"
           @click="runMenuAction(() => emitFormat('del'), $event)"
         >
-          <span class="menu-glyph strike" aria-hidden="true">S</span><span>{{ copy.strike }}</span>
+          <Strikethrough aria-hidden="true" /><span>{{ copy.strike }}</span>
         </button>
         <button
           type="button"
@@ -584,7 +578,7 @@ onBeforeUnmount(() => {
           data-action="format:inline_code"
           @click="runMenuAction(() => emitFormat('inline_code'), $event)"
         >
-          <span class="menu-glyph code" aria-hidden="true">&lt;/&gt;</span><span>{{ copy.inlineCode }}</span>
+          <Code aria-hidden="true" /><span>{{ copy.inlineCode }}</span>
         </button>
         <button
           v-for="action in listActions"
@@ -596,7 +590,7 @@ onBeforeUnmount(() => {
           :data-action="`paragraph:${action.type}`"
           @click="runMenuAction(() => emitParagraph(action.type), $event)"
         >
-          <span class="menu-glyph" aria-hidden="true">{{ action.glyph }}</span><span>{{ action.label }}</span>
+          <component :is="action.icon" aria-hidden="true" /><span>{{ action.label }}</span>
         </button>
 
         <div class="menu-separator" role="separator" />
@@ -613,9 +607,9 @@ onBeforeUnmount(() => {
         </button>
         <button
           v-for="action in [
-            { type: 'ul-task', glyph: '☑', label: copy.taskList },
-            { type: 'blockquote', glyph: '❞', label: copy.quote },
-            { type: 'pre', glyph: '{ }', label: copy.codeBlock },
+            { type: 'ul-task', icon: ListTodo, label: copy.taskList },
+            { type: 'blockquote', icon: Quote, label: copy.quote },
+            { type: 'pre', icon: Braces, label: copy.codeBlock },
           ]"
           :key="action.type"
           type="button"
@@ -625,7 +619,7 @@ onBeforeUnmount(() => {
           :data-action="`paragraph:${action.type}`"
           @click="runMenuAction(() => emitParagraph(action.type), $event)"
         >
-          <span class="menu-glyph" aria-hidden="true">{{ action.glyph }}</span><span>{{ action.label }}</span>
+          <component :is="action.icon" aria-hidden="true" /><span>{{ action.label }}</span>
         </button>
         <button
           type="button"
@@ -660,7 +654,7 @@ onBeforeUnmount(() => {
           data-action="toggle-source"
           @click="runMenuAction(toggleSource, $event)"
         >
-          <span class="menu-glyph code" aria-hidden="true">&lt;/&gt;</span><span>{{ copy.source }}</span>
+          <Code aria-hidden="true" /><span>{{ copy.source }}</span>
         </button>
         <button
           type="button"
@@ -747,8 +741,8 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   padding: 0;
   border: 1px solid transparent;
   border-radius: 7px;
@@ -772,6 +766,14 @@ onBeforeUnmount(() => {
   border-color: color-mix(in srgb, var(--mt-accent, #0366d6) 30%, transparent);
 }
 
+.tool-button :deep(svg), .menu-item :deep(svg) {
+  width: 18px;
+  height: 18px;
+  stroke-width: 1.75;
+  flex-shrink: 0;
+}
+.trigger-chevron :deep(svg) { width: 12px; height: 12px; }
+
 .tool-button:focus-visible {
   outline: 2px solid var(--mt-accent, #0366d6);
   outline-offset: 1px;
@@ -789,7 +791,7 @@ onBeforeUnmount(() => {
 }
 
 .text-button {
-  width: 34px;
+  width: 32px;
   font-size: 13px;
   font-weight: 650;
   letter-spacing: -0.01em;
@@ -857,7 +859,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 10px;
   width: 100%;
-  min-height: 34px;
+  min-height: 32px;
   padding: 5px 9px;
   border: 1px solid transparent;
   border-radius: 6px;
@@ -870,6 +872,7 @@ onBeforeUnmount(() => {
 }
 
 .menu-item:hover:not(:disabled) { background: var(--mt-row-hover, #f1f3f5); }
+.menu-item > :deep(svg),
 .menu-item > .el-icon,
 .menu-glyph { width: 22px; flex: 0 0 22px; text-align: center; }
 .menu-glyph { font-weight: 650; }
