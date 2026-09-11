@@ -10,9 +10,10 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { usePreferencesStore } from './preferences'
 
-const SIDEBAR_DEFAULT = 320
-const SIDEBAR_MIN = 220
-const SIDEBAR_MAX = 800
+const SIDEBAR_DEFAULT = 220
+export const SIDEBAR_MIN = 184
+export const SIDEBAR_MAX = 800
+const SIDEBAR_RAIL_WIDTH = 44
 const STORAGE_KEY = 'mt:sideBarWidth'
 
 function readStoredWidth(): number {
@@ -53,11 +54,11 @@ export const useLayoutStore = defineStore('layout', () => {
   })
   const sideBarWidth = ref(readStoredWidth())
 
-  /** Effective width includes the 64px activity rail. */
+  /** Effective width includes the 44px activity rail. */
   const effectiveSideBarWidth = computed(() => {
     if (!showSideBar.value) return 0
-    if (!rightColumn.value) return 64
-    return sideBarWidth.value + 64
+    if (!rightColumn.value) return SIDEBAR_RAIL_WIDTH
+    return sideBarWidth.value + SIDEBAR_RAIL_WIDTH
   })
 
   function setLayout(patch: Partial<{

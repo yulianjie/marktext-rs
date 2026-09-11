@@ -224,7 +224,7 @@ export async function applyPreferencesToDom(): Promise<void> {
         setRootProp('--mt-editor-font', editorFont)
         setRootProp('--mt-code-font', codeFont)
         setRootProp('--mt-code-font-size', `${codeFontSize}px`)
-        setRootProp('--mt-editor-line-width', lineWidth || '860px')
+        setRootProp('--mt-editor-line-width', lineWidth || 'none')
         setRootProp('--mt-text-direction', direction)
         setRootProp('--mt-base-font-size', '14px')
       },

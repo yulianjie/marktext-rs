@@ -778,9 +778,9 @@ onBeforeUnmount(() => {
           <SourceCodePane v-show="editor.sourceCodeMode" />
           <FindReplaceBar />
         </div>
-        <StatusBar v-if="layout.showStatusBar" />
       </div>
     </div>
+    <StatusBar v-if="layout.showStatusBar" />
     <CommandPalette />
     <AboutDialog />
     <RenameDialog />
@@ -801,7 +801,11 @@ onBeforeUnmount(() => {
   height: 100%;
   background: var(--mt-bg);
   position: relative;
+  border-radius: var(--mt-radius-window);
+  overflow: hidden;
 }
+.editor-page:has(.title-bar.is-maximized),
+.editor-page:has(.mac-title-bar) { border-radius: 0; }
 .page-body {
   display: flex;
   flex: 1;

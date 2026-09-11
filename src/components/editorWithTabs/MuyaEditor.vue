@@ -740,18 +740,42 @@ onBeforeUnmount(() => {
   flex: 1;
   overflow: auto;
   background: var(--mt-bg, #fff);
-  padding: 32px 0;
+  padding: 24px 0;
   font-family: var(--mt-editor-font);
   font-size: var(--mt-font-size);
   line-height: var(--mt-line-height);
   color: var(--mt-fg);
 }
 .muya-container {
-  max-width: var(--mt-editor-line-width, 860px);
+  box-sizing: border-box;
+  max-width: var(--mt-editor-line-width, none);
   margin: 0 auto;
-  padding: 0 64px;
+  padding: 0 24px;
   outline: none;
 }
+/* Keep document typography local to Muya; never style diagram label elements. */
+.muya-container :deep(h1.ag-paragraph) {
+  margin: 22px 0 13px;
+  font-size: 1.75em;
+  line-height: 1.4;
+  font-weight: 600;
+}
+.muya-container :deep(h2.ag-paragraph) {
+  margin: 22px 0 8px;
+  font-size: 1.1875em;
+  line-height: 1.5;
+  font-weight: 600;
+}
+.muya-container :deep(h3.ag-paragraph) { font-size: 1.125em; }
+.muya-container :deep(p.ag-paragraph) { margin-block: 0 12px; }
+.muya-container :deep(blockquote.ag-paragraph) {
+  margin: 18px 0;
+  padding: 3px 0 3px 14px;
+  border-left: 3px solid var(--mt-accent);
+  color: var(--mt-fg-muted);
+}
+.muya-container :deep(blockquote.ag-paragraph > :last-child) { margin-bottom: 0; }
+.muya-container :deep(#ag-editor-id > :first-child) { margin-top: 0; }
 .muya-host :deep(code),
 .muya-host :deep(pre) {
   font-family: var(--mt-code-font);

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * Sidebar — icon rail (40px) on the left, optional content panel on the
+ * Sidebar — icon rail (44px) on the left, optional content panel on the
  * right. Clicking an active icon collapses to just-the-rail; clicking
  * another icon switches the panel.
  *
@@ -9,7 +9,7 @@
  */
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { Folder, ListTree, Search, Settings as Setting } from '@lucide/vue'
-import { useLayoutStore, type RightColumn } from '@/stores/layout'
+import { useLayoutStore, SIDEBAR_MIN, SIDEBAR_MAX, type RightColumn } from '@/stores/layout'
 import { openSettings } from '@/services/tauri-invoke'
 import { useI18n } from '@/i18n'
 import TreePane from './TreePane.vue'
@@ -20,8 +20,6 @@ const layout = useLayoutStore()
 const { t } = useI18n()
 
 const panelWidth = computed(() => layout.sideBarWidth)
-const SIDEBAR_MIN = 220
-const SIDEBAR_MAX = 800
 const KEYBOARD_RESIZE_STEP = 16
 
 interface RailItem { key: RightColumn; icon: typeof Folder; titleKey: string }
@@ -99,7 +97,7 @@ onBeforeUnmount(endResize)
         :aria-controls="`${item.key}-sidebar-panel`"
         @click="switchTo(item.key)"
       >
-        <component :is="item.icon" :size="20" :stroke-width="1.75" aria-hidden="true" />
+        <component :is="item.icon" :size="16" :stroke-width="1.6" aria-hidden="true" />
       </button>
       <div class="spacer" />
       <button
@@ -109,7 +107,7 @@ onBeforeUnmount(endResize)
         :aria-label="t('sideBar.preferences')"
         @click="openSettings"
       >
-        <Setting :size="20" :stroke-width="1.75" aria-hidden="true" />
+        <Setting :size="16" :stroke-width="1.6" aria-hidden="true" />
       </button>
     </div>
     <div
@@ -144,28 +142,32 @@ onBeforeUnmount(endResize)
   display: flex;
   height: 100%;
   flex-shrink: 0;
-  border-right: 1px solid var(--mt-border);
+  background: var(--mt-glass-bg);
 }
 .rail {
-  width: 45px;
-  background: var(--mt-sidebar-bg);
+  box-sizing: border-box;
+  width: 44px;
+  flex-shrink: 0;
+  background: transparent;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 10px 0;
-  gap: 6px;
+  padding: 7px 0;
+  gap: 9px;
   border-right: 1px solid var(--mt-border);
 }
 .spacer { flex: 1; }
 .rail-icon {
   box-sizing: border-box;
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  position: relative;
   border: none;
   background: transparent;
   color: var(--mt-fg-muted);
   cursor: pointer;
-  border-radius: 8px;
+  border-radius: var(--mt-radius-control);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -176,22 +178,25 @@ onBeforeUnmount(endResize)
   color: var(--mt-fg);
 }
 .rail-icon.active {
-  background: color-mix(in srgb, var(--mt-accent) 11%, transparent);
+  background: var(--mt-icon-active-bg);
   color: var(--mt-accent);
-  box-shadow: inset 2px 0 0 var(--mt-accent);
+  box-shadow: none;
 }
+.rail-icon.active::before { content: ''; position: absolute; left: -6px; width: 2px; height: 16px; border-radius: 1px; background: var(--mt-accent); }
 .rail-icon:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--mt-accent) 72%, transparent);
   outline-offset: 1px;
 }
 
 .panel {
+  box-sizing: border-box;
   position: relative;
-  background: var(--mt-sidebar-bg);
+  max-width: max(184px, calc(100vw - 364px));
+  border-right: 1px solid var(--mt-border);
+  background: transparent;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  box-shadow: inset -1px 0 0 color-mix(in srgb, var(--mt-border) 72%, transparent);
 }
 .placeholder {
   padding: 24px 16px;

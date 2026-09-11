@@ -4,9 +4,13 @@
   --mt-glass-border: color-mix(in srgb, var(--mt-border) 75%, var(--mt-bg));
   --mt-glass-filter: none;
   --mt-chrome-opacity: 85%;
+  --mt-radius-control: 6px;
+  --mt-radius-tab: 8px;
+  --mt-radius-menu: 10px;
+  --mt-radius-window: 12px;
   --mt-icon-fg: color-mix(in srgb, var(--mt-fg) 75%, var(--mt-fg-muted));
   --mt-icon-hover-bg: color-mix(in srgb, var(--mt-fg) 8%, transparent);
-  --mt-icon-active-bg: color-mix(in srgb, var(--mt-accent) 16%, transparent);
+  --mt-icon-active-bg: color-mix(in srgb, var(--mt-accent) 10%, transparent);
   color-scheme: light;
 }
 html.dark, [data-theme='dark'], [data-theme='one-dark'], [data-theme='material-dark'] {
@@ -18,39 +22,13 @@ html.dark, [data-theme='dark'], [data-theme='one-dark'], [data-theme='material-d
   background: var(--mt-bg);
   font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
-#mt-app .editor-page .page-body { gap: 8px; padding: 8px; }
-#mt-app .editor-page .side-bar { border: 1px solid var(--mt-glass-border); border-radius: 16px; overflow: hidden; height: auto; background: var(--mt-glass-bg); backdrop-filter: var(--mt-glass-filter); }
-#mt-app .editor-page .rail { width: 62px; background: transparent; padding: 16px 0; gap: 12px; }
-#mt-app .editor-page .rail-icon { width: 40px; height: 40px; border-radius: 10px; position: relative; }
-#mt-app .editor-page .rail-icon.active { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mt-accent) 30%, transparent); background: color-mix(in srgb, var(--mt-accent) 12%, transparent); }
-#mt-app .editor-page .rail-icon.active::before { content: ''; position: absolute; left: -7px; width: 3px; height: 18px; border-radius: 3px; background: var(--mt-accent); }
-#mt-app .editor-page .rail-icon:focus-visible { outline: 2px solid var(--mt-accent); outline-offset: 1px; }
-#mt-app .editor-page .panel { background: transparent; box-shadow: none; max-width: calc(100vw - 470px); }
-#mt-app .editor-page .editor-column { border: 1px solid var(--mt-glass-border); border-radius: 16px; background: var(--mt-bg); }
-#mt-app .editor-page .tabs-bar { height: 52px; padding: 8px 10px 0; box-sizing: border-box; background: var(--mt-glass-bg); backdrop-filter: var(--mt-glass-filter); border: 0; box-shadow: none; }
-#mt-app .editor-page .tabs-scroll { gap: 5px; }
-#mt-app .editor-page .tab-shell { border: 0; min-width: 142px; border-radius: 11px 11px 0 0; background: color-mix(in srgb, var(--mt-tab-bg) 65%, transparent); }
-#mt-app .editor-page .tab-shell.active { background: color-mix(in srgb, var(--mt-bg) 92%, transparent); box-shadow: inset 0 -3px 0 var(--mt-accent); }
-#mt-app .editor-page .tab { font-size: 13px; padding-left: 16px; gap: 10px; }
-#mt-app .editor-page .new-tab { width: 40px; opacity: 1; }
-#mt-app .editor-page .editor-toolbar { height: 54px; background: var(--mt-glass-bg); backdrop-filter: var(--mt-glass-filter); border-bottom: 1px solid var(--mt-glass-border); }
-#mt-app .editor-page .tool-button { border-radius: 8px; }
+#mt-app .editor-page .editor-column { background: var(--mt-bg); }
 #mt-app .editor-page :is(.rail-icon, .tool-button) { color: var(--mt-icon-fg); }
 #mt-app .editor-page :is(.rail-icon, .tool-button):hover:not(:disabled) { color: var(--mt-fg); background: var(--mt-icon-hover-bg); }
 #mt-app .editor-page :is(.rail-icon, .tool-button).active,
 #mt-app .editor-page :is(.rail-icon, .tool-button).active:hover:not(:disabled) { color: var(--mt-accent); background: var(--mt-icon-active-bg); }
-#mt-app .editor-page .tool-button .el-icon { font-size: 18px; }
-#mt-app .editor-page .toc-row { font-size: 14px; }
-#mt-app .editor-page .toc-entry.root .toc-row { font-size: 15px; }
-#mt-app .editor-page .toolbar-group:last-child { position: sticky; right: 0; background: var(--mt-glass-bg); backdrop-filter: var(--mt-glass-filter); border-radius: 8px; }
-#mt-app .editor-page .status-bar { min-height: 32px; box-sizing: border-box; background: var(--mt-glass-bg); backdrop-filter: var(--mt-glass-filter); border-color: var(--mt-glass-border); font-size: 11px; }
-#mt-app .editor-page .muya-host { padding-block: 36px; }
-#mt-app .editor-page .muya-container { padding-inline: clamp(24px, 4vw, 64px); }
-#mt-app .editor-page .muya-host :is(pre, figure[data-role='CODE']) { border-radius: 10px; }
-
-@media (max-width: 1050px) {
-  #mt-app .editor-page .tab-shell { min-width: 120px; }
-}
+#mt-app .editor-page .tool-button .el-icon { font-size: 16px; }
+#mt-app .editor-page .muya-host :is(pre, figure[data-role='CODE']) { border-radius: var(--mt-radius-tab); }
 /* Native Acrylic / Vibrancy blur pixels outside the webview. Every ancestor must let
  * those pixels through; CSS backdrop-filter alone cannot sample the desktop.
  * Utility windows and browser previews retain their opaque background. */

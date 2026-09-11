@@ -355,6 +355,7 @@ onBeforeUnmount(() => {
   background: var(--mt-row-hover, #f6f8fa);
 }
 .cm-host :deep(.cm-content) {
-  padding: 16px 0;
+  padding: 24px 0;
 }
+.cm-host :deep(.cm-line) { padding-inline: 12px 24px; }
 </style>

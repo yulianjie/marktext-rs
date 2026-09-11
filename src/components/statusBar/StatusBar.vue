@@ -142,7 +142,7 @@ const modeLabel = computed(() => (
 
       <div class="status-section state-section">
         <span
-          class="status-chip save-state"
+          class="status-label save-state"
           :class="{ dirty: file && !file.isSaved, empty: !file }"
           data-status="save-state"
           role="status"
@@ -156,11 +156,11 @@ const modeLabel = computed(() => (
         <span v-if="prefs.autoSave" class="status-hint auto-save" data-status="auto-save">
           {{ autoSaveLabel }}
         </span>
-        <span class="status-chip mode-chip" data-status="editor-mode">{{ modeLabel }}</span>
-        <span v-if="prefs.focus" class="status-chip mode-chip" data-status="focus-mode">
+        <span class="status-label mode-label" data-status="editor-mode">{{ modeLabel }}</span>
+        <span v-if="prefs.focus" class="status-label mode-label" data-status="focus-mode">
           {{ copy.focusMode }}
         </span>
-        <span v-if="prefs.typewriter" class="status-chip mode-chip" data-status="typewriter-mode">
+        <span v-if="prefs.typewriter" class="status-label mode-label" data-status="typewriter-mode">
           {{ copy.typewriterMode }}
         </span>
       </div>
@@ -170,16 +170,17 @@ const modeLabel = computed(() => (
 
 <style scoped>
 .status-bar {
+  box-sizing: border-box;
   container-type: inline-size;
   flex: 0 0 auto;
   min-width: 0;
-  height: 30px;
+  height: 24px;
   overflow-x: auto;
   overflow-y: hidden;
   color: var(--mt-fg-muted, #6a737d);
   background: var(--mt-sidebar-bg, #fafbfc);
   border-top: 1px solid var(--mt-border, #e1e4e8);
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1;
   scrollbar-width: none;
   user-select: none;
@@ -194,13 +195,13 @@ const modeLabel = computed(() => (
   width: max-content;
   min-width: 100%;
   height: 100%;
-  padding: 0 10px;
+  padding: 0 12px;
   box-sizing: border-box;
 }
 
 .status-section,
 .status-item,
-.status-chip,
+.status-label,
 .status-hint {
   display: inline-flex;
   align-items: center;
@@ -211,13 +212,13 @@ const modeLabel = computed(() => (
 .status-item { gap: 4px; white-space: nowrap; }
 .status-value,
 .status-item strong {
-  color: var(--mt-fg, #24292e);
-  font-weight: 600;
+  color: inherit;
+  font-weight: 400;
 }
 
 .status-separator {
   width: 1px;
-  height: 13px;
+  height: 10px;
   background: var(--mt-border, #dfe2e5);
 }
 
@@ -229,14 +230,14 @@ const modeLabel = computed(() => (
 
 .status-spacer { flex: 1 0 18px; }
 
-.state-section { gap: 7px; }
-.status-chip {
-  min-height: 20px;
-  padding: 0 7px;
-  border: 1px solid var(--mt-border, #e1e4e8);
-  border-radius: 999px;
+.state-section { gap: 12px; }
+.status-label {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
   white-space: nowrap;
-  background: color-mix(in srgb, var(--mt-bg, #fff) 88%, transparent);
+  background: transparent;
+  cursor: default;
 }
 
 .status-hint {
@@ -245,20 +246,22 @@ const modeLabel = computed(() => (
   font-size: 11px;
 }
 
-.save-state { gap: 5px; }
+.save-state { gap: 6px; }
 .state-dot {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
   background: #2da44e;
 }
 .save-state.dirty .state-dot { background: #bf8700; }
 .save-state.empty .state-dot { background: var(--mt-fg-muted, #8c959f); }
 
-.mode-chip {
-  color: var(--mt-accent, #0366d6);
-  border-color: color-mix(in srgb, var(--mt-accent, #0366d6) 26%, var(--mt-border, #e1e4e8));
-  background: color-mix(in srgb, var(--mt-accent, #0366d6) 7%, transparent);
+.mode-label { gap: 12px; }
+.mode-label::before {
+  content: '';
+  width: 1px;
+  height: 10px;
+  background: var(--mt-border);
 }
 
 .visually-hidden {
@@ -286,11 +289,11 @@ const modeLabel = computed(() => (
 }
 
 @container (max-width: 420px) {
-  .mode-chip:not(:last-child) { display: none; }
+  .mode-label:not(:last-child) { display: none; }
 }
 
 @media (forced-colors: active) {
-  .state-dot { forced-color-adjust: none; }
-  .status-chip { border-color: CanvasText; }
+  .state-dot { background: CanvasText; }
+  .mode-label::before { background: CanvasText; }
 }
 </style>

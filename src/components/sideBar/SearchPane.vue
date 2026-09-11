@@ -195,13 +195,14 @@ function hitAriaLabel(path: string, hit: SearchHit): string {
   display: flex;
   align-items: center;
   border: 1px solid var(--mt-border, #d1d5da);
-  border-radius: 4px;
+  border-radius: var(--mt-radius-tab);
   padding: 4px 8px;
-  background: var(--mt-row-active, #fff);
+  background: var(--mt-bg, #fff);
 }
 .input-row:focus-within { border-color: var(--mt-accent, #0366d6); }
 .leading { color: var(--mt-fg-muted, #6a737d); margin-right: 6px; font-size: 14px; }
 .search-input {
+  min-width: 0;
   flex: 1;
   border: none;
   outline: none;

@@ -9,6 +9,7 @@
 import { nextTick, ref } from 'vue'
 import { useEditorStore } from '@/stores/editor'
 import { Close, Plus } from '@element-plus/icons-vue'
+import { FileText } from '@lucide/vue'
 import { t } from '@/i18n'
 import { bus } from '@/bus'
 import { writeText } from '@tauri-apps/plugin-clipboard-manager'
@@ -191,6 +192,7 @@ function onDragEnd() {
           @keydown="onTabKeydown(tab.id, $event)"
         >
           <span v-if="!tab.isSaved" class="dot" aria-hidden="true" />
+          <FileText v-else class="file-icon" :size="13" :stroke-width="1.6" aria-hidden="true" />
           <span class="label">{{ tab.filename }}</span>
         </button>
         <button
@@ -211,11 +213,12 @@ function onDragEnd() {
 
 <style scoped>
 .tabs-bar {
+  box-sizing: border-box;
   display: flex;
-  height: 35px;
+  height: 32px;
+  padding: 3px 6px 0;
   background: var(--mt-tab-bg);
   border-bottom: 1px solid var(--mt-border);
-  box-shadow: var(--mt-shadow-tabs);
   flex-shrink: 0;
   position: relative;
   z-index: 2;
@@ -224,26 +227,33 @@ function onDragEnd() {
   display: flex;
   overflow-x: auto;
   overflow-y: hidden;
-  flex: 1;
+  flex: 0 1 auto;
+  min-width: 0;
+  gap: 3px;
+  scrollbar-width: none;
 }
-.tabs-scroll::-webkit-scrollbar { height: 3px; }
-.tabs-scroll::-webkit-scrollbar-thumb { background: var(--mt-border, #d1d5da); }
+.tabs-scroll::-webkit-scrollbar { display: none; }
 
 .tab-shell {
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   height: 100%;
-  border-right: 1px solid var(--mt-border);
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: var(--mt-radius-tab) var(--mt-radius-tab) 0 0;
+  flex-shrink: 0;
   min-width: 100px;
-  max-width: 280px;
+  max-width: 190px;
   position: relative;
   transition: background-color 100ms, box-shadow 100ms;
 }
 .tab-shell:hover { background: var(--mt-row-hover); }
 .tab-shell.active {
   background: var(--mt-tab-bg-active);
-  box-shadow: inset 0 -2px 0 var(--mt-accent);
+  border-color: var(--mt-border);
 }
+.tab-shell.active::after { content: ''; position: absolute; bottom: 0; left: 7px; right: 7px; height: 2px; border-radius: 1px; background: var(--mt-accent); pointer-events: none; }
 .tab-shell.dragging { opacity: 0.5; }
 .tab-shell.drop-target { box-shadow: inset 3px 0 0 var(--mt-accent); }
 .tab {
@@ -252,8 +262,8 @@ function onDragEnd() {
   align-self: stretch;
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 0 4px 0 10px;
+  gap: 6px;
+  padding: 0 4px 0 8px;
   border: 0;
   color: var(--mt-fg-muted);
   background: transparent;
@@ -264,8 +274,9 @@ function onDragEnd() {
 }
 .tab-shell.active .tab {
   color: var(--mt-fg);
-  font-weight: 550;
+  font-weight: 400;
 }
+.file-icon { color: var(--mt-fg-muted); flex-shrink: 0; }
 .tab:focus-visible,
 .close:focus-visible,
 .new-tab:focus-visible {
@@ -280,11 +291,10 @@ function onDragEnd() {
   white-space: nowrap;
 }
 .dot {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   background: var(--mt-accent);
   border-radius: 50%;
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--mt-accent) 55%, var(--mt-bg));
   flex: 0 0 auto;
 }
 .close {
@@ -300,9 +310,7 @@ function onDragEnd() {
   color: var(--mt-fg-muted);
   cursor: pointer;
   padding: 0;
-  border-radius: 5px;
-  opacity: 0;
-  pointer-events: none;
+  border-radius: var(--mt-radius-control);
   transition: opacity 100ms, background-color 100ms, color 100ms;
 }
 .tab-shell:hover .close,
@@ -318,11 +326,17 @@ function onDragEnd() {
   background: transparent;
   color: var(--mt-fg-muted);
   cursor: pointer;
-  width: 36px;
+  width: 28px;
+  height: 26px;
+  flex: 0 0 28px;
+  align-self: center;
+  margin-left: 4px;
+  padding: 0;
+  border-radius: var(--mt-radius-control);
   display: flex;
   align-items: center;
   justify-content: center;
-  opacity: 0.62;
+  opacity: 1;
   transition: opacity 100ms;
 }
 .tabs-bar:hover .new-tab,

@@ -345,7 +345,6 @@ onBeforeUnmount(() => {
             @click="toggleToolbarMenu('paragraph', $event)"
             @keydown.down.prevent="openToolbarMenu('paragraph', true)"
           >
-            <span class="paragraph-glyph" aria-hidden="true">P</span>
             <span class="paragraph-label">{{ copy.paragraph }}</span>
             <el-icon class="trigger-chevron" aria-hidden="true"><ArrowDown /></el-icon>
           </button>
@@ -685,13 +684,13 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .editor-toolbar {
+  box-sizing: border-box;
   container-type: inline-size;
   flex: 0 0 auto;
   min-width: 0;
-  height: 44px;
+  height: 34px;
   color: var(--mt-fg-muted, #586069);
   background: var(--mt-bg, #fff);
-  background: color-mix(in srgb, var(--mt-bg, #fff) 96%, var(--mt-accent, #0366d6) 4%);
   border-bottom: 1px solid var(--mt-border, #e1e4e8);
   user-select: none;
 }
@@ -709,11 +708,11 @@ onBeforeUnmount(() => {
 .toolbar-content {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   width: max-content;
   min-width: 100%;
   height: 100%;
-  padding: 0 9px;
+  padding: 0 7px;
   box-sizing: border-box;
   justify-content: flex-start;
 }
@@ -721,17 +720,17 @@ onBeforeUnmount(() => {
 .toolbar-group {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 1px;
   flex: 0 0 auto;
 }
 
 /* Only the search/more group consumes spare space, never the editing groups. */
-.toolbar-group:last-child { margin-inline-start: auto; }
+.toolbar-group:last-child { margin-inline-start: auto; position: sticky; right: 0; background: var(--mt-bg); }
 
 .toolbar-divider {
   width: 1px;
-  height: 22px;
-  margin: 0 3px;
+  height: 18px;
+  margin: 0 2px;
   flex: 0 0 auto;
   background: var(--mt-border, #dfe2e5);
 }
@@ -741,11 +740,11 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 27px;
+  height: 27px;
   padding: 0;
   border: 1px solid transparent;
-  border-radius: 7px;
+  border-radius: var(--mt-radius-control);
   color: inherit;
   background: transparent;
   font: inherit;
@@ -767,9 +766,9 @@ onBeforeUnmount(() => {
 }
 
 .tool-button :deep(svg), .menu-item :deep(svg) {
-  width: 18px;
-  height: 18px;
-  stroke-width: 1.75;
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.6;
   flex-shrink: 0;
 }
 .trigger-chevron :deep(svg) { width: 12px; height: 12px; }
@@ -791,7 +790,7 @@ onBeforeUnmount(() => {
 }
 
 .text-button {
-  width: 32px;
+  width: 27px;
   font-size: 13px;
   font-weight: 650;
   letter-spacing: -0.01em;
@@ -809,15 +808,9 @@ onBeforeUnmount(() => {
 .paragraph-trigger {
   justify-content: flex-start;
   width: auto;
-  min-width: 112px;
-  padding: 0 7px 0 9px;
+  min-width: 88px;
+  padding: 0 6px;
   gap: 7px;
-}
-
-.paragraph-glyph {
-  min-width: 20px;
-  color: var(--mt-fg, #24292e);
-  font-weight: 700;
 }
 
 .paragraph-label {
@@ -847,7 +840,7 @@ onBeforeUnmount(() => {
   color: var(--mt-fg, #24292e);
   background: var(--mt-bg, #fff);
   border: 1px solid var(--mt-border, #dfe2e5);
-  border-radius: 9px;
+  border-radius: var(--mt-radius-menu);
   box-shadow: 0 10px 28px rgb(0 0 0 / 16%);
   user-select: none;
 }
@@ -900,30 +893,29 @@ onBeforeUnmount(() => {
 
 .compact-menu-action { display: flex; }
 
-@container (max-width: 820px) {
-  .tool-button { width: 32px; }
-  .paragraph-trigger { width: auto; min-width: 96px; }
-  .toolbar-content { gap: 2px; padding-inline: 8px; }
-  .toolbar-group { gap: 2px; }
-  .toolbar-divider { margin-inline: 2px; }
+@container (max-width: 699px) {
+  .tool-button { width: 25px; }
+  .paragraph-trigger { width: auto; min-width: 76px; }
+  .toolbar-content { gap: 2px; padding-inline: 5px; }
+  .toolbar-divider { margin-inline: 1px; }
 }
 
-/* The complete compact toolbar needs 689px, including search and separators. */
-@container (max-width: 699px) {
+/* Preserve all controls at normal widths; More retains every folded action. */
+@container (max-width: 599px) {
   .toolbar-expanded-action { display: none; }
 }
 
-@container (max-width: 459px) {
+@container (max-width: 419px) {
   .compact-collapsible { display: none; }
-  .paragraph-trigger { min-width: 88px; }
+  .paragraph-trigger { min-width: 64px; }
   .paragraph-label { max-width: 50px; }
   .toolbar-content { gap: 2px; padding-inline: 6px; }
   .toolbar-divider { margin-inline: 1px; }
 }
 
 @container (max-width: 390px) {
-  .paragraph-trigger { min-width: 44px; width: 44px; padding-inline: 7px; }
-  .paragraph-label { display: none; }
+  .paragraph-trigger { min-width: 56px; padding-inline: 5px; }
+  .paragraph-label { max-width: 36px; }
   .toolbar-divider { display: none; }
 }
 
