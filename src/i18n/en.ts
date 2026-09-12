@@ -4,6 +4,37 @@
  * Keys are nested by feature area. Mirror the same shape in `zh-CN.ts` and `ja.ts`.
  */
 export default {
+  quickInsert: {
+    hint: 'Type @ to insert',
+    noResults: 'No results',
+    heading: 'Heading {level}',
+    headingDescription: '{marker} Heading text',
+    groups: {
+      'basic block': 'BASIC BLOCKS',
+      header: 'HEADINGS',
+      'advanced block': 'ADVANCED BLOCKS',
+      'list block': 'LISTS',
+      diagram: 'DIAGRAMS',
+    },
+    items: {
+      paragraph: { title: 'Paragraph', description: 'Plain text paragraph' },
+      hr: { title: 'Horizontal Line', description: '--- Separate sections' },
+      'front-matter': { title: 'Front Matter', description: 'Document metadata' },
+      table: { title: 'Table', description: 'Arrange data in rows and columns' },
+      mathblock: { title: 'Display Math', description: 'A standalone LaTeX equation' },
+      html: { title: 'HTML Block', description: 'Custom HTML content' },
+      pre: { title: 'Code Block', description: 'Code with syntax highlighting' },
+      blockquote: { title: 'Quote Block', description: '> Quoted text' },
+      'ol-order': { title: 'Ordered List', description: '1. Numbered items' },
+      'ul-bullet': { title: 'Bullet List', description: '- Bulleted items' },
+      'ul-task': { title: 'To-do List', description: '- [ ] Tasks with checkboxes' },
+      'vega-lite': { title: 'Vega Chart', description: 'Data visualization with Vega-Lite' },
+      flowchart: { title: 'Flow Chart', description: 'Flowchart with flowchart.js' },
+      sequence: { title: 'Sequence Diagram', description: 'Interactions in time order' },
+      plantuml: { title: 'PlantUML Diagram', description: 'UML diagrams with PlantUML' },
+      mermaid: { title: 'Mermaid', description: 'Diagrams with Mermaid' },
+    },
+  },
   chrome: {
     hideSidebar: 'Hide sidebar',
     showSidebar: 'Show sidebar',

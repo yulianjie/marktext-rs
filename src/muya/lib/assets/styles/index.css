@@ -64,8 +64,8 @@ mark::after {
 }
 
 div.ag-show-quick-insert-hint p.ag-paragraph.ag-active > span.ag-paragraph-content:first-of-type:empty::after {
-  content: 'Type @ to insert';
-  color: var(--editorColor10);
+  content: var(--muya-quick-insert-hint, 'Type @ to insert');
+  color: var(--editorColor50);
 }
 
 .ag-paragraph {

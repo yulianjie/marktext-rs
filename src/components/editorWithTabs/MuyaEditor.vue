@@ -65,11 +65,12 @@ import { bus } from '@/bus'
 
 const editor = useEditorStore()
 const prefs = usePreferencesStore()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const editorRoot = ref<HTMLDivElement | null>(null)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const muyaRef = shallowRef<any>(null)
+watch(locale, () => muyaRef.value?.quickInsert?.refresh())
 const activeBoundId = ref<string | null>(null)
 let disposePrefsApplier: (() => void) | null = null
 const contextMenuRequests = new LatestContextMenuRequest()
@@ -376,6 +377,7 @@ async function construct() {
       mermaidTheme: isDark ? 'dark' : 'default',
       vegaTheme: isDark ? 'dark' : 'latimes',
       // ── host callbacks ────────────────────────────────────────
+      translate: t,
       imageAction: muyaImageAction,
       imagePathPicker: muyaImagePathPicker,
       imagePathAutoComplete: muyaImagePathAutoComplete,
@@ -728,7 +730,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="muya-host" data-editor-shortcut-scope="true">
+  <div class="muya-host" data-editor-shortcut-scope="true" :style="{ '--muya-quick-insert-hint': JSON.stringify(t('quickInsert.hint')) }">
     <div ref="editorRoot" class="muya-container">
       <div></div>
     </div>
@@ -750,7 +752,9 @@ onBeforeUnmount(() => {
   box-sizing: border-box;
   max-width: var(--mt-editor-line-width, none);
   margin: 0 auto;
-  padding: 0 24px;
+  /* Muya places the 20px paragraph control 30px to the left of the text.
+   * Reserve that gutter plus 10px inside the host's scroll boundary. */
+  padding: 0 40px;
   outline: none;
 }
 /* Keep document typography local to Muya; never style diagram label elements. */

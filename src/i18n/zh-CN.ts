@@ -2,6 +2,37 @@
  * 简体中文 locale 字符串。结构必须与 en.ts 一致。
  */
 export default {
+  quickInsert: {
+    hint: '输入 @ 插入内容',
+    noResults: '没有匹配的内容',
+    heading: '标题 {level}',
+    headingDescription: '{marker} 标题文字',
+    groups: {
+      'basic block': '基础块',
+      header: '标题',
+      'advanced block': '高级块',
+      'list block': '列表',
+      diagram: '图表',
+    },
+    items: {
+      paragraph: { title: '正文', description: '普通文本段落' },
+      hr: { title: '分隔线', description: '--- 分隔不同章节' },
+      'front-matter': { title: '文档元数据', description: '在文档开头添加属性信息' },
+      table: { title: '表格', description: '使用行和列组织数据' },
+      mathblock: { title: '数学公式', description: '独立显示的 LaTeX 公式' },
+      html: { title: 'HTML 块', description: '自定义 HTML 内容' },
+      pre: { title: '代码块', description: '带语法高亮的代码' },
+      blockquote: { title: '引用', description: '> 引用文字' },
+      'ol-order': { title: '有序列表', description: '1. 带编号的列表项' },
+      'ul-bullet': { title: '无序列表', description: '- 带项目符号的列表项' },
+      'ul-task': { title: '任务列表', description: '- [ ] 带复选框的待办事项' },
+      'vega-lite': { title: 'Vega 图表', description: '使用 Vega-Lite 展示数据' },
+      flowchart: { title: '流程图', description: '使用 flowchart.js 绘制流程' },
+      sequence: { title: '时序图', description: '按时间顺序展示交互过程' },
+      plantuml: { title: 'PlantUML 图表', description: '使用 PlantUML 绘制 UML 图' },
+      mermaid: { title: 'Mermaid 图表', description: '使用 Mermaid 绘制图表' },
+    },
+  },
   chrome: {
     hideSidebar: '隐藏侧边栏',
     showSidebar: '显示侧边栏',

@@ -2,6 +2,37 @@
  * 日本語ロケール文字列。en.ts と同じ構造を保つこと。
  */
 export default {
+  quickInsert: {
+    hint: '@ を入力して挿入',
+    noResults: '一致する項目がありません',
+    heading: '見出し {level}',
+    headingDescription: '{marker} 見出しのテキスト',
+    groups: {
+      'basic block': '基本ブロック',
+      header: '見出し',
+      'advanced block': '高度なブロック',
+      'list block': 'リスト',
+      diagram: '図表',
+    },
+    items: {
+      paragraph: { title: '段落', description: '通常のテキスト段落' },
+      hr: { title: '区切り線', description: '--- セクションを区切る線' },
+      'front-matter': { title: 'フロントマター', description: '文書のメタデータ' },
+      table: { title: '表', description: '行と列でデータを整理' },
+      mathblock: { title: '数式ブロック', description: '独立して表示する LaTeX 数式' },
+      html: { title: 'HTML ブロック', description: 'カスタム HTML コンテンツ' },
+      pre: { title: 'コードブロック', description: '構文を強調表示するコード' },
+      blockquote: { title: '引用', description: '> 引用するテキスト' },
+      'ol-order': { title: '番号付きリスト', description: '1. 番号付きの項目' },
+      'ul-bullet': { title: '箇条書きリスト', description: '- 箇条書きの項目' },
+      'ul-task': { title: 'タスクリスト', description: '- [ ] チェックボックス付きのタスク' },
+      'vega-lite': { title: 'Vega チャート', description: 'Vega-Lite でデータを可視化' },
+      flowchart: { title: 'フローチャート', description: 'flowchart.js で処理の流れを描画' },
+      sequence: { title: 'シーケンス図', description: '時間順にやり取りを表示' },
+      plantuml: { title: 'PlantUML 図', description: 'PlantUML で UML 図を描画' },
+      mermaid: { title: 'Mermaid 図', description: 'Mermaid で図表を描画' },
+    },
+  },
   chrome: {
     hideSidebar: 'サイドバーを非表示',
     showSidebar: 'サイドバーを表示',

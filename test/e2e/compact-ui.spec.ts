@@ -72,7 +72,7 @@ test('compact layout matches the approved dimensions with and without the sideba
       expect(geometry.statusWidth).toBe(width)
       expect(geometry.sidebarWidth).toBe(sidebar ? 264 : 0)
       expect(geometry.editorLeft).toBe(sidebar ? 264 : 0)
-      expect(geometry.padding).toEqual(['24px', '24px', '24px'])
+      expect(geometry.padding).toEqual(['24px', '40px', '40px'])
       expect(geometry.firstHeadingTop).toBe(24)
       expect(geometry.newTabGap).toBeGreaterThanOrEqual(0)
       expect(geometry.newTabGap).toBeLessThanOrEqual(8)

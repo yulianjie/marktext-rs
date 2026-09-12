@@ -17,13 +17,45 @@ class QuickInsert extends BaseScrollFloat {
     this.renderArray = null
     this.activeItem = null
     this.block = null
-    this.renderObj = quickInsertObj
+    this.query = ''
+    this.renderObj = this.getItems()
     this.render()
     this.listen()
   }
 
   get renderObj () {
     return this._renderObj
+  }
+
+  translate (key, fallback, params) {
+    const path = `quickInsert.${key}`
+    const text = this.muya.options.translate?.(path, params)
+    return text && text !== path ? text : fallback
+  }
+
+  getItems () {
+    const obj = deepCopy(quickInsertObj)
+    for (const items of Object.values(obj)) {
+      for (const item of items) {
+        const { title, subTitle, label } = item
+        const heading = /^heading (\d)$/.exec(label)
+        if (heading) {
+          const level = Number(heading[1])
+          item.title = this.translate('heading', title, { level })
+          item.subTitle = this.translate('headingDescription', subTitle, { marker: '#'.repeat(level) })
+        } else {
+          item.title = this.translate(`items.${label}.title`, title)
+          item.subTitle = this.translate(`items.${label}.description`, subTitle)
+        }
+        // Keep upstream English names and command IDs as search aliases.
+        item.searchText = `${item.title} ${title} ${label}`
+      }
+    }
+    return obj
+  }
+
+  refresh () {
+    if (this.status) this.search(this.query, this.activeItem?.label)
   }
 
   set renderObj (obj) {
@@ -33,6 +65,7 @@ class QuickInsert extends BaseScrollFloat {
       renderArray.push(...obj[key])
     })
     this.renderArray = renderArray
+    this.activeItem = null
     if (this.renderArray.length > 0) {
       this.activeItem = this.renderArray[0]
       const activeEle = this.getItemElement(this.activeItem)
@@ -46,7 +79,7 @@ class QuickInsert extends BaseScrollFloat {
       return _renderObj[key].length !== 0
     })
       .map(key => {
-        const titleVnode = h('div.title', key.toUpperCase())
+        const titleVnode = h('div.title', this.translate(`groups.${key}`, key.toUpperCase()))
         const items = []
         for (const item of _renderObj[key]) {
           const { title, subTitle, label, icon, shortCut } = item
@@ -79,7 +112,7 @@ class QuickInsert extends BaseScrollFloat {
       })
 
     if (children.length === 0) {
-      children = h('div.no-result', 'No result')
+      children = h('div.no-result', this.translate('noResults', 'No result'))
     }
     const vnode = h('div', children)
 
@@ -105,25 +138,29 @@ class QuickInsert extends BaseScrollFloat {
     })
   }
 
-  search (text) {
+  search (text, activeLabel) {
+    this.query = text
     const { contentState } = this.muya
     const canInserFrontMatter = contentState.canInserFrontMatter(this.block)
-    const obj = deepCopy(quickInsertObj)
+    const obj = this.getItems()
     if (!canInserFrontMatter) {
-      obj['basic block'].splice(2, 1)
+      obj['basic block'] = obj['basic block'].filter(item => item.label !== 'front-matter')
     }
     let result = obj
     if (text !== '') {
       result = {}
       Object.keys(obj).forEach(key => {
-        result[key] = filter(obj[key], text, { key: 'title' })
+        result[key] = filter(obj[key], text, { key: 'searchText' })
       })
     }
     this.renderObj = result
+    this.activeItem = this.renderArray.find(item => item.label === activeLabel) || this.activeItem
     this.render()
+    this.popper?.scheduleUpdate()
   }
 
   selectItem (item) {
+    if (!item || !this.block) return
     const { contentState } = this.muya
     this.block.text = ''
     const { key } = this.block
