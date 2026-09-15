@@ -3,7 +3,9 @@
  *
  * Keys are nested by feature area. Mirror the same shape in `zh-CN.ts` and `ja.ts`.
  */
+import agent from './agent-en'
 export default {
+  agent,
   quickInsert: {
     hint: 'Type @ to insert',
     noResults: 'No results',

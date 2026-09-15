@@ -1,7 +1,9 @@
 /**
  * 简体中文 locale 字符串。结构必须与 en.ts 一致。
  */
+import agent from './agent-zh-CN'
 export default {
+  agent,
   quickInsert: {
     hint: '输入 @ 插入内容',
     noResults: '没有匹配的内容',

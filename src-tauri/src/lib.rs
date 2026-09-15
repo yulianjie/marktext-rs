@@ -120,6 +120,12 @@ pub fn run() {
 
     builder
         .manage(app::AppState::default())
+        .manage(commands::agent::AgentState::default())
+        .on_window_event(|window, event| {
+            if matches!(event, tauri::WindowEvent::Destroyed) {
+                commands::agent::cancel_window(window.app_handle(), window.label());
+            }
+        })
         .manage(menu::FormatMenuHandles::default())
         .invoke_handler(marktext_handler!())
         .setup(move |app| {

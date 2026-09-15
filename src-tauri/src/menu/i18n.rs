@@ -76,6 +76,7 @@ pub struct MenuStrings {
 
     // view
     pub toggle_sidebar: &'static str,
+    pub toggle_agent: &'static str,
     pub toggle_tab_bar: &'static str,
     pub toggle_toolbar: &'static str,
     pub toggle_status_bar: &'static str,
@@ -165,6 +166,7 @@ pub const EN: MenuStrings = MenuStrings {
     clear_formatting: "Clear Formatting",
 
     toggle_sidebar: "Toggle Sidebar",
+    toggle_agent: "AI Assistant",
     toggle_tab_bar: "Toggle Tab Bar",
     toggle_toolbar: "Toggle Toolbar",
     toggle_status_bar: "Toggle Status Bar",
@@ -252,6 +254,7 @@ pub const ZH_CN: MenuStrings = MenuStrings {
     clear_formatting: "清除格式",
 
     toggle_sidebar: "切换侧边栏",
+    toggle_agent: "AI 助手",
     toggle_tab_bar: "切换标签栏",
     toggle_toolbar: "切换工具栏",
     toggle_status_bar: "切换状态栏",
@@ -339,6 +342,7 @@ pub const JA: MenuStrings = MenuStrings {
     clear_formatting: "書式をクリア",
 
     toggle_sidebar: "サイドバー切替",
+    toggle_agent: "AI アシスタント",
     toggle_tab_bar: "タブバー切替",
     toggle_toolbar: "ツールバー切替",
     toggle_status_bar: "ステータスバー切替",

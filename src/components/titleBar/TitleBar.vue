@@ -3,7 +3,8 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { platform } from '@tauri-apps/plugin-os'
 import { Minus, FullScreen, CopyDocument, Close } from '@element-plus/icons-vue'
-import { PanelLeftClose, PanelLeftOpen } from '@lucide/vue'
+import { PanelLeftClose, PanelLeftOpen, Sparkles } from '@lucide/vue'
+import { useAgentStore } from '@/stores/agent'
 import { useLayoutStore } from '@/stores/layout'
 import { getAppIconOption } from '@/services/app-icon'
 import { popupEditorMenu } from '@/services/tauri-invoke'
@@ -14,6 +15,7 @@ import { useI18n } from '@/i18n'
 const { t } = useI18n()
 const prefs = usePreferencesStore()
 const layout = useLayoutStore()
+const agent = useAgentStore()
 const logo = computed(() => getAppIconOption(prefs.appIcon).src)
 const notify = useNotificationStore()
 const native = '__TAURI_INTERNALS__' in window
@@ -101,6 +103,7 @@ onBeforeUnmount(() => {
       <component :is="layout.showSideBar ? PanelLeftClose : PanelLeftOpen" :size="16" :stroke-width="1.6" aria-hidden="true" />
     </button>
     <div class="drag-space" data-tauri-drag-region />
+    <button type="button" class="agent-toggle" :aria-label="t('agent.toggle')" :title="t('agent.toggle') + ' (Ctrl/Cmd+Shift+A)'" :aria-expanded="agent.visible" aria-controls="agent-panel" @click="agent.toggle()"><Sparkles :size="15" /><span>{{ t('agent.toggle') }}</span><i v-if="agent.busy" /></button>
     <div v-if="customChrome" class="window-controls">
       <button type="button" :aria-label="t('chrome.minimize')" :title="t('chrome.minimize')"
         :disabled="!appWindow" @click="run(() => appWindow!.minimize())">
@@ -135,6 +138,10 @@ button:focus-visible { outline: 2px solid var(--mt-accent); outline-offset: -2px
 .sidebar-toggle:hover { background: var(--mt-icon-hover-bg); color: var(--mt-fg); }
 .sidebar-toggle[aria-expanded="true"] { color: var(--mt-accent); background: var(--mt-icon-active-bg); }
 .window-controls { display: flex; height: 100%; }
+.agent-toggle { display: flex; align-items: center; gap: 5px; height: 26px; margin-right: 10px; padding: 0 8px; font: inherit; font-size: 11px; white-space: nowrap; color: var(--mt-fg-muted); background: transparent; border: 1px solid var(--mt-border); border-radius: 6px; cursor: pointer; }
+.agent-toggle:hover, .agent-toggle[aria-expanded="true"] { color: var(--mt-accent); background: var(--mt-icon-active-bg); }
+.agent-toggle i { height: 5px; width: 5px; border-radius: 50%; background: var(--mt-accent); }
+@media (max-width: 740px) { .agent-toggle span { display: none; } }
 .window-controls button { display: grid; place-items: center; width: 42px; padding: 0; border: 0; background: transparent; color: var(--mt-fg); }
 .window-controls svg { width: 13px; height: 13px; }
 .window-controls button:hover:enabled { background: var(--mt-row-hover); }

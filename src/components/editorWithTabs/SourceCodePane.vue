@@ -11,6 +11,7 @@ import { EditorState, Transaction, type Extension } from '@codemirror/state'
 import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter } from '@codemirror/view'
 import {
   history,
+  isolateHistory,
   historyField,
   historyKeymap,
   defaultKeymap,
@@ -254,6 +255,14 @@ function installBusHandlers() {
 onMounted(() => {
   mountView(editor.currentFile)
   installBusHandlers()
+  busUnsubs.push(editor.registerAgentEditHandler('source', markdown => {
+    const view = viewRef.value
+    if (!view || boundId.value !== editor.currentFileId) throw new Error('agent:editorNotReady')
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: markdown },
+      annotations: [Transaction.userEvent.of('input.agent'), isolateHistory.of('full')],
+    })
+  }))
 })
 
 watch(

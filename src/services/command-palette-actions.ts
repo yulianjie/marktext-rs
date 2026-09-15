@@ -87,6 +87,7 @@ export const BUILTIN_COMMAND_SPECS: readonly BuiltinCommandSpec[] = [
   command('format.clear', 'format', 'wysiwyg'),
 
   command('view.toggleSidebar', 'view'),
+  { id: 'view.toggleAgent', category: 'view', labelKey: 'agent.toggle', availability: 'always' },
   command('view.toggleTabBar', 'view'),
   command('view.toggleToolbar', 'view'),
   command('view.toggleStatusBar', 'view'),

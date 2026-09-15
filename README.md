@@ -31,6 +31,11 @@ npm run tauri:build    # produces installer in src-tauri/target/release/bundle/
 
 ## Project layout
 
+The built-in writing agent supports DeepSeek, OpenAI-compatible APIs and local
+Ollama, with streaming chat, explicit document/selection context, reviewed edits
+and editor undo. Open **AI assistant** in the title bar (`Ctrl/Cmd+Shift+A`) and
+configure your model. See the [setup, architecture and privacy guide](docs/AI_AGENT.md).
+
 Desktop title-bar/sidebar blur uses Windows Acrylic, macOS Vibrancy, and
 supported Linux X11/Wayland compositor protocols, with solid colors elsewhere.
 See [desktop blur support and verification](docs/DESKTOP_BLUR.md).

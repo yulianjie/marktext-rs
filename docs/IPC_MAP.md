@@ -148,8 +148,8 @@ The Electron `file-drop` event on `BrowserWindow` is replaced by Tauri's
 - All `*-by-id` channels referenced the Electron `BrowserWindow.id` integer.
   In Tauri we use string `label`s instead; the renderer can read its own via
   `getCurrentWebviewWindow().label`.
-- Multi-window broadcasts use `app.emit_to(...)`; per-window targeted events
-  use `WebviewWindow.emit(...)`.
+- Broadcasts use `emit(...)`; targeted events use `emit_to(...)` and listeners
+  with a matching event target. The writing agent uses `WebviewWindow` targets.
 - All command payloads are JSON-serialisable via serde; no path strings need
   to be normalised (Rust `PathBuf` round-trips through serde as a string).
 # Desktop backdrop extension
@@ -157,3 +157,15 @@ The Electron `file-drop` event on `BrowserWindow` is replaced by Tauri's
 `cmd_window_enable_backdrop` negotiates native desktop blur for the calling
 editor window and returns a boolean. `mt://window/backdrop` emits a boolean when
 Linux compositor capabilities change. See [DESKTOP_BLUR.md](DESKTOP_BLUR.md).
+# Writing Agent
+
+The writing agent is native to the Tauri edition (no legacy Electron channel).
+
+| Renderer command / event | Purpose |
+| --- | --- |
+| `cmd_agent_get_config` | Read non-secret settings and key-presence flag |
+| `cmd_agent_save_config` | Save base URL / model and optionally update or remove OS-vault credential |
+| `cmd_agent_test_connection` | Send a test message with the saved model settings |
+| `cmd_agent_start` | Start a bounded writing-agent run on an explicit document snapshot |
+| `cmd_agent_cancel` | Cancel only the calling window's matching request |
+| `mt://agent/event` | Window-targeted delta, tool, proposal and terminal events, correlated by request ID |

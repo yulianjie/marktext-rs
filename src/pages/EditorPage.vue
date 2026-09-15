@@ -10,6 +10,8 @@ import { getCurrentWebview } from '@tauri-apps/api/webview'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { ElMessageBox } from 'element-plus'
 import TitleBar from '@/components/titleBar/TitleBar.vue'
+import AgentPanel from '@/components/agent/AgentPanel.vue'
+import { useAgentStore } from '@/stores/agent'
 import TabsBar from '@/components/editorWithTabs/TabsBar.vue'
 import EditorToolbar from '@/components/editorToolbar/EditorToolbar.vue'
 import MuyaEditor from '@/components/editorWithTabs/MuyaEditor.vue'
@@ -73,6 +75,7 @@ import {
 } from '@/services/editor-session'
 
 const editor = useEditorStore()
+const agent = useAgentStore()
 const layout = useLayoutStore()
 const prefs = usePreferencesStore()
 const cc = useCommandCenterStore()
@@ -145,6 +148,11 @@ function onApplicationKey(ev: KeyboardEvent) {
 }
 
 function onKey(ev: KeyboardEvent) {
+  if (!ev.defaultPrevented && !ev.isComposing && (ev.ctrlKey || ev.metaKey) && ev.shiftKey && !ev.altKey && ev.code === 'KeyA') {
+    ev.preventDefault()
+    if (!ev.repeat) agent.toggle()
+    return
+  }
   if (!ev.defaultPrevented) {
     const fixedAction = resolveFixedEditorShortcut(
       eventAccel(ev),
@@ -501,6 +509,7 @@ const MENU_ACTIONS: Record<string, () => void | Promise<void>> = {
   'edit.copyAsHtml': () => bus.emit('copyAsHtml', undefined),
   'edit.pasteAsPlainText': () => bus.emit('pasteAsPlainText', undefined),
   'view.toggleSidebar': () => layout.toggleSideBar(),
+  'view.toggleAgent': () => agent.toggle(),
   'view.toggleTabBar': () => layout.toggleTabBar(),
   'view.toggleToolbar': () => layout.toggleToolBar(),
   'view.toggleStatusBar': () => layout.toggleStatusBar(),
@@ -779,6 +788,7 @@ onBeforeUnmount(() => {
           <FindReplaceBar />
         </div>
       </div>
+      <AgentPanel v-if="agent.visible" />
     </div>
     <StatusBar v-if="layout.showStatusBar" />
     <CommandPalette />

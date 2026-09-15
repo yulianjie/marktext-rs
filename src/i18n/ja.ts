@@ -1,7 +1,9 @@
 /**
  * 日本語ロケール文字列。en.ts と同じ構造を保つこと。
  */
+import agent from './agent-ja'
 export default {
+  agent,
   quickInsert: {
     hint: '@ を入力して挿入',
     noResults: '一致する項目がありません',

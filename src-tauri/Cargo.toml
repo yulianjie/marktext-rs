@@ -1,6 +1,6 @@
 [package]
 name = "marktext-rs"
-version = "0.3.5"
+version = "0.4.0"
 description = "MarkText rewritten with Tauri 2 + Vue 3"
 authors = ["MarkText contributors"]
 license = "MIT"
@@ -64,7 +64,8 @@ encoding_rs_io = "0.1"
 pulldown-cmark = "0.12"
 
 # HTTP (image upload, Unsplash, GitHub)
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "multipart"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "multipart", "stream"] }
+keyring = { version = "3.6.3", features = ["windows-native", "apple-native", "sync-secret-service", "crypto-rust", "vendored"] }
 
 # Schema validation for preferences
 jsonschema = { version = "0.28", default-features = false }

@@ -9,6 +9,14 @@
  */
 
 import { invoke } from '@tauri-apps/api/core'
+import type { AgentConfig, AgentRequest, AgentSettings } from './agent'
+
+export const agentGetConfig = () => invoke<AgentConfig>('cmd_agent_get_config')
+export const agentSaveConfig = (settings: AgentSettings, apiKey?: string) =>
+  invoke<AgentConfig>('cmd_agent_save_config', { settings, apiKey })
+export const agentTestConnection = () => invoke<void>('cmd_agent_test_connection')
+export const agentStart = (request: AgentRequest) => invoke<void>('cmd_agent_start', { request })
+export const agentCancel = (requestId: string) => invoke<void>('cmd_agent_cancel', { requestId })
 import {
   assertValidEditorSession,
   type EditorSession,

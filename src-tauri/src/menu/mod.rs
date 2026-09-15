@@ -677,6 +677,7 @@ fn build_menu(
             )?,
             &mi(app, "view.toggleTabBar", s.toggle_tab_bar, None)?,
             &mi(app, "view.toggleToolbar", s.toggle_toolbar, None)?,
+            &mi(app, "view.toggleAgent", s.toggle_agent, None)?,
             &mi(app, "view.toggleStatusBar", s.toggle_status_bar, None)?,
             &mi(
                 app,

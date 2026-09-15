@@ -8,7 +8,9 @@
  */
 
 import type { App } from 'vue'
+import type { AgentEvent } from './agent'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
+import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow'
 
 /* ─── payload types ──────────────────────────────────────────── */
 
@@ -34,6 +36,7 @@ export interface EditorSelectionChange { windowLabel: string; selection: unknown
 export interface UpdaterAvailable { version: string; notes?: string }
 
 export interface EventRegistry {
+  'mt://agent/event': AgentEvent
   'mt://window/backdrop': boolean
   'mt://second-instance': SecondInstance
   'mt://fs/change': FileWatchEvent
@@ -67,7 +70,10 @@ export async function listenTyped<K extends EventName>(
     // without throwing and downstream setup keeps running.
     return () => {}
   }
-  const fn = await listen<EventRegistry[K]>(name, e => handler(e.payload))
+  const options = name === 'mt://agent/event'
+    ? { target: { kind: 'WebviewWindow' as const, label: getCurrentWebviewWindow().label } }
+    : undefined
+  const fn = await listen<EventRegistry[K]>(name, e => handler(e.payload), options)
   unlisteners.push(fn)
   return fn
 }

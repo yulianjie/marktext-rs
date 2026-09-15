@@ -162,6 +162,22 @@ export const useEditorStore = defineStore('editor', () => {
    *  Muya without dragging a ref around. */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let muyaInstance: any = null
+  const agentEditHandlers = new Map<'source' | 'wysiwyg', (markdown: string) => void>()
+
+  function registerAgentEditHandler(mode: 'source' | 'wysiwyg', handler: (markdown: string) => void) {
+    agentEditHandlers.set(mode, handler)
+    return () => { if (agentEditHandlers.get(mode) === handler) agentEditHandlers.delete(mode) }
+  }
+
+  function applyAgentEdit(id: string, expected: string, markdown: string): string {
+    const tab = currentFile.value
+    if (!tab || tab.id !== id || tab.markdown !== expected) throw new Error('agent:conflict')
+    const handler = agentEditHandlers.get(sourceCodeMode.value ? 'source' : 'wysiwyg')
+    if (!handler) throw new Error('agent:editorNotReady')
+    tab.pendingBaselineUpdate = false
+    handler(markdown)
+    return tab.markdown
+  }
   const autoSaveTimers = new Map<string, ReturnType<typeof setTimeout>>()
   /** Reference-counted because directory-remove events may overlap. */
   const removalProbeCounts = new Map<string, number>()
@@ -1175,6 +1191,8 @@ export const useEditorStore = defineStore('editor', () => {
     setMuyaInstance,
     clearMuyaInstance,
     getMuyaInstance,
+    registerAgentEditHandler,
+    applyAgentEdit,
     setSelectionFormats,
     captureCurrentViewState,
     // lifecycle

@@ -466,6 +466,16 @@ async function construct() {
 
   muyaRef.value = muya
   editor.setMuyaInstance(muya)
+  busUnsubs.push(editor.registerAgentEditHandler('wysiwyg', markdown => {
+    const state = muya.contentState
+    state.history.commitPending()
+    if (!state.history.stack.length) {
+      state.history.push({ blocks: state.blocks, cursor: state.cursor, renderRange: state.renderRange })
+    }
+    muya.setMarkdown(markdown)
+    state.history.commitPending()
+    muya.dispatchChange()
+  }))
   disposePrefsApplier = applyPreferencesToMuya(muya)
   console.info('[Muya] constructed')
 }

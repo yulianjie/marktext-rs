@@ -9,6 +9,7 @@
 //! `tauri::Builder::invoke_handler`. Add a `#[tauri::command]` here AND in
 //! the macro — the build fails fast if you forget either.
 
+pub mod agent;
 pub mod backdrop;
 pub mod debug;
 pub mod export;
@@ -29,6 +30,11 @@ pub mod workspace;
 macro_rules! marktext_handler {
     () => {
         tauri::generate_handler![
+            $crate::commands::agent::cmd_agent_get_config,
+            $crate::commands::agent::cmd_agent_save_config,
+            $crate::commands::agent::cmd_agent_test_connection,
+            $crate::commands::agent::cmd_agent_start,
+            $crate::commands::agent::cmd_agent_cancel,
             // debug
             $crate::commands::debug::cmd_log,
             // file
