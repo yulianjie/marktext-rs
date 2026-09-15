@@ -491,8 +491,15 @@ export const useEditorStore = defineStore('editor', () => {
       tab.markdown = nextMarkdown
       tab.isSaved = true
     } else if (tab.markdown !== nextMarkdown) {
+      // Muya always serializes a final newline. A save may have removed it
+      // according to this file's policy; the next selection/change event
+      // must not turn that same saved content into a new unsaved edit.
+      const remainsSaved = tab.isSaved
+        && tab.trimTrailingNewline === 0
+        && !tab.markdown.endsWith('\n')
+        && nextMarkdown === `${tab.markdown}\n`
       tab.markdown = nextMarkdown
-      tab.isSaved = false
+      tab.isSaved = remainsSaved
       scheduleAutoSave(tab)
     }
     if (payload?.wordCount) tab.wordCount = payload.wordCount
@@ -619,7 +626,9 @@ export const useEditorStore = defineStore('editor', () => {
       tab.encoding = { ...change.encoding }
       tab.lineEnding = change.lineEnding
       tab.adjustLineEndingOnSave = change.lineEnding === 'crlf'
-      tab.isSaved = tab.markdown === change.markdown
+      // Keep a clean Muya buffer clean when disk uses an equivalent EOF
+      // representation, but do not discard still-unsaved blank-line edits.
+      tab.isSaved = tab.isSaved || tab.markdown === change.markdown
       tab.externalChange = null
       tab.autoSaveBlocked = false
       if (!tab.isSaved) scheduleAutoSave(tab)

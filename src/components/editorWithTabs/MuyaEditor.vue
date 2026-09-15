@@ -44,6 +44,7 @@ import {
 } from '@/services/muya-image-picker'
 import { applyPreferencesToMuya } from '@/services/muya-preferences-applier'
 import { effectiveThemeId } from '@/services/preferences-applier'
+import { normalizeMarkdown } from '@/services/trailing-newline'
 import { setFormatMenuState } from '@/services/tauri-invoke'
 import { spellchecker } from '@/services/spellchecker'
 import {
@@ -510,12 +511,20 @@ function persistActiveSession() {
   const markdown = muya.getMarkdown?.()
   // Source mode may have updated the shared document while Muya was hidden.
   // Never attach an old block history to that newer Markdown snapshot.
-  if (typeof markdown !== 'string' || markdown !== tab.markdown) return
+  if (typeof markdown !== 'string' || !matchesDocument(markdown, tab)) return
   muya.contentState?.history?.commitPending?.()
   const history = muya.getHistory?.()
   if (history) tab.history = cloneMuyaHistory(history)
-  tab.historyMarkdown = markdown
+  tab.historyMarkdown = tab.markdown
   tab.cursor = muya.getCursor?.() ?? tab.cursor
+}
+
+function matchesDocument(markdown: string, tab: DocumentState): boolean {
+  return markdown === tab.markdown || (
+    tab.isSaved
+    && normalizeMarkdown(markdown, tab.trimTrailingNewline)
+      === normalizeMarkdown(tab.markdown, tab.trimTrailingNewline)
+  )
 }
 
 /** Swap the displayed document and restore only that tab's Muya history. */
@@ -571,7 +580,10 @@ function syncActiveMarkdownFromStore() {
   const tab = editor.currentFile
   const muya = muyaRef.value
   if (!tab || !muya || activeBoundId.value !== tab.id) return
-  if (muya.getMarkdown?.() === tab.markdown) return
+  // Saving can change only the on-disk trailing-newline representation.
+  // Re-parsing that equivalent content resets history/cursor and Muya adds
+  // its synthetic newline again, making the just-saved file dirty forever.
+  if (matchesDocument(muya.getMarkdown(), tab)) return
   // Disk reloads and source-mode edits deliberately reset Muya's incompatible
   // block history rather than allowing an undo to resurrect stale content.
   loadFile(tab, false)

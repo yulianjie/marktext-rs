@@ -165,6 +165,33 @@ describe('editor trailing-newline integration', () => {
     expect(tab.isSaved).toBe(true)
   })
 
+  it('keeps a saved file clean after Muya restores its synthetic newline and the watcher reports the save', async () => {
+    usePreferencesStore().trimTrailingNewline = 2
+    invokeMocks.readMarkdown.mockResolvedValue(loaded('disk'))
+    const editor = useEditorStore()
+    const tab = await editor.openFile('C:\\notes\\draft.md')
+    editor.applyContentChange(tab.id, 'disk\n')
+    editor.applyContentChange(tab.id, 'edited\n')
+
+    await expect(editor.saveTab(tab)).resolves.toBe(true)
+    editor.applyContentChange(tab.id, 'edited\n')
+    expect(tab.markdown).toBe('edited\n')
+    expect(tab.lastSavedMarkdown).toBe('edited')
+    expect(tab.isSaved).toBe(true)
+
+    invokeMocks.readMarkdown.mockResolvedValue(loaded('edited'))
+    await editor.handleFileWatchEvent({ kind: 'modified', path: tab.pathname })
+    expect(tab.isSaved).toBe(true)
+
+    editor.applyContentChange(tab.id, 'edited\n\n')
+    expect(tab.isSaved).toBe(false)
+    expect(tab.markdown).toBe('edited\n\n')
+
+    editor.applyContentChange(tab.id, 'another real edit\n')
+    expect(tab.isSaved).toBe(false)
+    expect(tab.lastSavedMarkdown).toBe('edited')
+  })
+
   it('writes and records the exact same normalized snapshot', async () => {
     const prefs = usePreferencesStore()
     prefs.trimTrailingNewline = 1
