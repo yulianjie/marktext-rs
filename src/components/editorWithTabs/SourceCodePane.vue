@@ -268,7 +268,18 @@ onMounted(() => {
 watch(
   () => editor.currentFileId,
   (id) => {
-    if (!id) { tryRevealSearchHit(); return }
+    if (!id) {
+      persistBoundState()
+      boundId.value = null
+      const view = viewRef.value
+      view?.contentDOM.blur()
+      view?.setState(buildState(''))
+      currentMatches = []
+      currentMatchIndex = -1
+      replaceAllPending = false
+      tryRevealSearchHit()
+      return
+    }
     const tab = editor.tabs.find(t => t.id === id)
     if (tab && boundId.value !== id) {
       swapTab(tab)

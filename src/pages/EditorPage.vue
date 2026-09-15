@@ -783,8 +783,8 @@ onBeforeUnmount(() => {
         <TabsBar v-if="layout.showTabBar" />
         <EditorToolbar v-if="layout.showToolBar" />
         <div class="editor-stage">
-          <MuyaEditor v-show="!editor.sourceCodeMode" />
-          <SourceCodePane v-show="editor.sourceCodeMode" />
+          <MuyaEditor v-show="editor.currentFile && !editor.sourceCodeMode" />
+          <SourceCodePane v-show="editor.currentFile && editor.sourceCodeMode" />
           <FindReplaceBar />
         </div>
       </div>

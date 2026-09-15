@@ -542,11 +542,24 @@ function loadFile(tab: DocumentState, persistCurrent = true) {
   activeBoundId.value = tab.id
 }
 
+function clearFile() {
+  persistActiveSession()
+  activeBoundId.value = null
+  contextMenuRequests.invalidate()
+  const muya = muyaRef.value
+  if (!muya) return
+  muya.blur(false, true)
+  muya.setOptions({ baseUrl: '' })
+  muya.setMarkdown('', undefined, false)
+  muya.clearHistory()
+  void setFormatMenuState([]).catch(() => { /* no native menu in browser mode */ })
+}
+
 // React to current-tab changes — content swap only, never destroy/recreate.
 watch(
   () => editor.currentFileId,
   (id) => {
-    if (!id) { tryRevealSearchHit(); return }
+    if (!id) { clearFile(); tryRevealSearchHit(); return }
     const tab = editor.tabs.find(t => t.id === id)
     if (tab && activeBoundId.value !== id) loadFile(tab)
     tryRevealSearchHit()
@@ -609,7 +622,7 @@ function withMuya(fn: (muya: any) => void) {
 // is hidden would write stale Markdown back into the active tab.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function withVisibleMuya(fn: (muya: any) => void) {
-  if (editor.sourceCodeMode) return
+  if (!editor.currentFile || editor.sourceCodeMode) return
   withMuya(fn)
 }
 

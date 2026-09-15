@@ -206,6 +206,11 @@ export const useEditorStore = defineStore('editor', () => {
     currentFileId.value = id
     const next = tabs.value.find(tab => tab.id === id)
     if (next) sourceCodeMode.value = next.sourceMode
+    else {
+      listToc.value = []
+      currentSelectionFormats.value = []
+      findReplaceOpen.value = false
+    }
   }
 
   function newUntitledTab(initialMarkdown = '') {
