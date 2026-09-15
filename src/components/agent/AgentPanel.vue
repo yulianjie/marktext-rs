@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { ArrowDown, ArrowUp, Check, Copy, FileText, LoaderCircle, Plus, RotateCcw, Settings2, Sparkles, Square, TextSelect, X } from '@lucide/vue'
+import { ArrowDown, ArrowUp, BookOpen, Check, Copy, FileText, LoaderCircle, Plus, RotateCcw, Settings2, Sparkles, Square, TextSelect, X } from '@lucide/vue'
 import DOMPurify from 'dompurify'
 import marked from 'muya/lib/parser/marked'
 import { useAgentStore } from '@/stores/agent'
 import { useEditorStore } from '@/stores/editor'
 import { useI18n } from '@/i18n'
 import AgentSettings from './AgentSettings.vue'
+import AgentSkills from './AgentSkills.vue'
 import './agent.css'
 
 const agent = useAgentStore()
@@ -86,6 +87,7 @@ onMounted(() => {
   try { const width = Number(localStorage.getItem('mt:agentWidth')); if (width >= 320 && width <= 560) panelWidth.value = width } catch { /* optional preference */ }
   input.value?.focus()
   if (!agent.config) void agent.loadConfig()
+  void agent.loadSkills()
 })
 onBeforeUnmount(() => { stopResize(); clearTimeout(copyTimer) })
 </script>
@@ -97,13 +99,16 @@ onBeforeUnmount(() => { stopResize(); clearTimeout(copyTimer) })
     <header class="agent-header">
       <Sparkles :size="16" class="agent-mark" /><h2>{{ t('agent.title') }}</h2>
       <button type="button" :disabled="agent.busy || !agent.conversation.messages.length" :aria-label="t('agent.newChat')" :title="t('agent.newChat')" @click="agent.clear"><Plus :size="16" /></button>
-      <button type="button" :aria-label="t('agent.settings.title')" :title="t('agent.settings.title')" :aria-pressed="agent.settingsOpen" @click="agent.settingsOpen = !agent.settingsOpen"><Settings2 :size="16" /></button>
+      <button type="button" :aria-label="t('agent.skills.title')" :title="t('agent.skills.title')" :aria-pressed="agent.skillsOpen" @click="agent.skillsOpen = !agent.skillsOpen; agent.settingsOpen = false"><BookOpen :size="16" /></button>
+      <button type="button" :aria-label="t('agent.settings.title')" :title="t('agent.settings.title')" :aria-pressed="agent.settingsOpen" @click="agent.settingsOpen = !agent.settingsOpen; agent.skillsOpen = false"><Settings2 :size="16" /></button>
       <button type="button" :aria-label="t('common.close')" :title="t('common.close')" @click="agent.visible = false"><X :size="16" /></button>
     </header>
     <AgentSettings v-if="agent.settingsOpen" />
+    <AgentSkills v-else-if="agent.skillsOpen" />
     <template v-else>
       <div class="agent-model-row"><span :title="agent.config?.baseUrl">{{ agent.config?.model || t('agent.notConfigured') }}</span><span>{{ t('agent.reviewFirst') }}</span></div>
       <div v-if="agent.configError" class="agent-banner" role="alert">{{ agent.configError }}<button type="button" @click="agent.loadConfig">{{ t('agent.retry') }}</button></div>
+      <div v-if="agent.skillsError" class="agent-banner" role="alert">{{ agent.skillsError }}<button type="button" @click="agent.loadSkills">{{ t('agent.retry') }}</button></div>
       <div v-if="agent.busy && !agent.runningHere" class="agent-banner" role="status">{{ t('agent.runningElsewhere') }}<button type="button" @click="editor.setCurrent(agent.run!.key)">{{ t('agent.returnToRun') }}</button></div>
       <div ref="feed" class="agent-feed" role="log" :aria-label="t('agent.conversation')" aria-live="off" @scroll="onScroll">
         <section v-if="!agent.conversation.messages.length" class="agent-welcome">
@@ -136,8 +141,9 @@ onBeforeUnmount(() => { stopResize(); clearTimeout(copyTimer) })
       <div v-if="agent.error" class="agent-composer-error" role="alert">{{ agent.error }}<button type="button" :aria-label="t('common.close')" @click="agent.error = ''"><X :size="13" /></button></div>
       <div class="agent-composer">
         <div class="agent-context-row"><label :title="attachmentName"><input v-model="agent.includeDocument" type="checkbox" :disabled="!editor.currentFile"><FileText :size="12" /><span>{{ attachmentName }}</span></label><button v-if="selected" type="button" :aria-label="t('agent.clearSelection')" :title="t('agent.clearSelection')" @click="agent.selection = null"><X :size="12" /></button><button v-else type="button" :disabled="!editor.currentFile" :aria-label="t('agent.attachSelection')" :title="t('agent.attachSelection')" @mousedown.prevent @click="agent.attachSelection"><TextSelect :size="14" /></button></div>
+        <div class="agent-skill-picker"><BookOpen :size="12" /><select v-model="agent.conversation.skillId" :disabled="agent.skillsLoading || agent.busy" :aria-label="t('agent.skills.choose')"><option value="">{{ t('agent.skills.auto') }}</option><option v-for="skill in agent.skills.filter(s => s.enabled)" :key="skill.id" :value="skill.id">{{ skill.builtin ? t(`agent.skills.builtins.${skill.name}.name`) : skill.name }}</option></select></div>
         <textarea ref="input" v-model="agent.conversation.draft" :aria-label="t('agent.inputLabel')" :placeholder="t('agent.placeholder')" rows="3" @keydown="onKey" />
-        <div class="agent-send-row"><small>{{ t('agent.keyboardHint') }}</small><button v-if="agent.busy" type="button" class="agent-stop" :disabled="agent.stopping" :aria-label="t('agent.stop')" :title="t('agent.stop')" @click="agent.stop"><Square :size="14" /></button><button v-else type="button" class="agent-primary" :disabled="!agent.conversation.draft.trim() || agent.loadingConfig || !agent.config" :aria-label="t('agent.send')" :title="t('agent.send')" @click="send"><ArrowUp :size="17" /></button></div>
+        <div class="agent-send-row"><small>{{ t('agent.keyboardHint') }}</small><button v-if="agent.busy" type="button" class="agent-stop" :disabled="agent.stopping" :aria-label="t('agent.stop')" :title="t('agent.stop')" @click="agent.stop"><Square :size="14" /></button><button v-else type="button" class="agent-primary" :disabled="!agent.conversation.draft.trim() || agent.loadingConfig || agent.skillsLoading || !agent.config" :aria-label="t('agent.send')" :title="t('agent.send')" @click="send"><ArrowUp :size="17" /></button></div>
       </div>
       <p class="agent-privacy-note">{{ t('agent.privacyNote') }}</p>
     </template>

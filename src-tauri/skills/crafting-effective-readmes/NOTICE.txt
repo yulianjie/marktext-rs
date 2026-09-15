@@ -1,0 +1,23 @@
+Third-party references included in this skill
+
+The skill entrypoint, templates and packaging are from softaworks/agent-toolkit
+at the revision recorded in source.json, under its MIT license (LICENSE.txt).
+The Markdown reference copies below are unchanged from that pinned package.
+
+references/art-of-readme.md:
+Art of README by hackergrrl and contributors.
+https://github.com/hackergrrl/art-of-readme
+Creative Commons Attribution 2.0, as stated in the reference itself:
+https://creativecommons.org/licenses/by/2.0/legalcode
+
+references/make-a-readme.md:
+Make a README by Danny Guo, https://github.com/dguo/make-a-readme
+MIT license; see LICENSE-make-a-readme.txt.
+
+references/standard-readme-*.md:
+Standard Readme by Richard Littauer and contributors,
+https://github.com/RichardLitt/standard-readme
+MIT license; see LICENSE-standard-readme.txt.
+
+These references retain their respective licenses. Embedded remote media URLs
+remain references only; the skill runtime does not fetch images or web pages.

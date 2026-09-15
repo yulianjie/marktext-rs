@@ -1,0 +1,22 @@
+Third-party references included in this skill
+
+The skill entrypoint and packaging are from softaworks/agent-toolkit at the
+revision recorded in source.json, under its MIT license (LICENSE.txt).
+The upstream README credits Joshua David Thomas's agent-skills (MIT; see
+LICENSE-original-skill.txt) and obra/the-elements-of-style.
+
+elements-of-style/*.md:
+William Strunk Jr., The Elements of Style, 1918. Public domain text, distributed
+as Markdown by https://github.com/obra/the-elements-of-style (original source:
+https://www.gutenberg.org/ebooks/37134). Copied from the pinned toolkit package.
+
+signs-of-ai-writing.md:
+Markdown adaptation supplied by the pinned toolkit package of Wikipedia's
+"Wikipedia:Signs of AI writing", by Wikipedia contributors.
+Source: https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing
+Author history: https://en.wikipedia.org/w/index.php?title=Wikipedia:Signs_of_AI_writing&action=history
+Licensed under Creative Commons Attribution-ShareAlike 4.0 International:
+https://creativecommons.org/licenses/by-sa/4.0/legalcode
+This reference retains that license; it is not relicensed under MIT. MarkText
+has not changed the upstream Markdown text. Remote images are referenced only,
+not bundled or fetched by the skill runtime.

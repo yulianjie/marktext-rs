@@ -5,7 +5,7 @@ import { agentTransport } from '@/services/agent-transport'
 import { getLocale, t } from '@/i18n'
 import {
   markdownSelection, proposalMarkdown,
-  type AgentConfig, type AgentEvent, type AgentSettings, type DocumentSnapshot, type ReviewedEdit,
+  type AgentConfig, type AgentEvent, type AgentSettings, type AgentSkill, type DocumentSnapshot, type ReviewedEdit,
 } from '@/services/agent'
 
 export interface ChatItem {
@@ -18,7 +18,7 @@ export interface ChatItem {
   error?: string
   cancelled?: boolean
 }
-interface Conversation { messages: ChatItem[]; draft: string }
+interface Conversation { messages: ChatItem[]; draft: string; skillId: string }
 
 export function agentError(error: unknown): string {
   const code = String(error).match(/agent:([a-zA-Z]+)/)?.[1] ?? 'unknown'
@@ -30,6 +30,10 @@ export const useAgentStore = defineStore('agent', () => {
   const editor = useEditorStore()
   const visible = ref(false)
   const settingsOpen = ref(false)
+  const skillsOpen = ref(false)
+  const skills = ref<AgentSkill[]>([])
+  const skillsLoading = ref(false)
+  const skillsError = ref('')
   const config = ref<AgentConfig | null>(null)
   const loadingConfig = ref(false)
   const configError = ref('')
@@ -39,7 +43,7 @@ export const useAgentStore = defineStore('agent', () => {
   const sessions = ref<Record<string, Conversation>>({})
   const currentKey = computed(() => editor.currentFileId ?? 'no-document')
   function getConversation(key = currentKey.value): Conversation {
-    return sessions.value[key] ?? (sessions.value[key] = { messages: [], draft: '' })
+    return sessions.value[key] ?? (sessions.value[key] = { messages: [], draft: '', skillId: '' })
   }
   const conversation = computed(() => getConversation())
   const run = ref<{ id: string; key: string; messageId: string; snapshot: DocumentSnapshot | null } | null>(null)
@@ -50,6 +54,29 @@ export const useAgentStore = defineStore('agent', () => {
   let unlisten: (() => void) | null = null
   let listening: Promise<void> | null = null
   let disposed = false
+
+  function updateSkills(items: AgentSkill[]) {
+    skills.value = items
+    for (const chat of Object.values(sessions.value)) {
+      if (!items.some(s => s.id === chat.skillId && s.enabled)) chat.skillId = ''
+    }
+  }
+  async function loadSkills() {
+    if (skillsLoading.value) return
+    skillsLoading.value = true
+    skillsError.value = ''
+    try { updateSkills(await agentTransport.listSkills()) }
+    catch (cause) { skillsError.value = agentError(cause) }
+    finally { skillsLoading.value = false }
+  }
+  async function changeSkills(action: () => Promise<AgentSkill[] | null>) {
+    if (skillsLoading.value || busy.value) return
+    skillsLoading.value = true
+    skillsError.value = ''
+    try { const items = await action(); if (items) updateSkills(items) }
+    catch (cause) { skillsError.value = agentError(cause) }
+    finally { skillsLoading.value = false }
+  }
 
   async function loadConfig() {
     if (loadingConfig.value) return
@@ -107,7 +134,7 @@ export const useAgentStore = defineStore('agent', () => {
     const message = sessions.value[active.key]?.messages.find(item => item.id === active.messageId)
     if (!message) return
     if (event.kind === 'delta') message.content += event.text ?? ''
-    if (event.kind === 'tool' && ['read_document', 'search_document', 'propose_edit'].includes(event.text ?? '')) message.tools.push(event.text!)
+    if (event.kind === 'tool' && ['read_document', 'search_document', 'propose_edit', 'read_skill', 'read_skill_file'].includes(event.text ?? '')) message.tools.push(event.text!)
     if (event.kind === 'proposal' && event.proposal && active.snapshot) {
       try {
         proposalMarkdown(active.snapshot, event.proposal)
@@ -133,15 +160,17 @@ export const useAgentStore = defineStore('agent', () => {
   }
 
   async function send(prompt = conversation.value.draft) {
-    if (busy.value || !prompt.trim()) return
+    if (busy.value || skillsLoading.value || !prompt.trim()) return
     error.value = ''
     const chat = getConversation()
+    const skillIds = chat.skillId ? [chat.skillId] : []
     let attached: DocumentSnapshot | null
     try {
       attached = snapshot()
       if (chat.messages.length >= 22) throw new Error('agent:historyFull')
-      const total = new TextEncoder().encode(prompt + chat.messages.map(m => m.content).join('') + (attached?.markdown.slice(attached.from, attached.to) ?? '')).length
-      if (total > 220_000 || new TextEncoder().encode(prompt).length > 80_000) throw new Error('agent:contextTooLarge')
+      const total = new TextEncoder().encode(prompt + chat.messages.map(m => m.content).join('')).length
+      const documentBytes = new TextEncoder().encode(attached?.markdown.slice(attached.from, attached.to) ?? '').length
+      if (total > 220_000 || new TextEncoder().encode(prompt).length > 80_000 || documentBytes > 2_000_000) throw new Error('agent:contextTooLarge')
     } catch (cause) { error.value = agentError(cause); return }
     const requestId = crypto.randomUUID()
     const messageId = crypto.randomUUID()
@@ -157,7 +186,7 @@ export const useAgentStore = defineStore('agent', () => {
       startPromise = (async () => {
         await ensureListener()
         if (disposed) { run.value = null; return }
-        await agentTransport.start({ requestId, messages, language: getLocale(), context: attached ? {
+        await agentTransport.start({ requestId, messages, language: getLocale(), skillIds, context: attached ? {
           name: attached.name, markdown: attached.markdown.slice(attached.from, attached.to),
         } : null })
       })()
@@ -181,7 +210,7 @@ export const useAgentStore = defineStore('agent', () => {
 
   function clear() {
     if (busy.value) return
-    sessions.value[currentKey.value] = { messages: [], draft: '' }
+    sessions.value[currentKey.value] = { messages: [], draft: '', skillId: '' }
     error.value = ''
   }
 
@@ -222,6 +251,6 @@ export const useAgentStore = defineStore('agent', () => {
     unlisten?.()
   })
 
-  return { visible, settingsOpen, config, loadingConfig, configError, error, includeDocument, selection, conversation,
+  return { visible, settingsOpen, skillsOpen, skills, skillsLoading, skillsError, loadSkills, changeSkills, config, loadingConfig, configError, error, includeDocument, selection, conversation,
     busy, runningHere, stopping, run, toggle, loadConfig, saveConfig, attachSelection, send, stop, clear, apply, revert, retry }
 })

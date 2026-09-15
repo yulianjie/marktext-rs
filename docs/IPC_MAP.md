@@ -168,4 +168,9 @@ The writing agent is native to the Tauri edition (no legacy Electron channel).
 | `cmd_agent_test_connection` | Send a test message with the saved model settings |
 | `cmd_agent_start` | Start a bounded writing-agent run on an explicit document snapshot |
 | `cmd_agent_cancel` | Cancel only the calling window's matching request |
+| `cmd_agent_list_skills` | List built-in/imported skill metadata and enabled state |
+| `cmd_agent_import_skill` | Open native SKILL.md picker and import its bounded text package |
+| `cmd_agent_set_skill_enabled` | Persist a skill's enabled state |
+| `cmd_agent_remove_skill` | Remove an imported copy without changing its source files |
+| `cmd_agent_read_skill` | Read skill instructions and reference filenames for the management UI |
 | `mt://agent/event` | Window-targeted delta, tool, proposal and terminal events, correlated by request ID |

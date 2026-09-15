@@ -9,7 +9,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core'
-import type { AgentConfig, AgentRequest, AgentSettings } from './agent'
+import type { AgentConfig, AgentRequest, AgentSettings, AgentSkill, AgentSkillDetail } from './agent'
 
 export const agentGetConfig = () => invoke<AgentConfig>('cmd_agent_get_config')
 export const agentSaveConfig = (settings: AgentSettings, apiKey?: string) =>
@@ -17,6 +17,12 @@ export const agentSaveConfig = (settings: AgentSettings, apiKey?: string) =>
 export const agentTestConnection = () => invoke<void>('cmd_agent_test_connection')
 export const agentStart = (request: AgentRequest) => invoke<void>('cmd_agent_start', { request })
 export const agentCancel = (requestId: string) => invoke<void>('cmd_agent_cancel', { requestId })
+export const agentListSkills = () => invoke<AgentSkill[]>('cmd_agent_list_skills')
+export const agentImportSkill = () => invoke<AgentSkill[] | null>('cmd_agent_import_skill')
+export const agentSetSkillEnabled = (id: string, enabled: boolean) =>
+  invoke<AgentSkill[]>('cmd_agent_set_skill_enabled', { id, enabled })
+export const agentRemoveSkill = (id: string) => invoke<AgentSkill[]>('cmd_agent_remove_skill', { id })
+export const agentReadSkill = (id: string) => invoke<AgentSkillDetail>('cmd_agent_read_skill', { id })
 import {
   assertValidEditorSession,
   type EditorSession,

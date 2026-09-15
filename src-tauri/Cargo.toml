@@ -1,6 +1,6 @@
 [package]
 name = "marktext-rs"
-version = "0.4.0"
+version = "0.5.0"
 description = "MarkText rewritten with Tauri 2 + Vue 3"
 authors = ["MarkText contributors"]
 license = "MIT"
@@ -37,6 +37,7 @@ tokio = { version = "1", features = ["full"] }
 # Serialization
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+serde_yaml_ng = "0.10"
 base64 = "0.22"
 
 # Error handling
@@ -109,6 +110,9 @@ wayland-protocols-plasma = { version = "0.3", features = ["client"] }
 [features]
 # This feature is used for production builds or when a dev server is not specified, DO NOT REMOVE!!
 custom-protocol = ["tauri/custom-protocol"]
+
+[dev-dependencies]
+tempfile = "3"
 
 [profile.dev]
 opt-level = 0

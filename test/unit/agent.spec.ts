@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { markdownSelection, proposalMarkdown, type AgentEvent } from '../../src/services/agent'
 
-const transport = vi.hoisted(() => ({ getConfig: vi.fn(), saveConfig: vi.fn(), testConnection: vi.fn(), start: vi.fn(), cancel: vi.fn(), listen: vi.fn() }))
+const transport = vi.hoisted(() => ({ getConfig: vi.fn(), saveConfig: vi.fn(), testConnection: vi.fn(), start: vi.fn(), cancel: vi.fn(), listen: vi.fn(), listSkills: vi.fn(), importSkill: vi.fn() }))
 vi.mock('@/services/agent-transport', () => ({ agentTransport: transport }))
 vi.mock('@/services/tauri-invoke', () => ({ readMarkdown: vi.fn(), saveMarkdown: vi.fn(), saveAsDialog: vi.fn(), renameFile: vi.fn() }))
 vi.mock('element-plus', () => ({ ElMessageBox: { confirm: vi.fn() }, ElNotification: vi.fn() }))
@@ -18,11 +18,44 @@ beforeEach(() => {
   transport.listen.mockImplementation(async handler => { emit = handler; return () => {} })
   transport.start.mockResolvedValue(undefined)
   transport.cancel.mockResolvedValue(undefined)
+  transport.listSkills.mockResolvedValue([])
   usePreferencesStore().autoSave = false
 })
 
 const snapshot = { tabId: 'doc', name: 'note.md', markdown: 'same\nhello world\nsame', from: 5, to: 16 }
 describe('Agent document edits', () => {
+  it('keeps document size separate from chat context and defaults to automatic skills', async () => {
+    useEditorStore().newUntitledTab('x'.repeat(400_000))
+    const agent = useAgentStore()
+    await agent.send('Explain Markdown tables')
+    expect(transport.start).toHaveBeenCalledOnce()
+    expect(transport.start.mock.calls[0]![0].skillIds).toEqual([])
+  })
+  it('sends chosen skills and clears selections when disabled or removed', async () => {
+    useEditorStore().newUntitledTab('hello')
+    const agent = useAgentStore()
+    const skill = { id: 'user:sample', name: 'sample', description: 'Explain', enabled: true, builtin: false, source: null, license: 'MIT' }
+    transport.listSkills.mockResolvedValue([skill])
+    await agent.loadSkills()
+    agent.conversation.skillId = skill.id
+    agent.includeDocument = false
+    await agent.send('Explain this concept')
+    expect(transport.start.mock.calls[0]![0].skillIds).toEqual(['user:sample'])
+    const id = agent.run!.id
+    emit({ requestId: id, kind: 'tool', text: 'read_skill' })
+    emit({ requestId: id, kind: 'tool', text: 'read_skill_file' })
+    emit({ requestId: id, kind: 'done' })
+    expect(agent.conversation.messages.at(-1)!.tools).toEqual(['read_skill', 'read_skill_file'])
+    await agent.changeSkills(async () => [{ ...skill, enabled: false }])
+    expect(agent.conversation.skillId).toBe('')
+    await agent.changeSkills(async () => null)
+    expect(agent.skills).toHaveLength(1)
+    await agent.changeSkills(async () => { throw new Error('agent:skillInvalid') })
+    expect(agent.skillsError).not.toBe('')
+    expect(agent.skills).toHaveLength(1)
+    await agent.changeSkills(async () => [])
+    expect(agent.skills).toHaveLength(0)
+  })
   it('edits within the attached scope and preserves all surrounding content', () => {
     expect(proposalMarkdown(snapshot, { title: 'Edit', oldText: 'hello', newText: '你好' })).toBe('same\n你好 world\nsame')
     expect(proposalMarkdown(snapshot, { title: 'Append', oldText: '', newText: '!' })).toBe('same\nhello world!\nsame')

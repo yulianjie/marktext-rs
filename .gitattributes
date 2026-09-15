@@ -1,0 +1,2 @@
+# Preserve upstream skill text, including Markdown hard breaks and example indentation.
+src-tauri/skills/** -whitespace

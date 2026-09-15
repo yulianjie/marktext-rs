@@ -35,6 +35,11 @@ macro_rules! marktext_handler {
             $crate::commands::agent::cmd_agent_test_connection,
             $crate::commands::agent::cmd_agent_start,
             $crate::commands::agent::cmd_agent_cancel,
+            $crate::commands::agent::skills::cmd_agent_list_skills,
+            $crate::commands::agent::skills::cmd_agent_import_skill,
+            $crate::commands::agent::skills::cmd_agent_set_skill_enabled,
+            $crate::commands::agent::skills::cmd_agent_remove_skill,
+            $crate::commands::agent::skills::cmd_agent_read_skill,
             // debug
             $crate::commands::debug::cmd_log,
             // file

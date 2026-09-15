@@ -3,11 +3,22 @@ export interface AgentSettings { baseUrl: string; model: string }
 export interface AgentConfig extends AgentSettings { hasKey: boolean }
 export interface AgentMessage { role: 'user' | 'assistant'; content: string }
 export interface AgentContext { name: string; markdown: string }
+export interface AgentSkill {
+  id: string
+  name: string
+  description: string
+  license: string | null
+  source: string | null
+  builtin: boolean
+  enabled: boolean
+}
+export interface AgentSkillDetail { id: string; instructions: string; files: string[] }
 export interface AgentRequest {
   requestId: string
   messages: AgentMessage[]
   context: AgentContext | null
   language: string
+  skillIds?: string[]
 }
 export interface AgentProposal { title: string; oldText: string; newText: string }
 export interface AgentEvent {
