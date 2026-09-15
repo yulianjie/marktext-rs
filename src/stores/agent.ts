@@ -3,9 +3,10 @@ import { defineStore } from 'pinia'
 import { useEditorStore } from './editor'
 import { agentTransport } from '@/services/agent-transport'
 import { getLocale, t } from '@/i18n'
+import { MAX_MESSAGE_IMAGES, readAgentImage, validateImageBudget } from '@/services/agent-images'
 import {
   markdownSelection, proposalMarkdown,
-  type AgentConfig, type AgentEvent, type AgentSettings, type AgentSkill, type DocumentSnapshot, type ReviewedEdit,
+  type AgentConfig, type AgentEvent, type AgentImage, type AgentSettings, type AgentSkill, type DocumentSnapshot, type ReviewedEdit,
 } from '@/services/agent'
 
 export interface ChatItem {
@@ -13,12 +14,20 @@ export interface ChatItem {
   role: 'user' | 'assistant'
   content: string
   attachment?: string
+  images?: AgentImage[]
+  contextSnapshot?: DocumentSnapshot | null
   tools: string[]
   edit?: ReviewedEdit
   error?: string
   cancelled?: boolean
 }
-interface Conversation { messages: ChatItem[]; draft: string; skillId: string }
+interface Conversation {
+  messages: ChatItem[]; draft: string; skillId: string; images: AgentImage[]; readingImages: boolean
+  includeDocument: boolean; selection: DocumentSnapshot | null; dismissedSelection: DocumentSnapshot | null
+}
+function newConversation(): Conversation {
+  return { messages: [], draft: '', skillId: '', images: [], readingImages: false, includeDocument: true, selection: null, dismissedSelection: null }
+}
 
 export function agentError(error: unknown): string {
   const code = String(error).match(/agent:([a-zA-Z]+)/)?.[1] ?? 'unknown'
@@ -38,14 +47,15 @@ export const useAgentStore = defineStore('agent', () => {
   const loadingConfig = ref(false)
   const configError = ref('')
   const error = ref('')
-  const includeDocument = ref(true)
-  const selection = ref<DocumentSnapshot | null>(null)
   const sessions = ref<Record<string, Conversation>>({})
   const currentKey = computed(() => editor.currentFileId ?? 'no-document')
   function getConversation(key = currentKey.value): Conversation {
-    return sessions.value[key] ?? (sessions.value[key] = { messages: [], draft: '', skillId: '' })
+    if (!sessions.value[key]) sessions.value[key] = newConversation()
+    return sessions.value[key]!
   }
   const conversation = computed(() => getConversation())
+  const includeDocument = computed({ get: () => conversation.value.includeDocument, set: value => { conversation.value.includeDocument = value } })
+  const selection = computed({ get: () => conversation.value.selection, set: value => { conversation.value.selection = value } })
   const run = ref<{ id: string; key: string; messageId: string; snapshot: DocumentSnapshot | null } | null>(null)
   const busy = computed(() => run.value !== null)
   const runningHere = computed(() => run.value?.key === currentKey.value)
@@ -93,13 +103,14 @@ export const useAgentStore = defineStore('agent', () => {
   }
 
   function toggle() {
+    if (!visible.value) attachSelection(true)
     visible.value = !visible.value
     if (visible.value && !config.value) void loadConfig()
   }
 
-  function attachSelection() {
+  function attachSelection(automatic = false) {
     const tab = editor.currentFile
-    if (!tab) return
+    if (!tab || automatic && !includeDocument.value) return
     let range: { from: number; to: number } | null = null
     if (editor.sourceCodeMode) {
       const data = tab.sourceSelection as { ranges?: { anchor: number; head: number }[]; main?: number } | null
@@ -107,15 +118,42 @@ export const useAgentStore = defineStore('agent', () => {
       if (selected && selected.anchor !== selected.head) range = { from: Math.min(selected.anchor, selected.head), to: Math.max(selected.anchor, selected.head) }
     } else {
       const muya = editor.getMuyaInstance() as { getCursor?: () => unknown } | null
-      range = markdownSelection(tab.markdown, muya?.getCursor?.())
+      try { range = markdownSelection(tab.markdown, muya?.getCursor?.()) }
+      catch { /* The editor can be switching documents or unmounting. */ }
     }
     if (!range || range.from < 0 || range.to > tab.markdown.length) {
-      error.value = t('agent.errors.noSelection')
+      if (!automatic) error.value = t('agent.errors.noSelection')
       return
     }
+    const dismissed = conversation.value.dismissedSelection
+    if (automatic && dismissed?.markdown === tab.markdown && dismissed.from === range.from && dismissed.to === range.to) return
     selection.value = { tabId: tab.id, name: tab.filename, markdown: tab.markdown, ...range }
+    conversation.value.dismissedSelection = null
     includeDocument.value = true
     error.value = ''
+  }
+
+  function clearSelection() {
+    conversation.value.dismissedSelection = selection.value
+    selection.value = null
+  }
+
+  async function addImages(files: File[]) {
+    const key = currentKey.value, chat = getConversation()
+    if (!files.length) return
+    if (chat.readingImages) { error.value = t('agent.errors.imageReading'); return }
+    if (chat.images.length + files.length > MAX_MESSAGE_IMAGES) { error.value = t('agent.errors.imageCount'); return }
+    chat.readingImages = true
+    error.value = ''
+    try {
+      const images: AgentImage[] = []
+      for (const file of files) images.push(await readAgentImage(file))
+      validateImageBudget([...chat.messages.flatMap(m => m.images ?? []), ...chat.images, ...images])
+      // Never attach an asynchronous read to a replacement/new conversation.
+      if (!disposed && sessions.value[key] === chat) chat.images.push(...images)
+    } catch (cause) {
+      if (currentKey.value === key && sessions.value[key] === chat) error.value = agentError(cause)
+    } finally { chat.readingImages = false }
   }
 
   function snapshot(): DocumentSnapshot | null {
@@ -159,14 +197,16 @@ export const useAgentStore = defineStore('agent', () => {
     await listening
   }
 
-  async function send(prompt = conversation.value.draft) {
-    if (busy.value || skillsLoading.value || !prompt.trim()) return
+  async function send(prompt = conversation.value.draft, retryContext?: DocumentSnapshot | null) {
+    if (busy.value || skillsLoading.value || conversation.value.readingImages || !prompt.trim() && !conversation.value.images.length) return
     error.value = ''
     const chat = getConversation()
     const skillIds = chat.skillId ? [chat.skillId] : []
     let attached: DocumentSnapshot | null
     try {
-      attached = snapshot()
+      attached = retryContext === undefined ? snapshot() : retryContext
+      if (attached && (attached.tabId !== editor.currentFileId || attached.markdown !== editor.currentFile?.markdown)) throw new Error('agent:selectionChanged')
+      validateImageBudget([...chat.messages.flatMap(m => m.images ?? []), ...chat.images])
       if (chat.messages.length >= 22) throw new Error('agent:historyFull')
       const total = new TextEncoder().encode(prompt + chat.messages.map(m => m.content).join('')).length
       const documentBytes = new TextEncoder().encode(attached?.markdown.slice(attached.from, attached.to) ?? '').length
@@ -175,13 +215,16 @@ export const useAgentStore = defineStore('agent', () => {
     const requestId = crypto.randomUUID()
     const messageId = crypto.randomUUID()
     run.value = { id: requestId, key: currentKey.value, messageId, snapshot: attached }
-    chat.messages.push({ id: crypto.randomUUID(), role: 'user', content: prompt.trim(), tools: [], attachment: attached ? `${attached.name} · ${selection.value?.tabId === attached.tabId ? t('agent.selection') : t('agent.document')}` : t('agent.noAttachment') })
+    chat.messages.push({ id: crypto.randomUUID(), role: 'user', content: prompt.trim(), tools: [], images: chat.images.map(image => ({ ...image })), contextSnapshot: attached,
+      attachment: attached ? `${attached.name} · ${attached.from !== 0 || attached.to !== attached.markdown.length ? t('agent.selection') : t('agent.document')}` : t('agent.noAttachment') })
     const messages = chat.messages.filter(m => !m.error && !m.cancelled).map(m => ({
       role: m.role,
       content: m.content + (m.edit ? `\n[Document edit status: ${m.edit.status}. Proposal: ${m.edit.title}]` : ''),
+      ...(m.images?.length ? { images: m.images.map(image => ({ ...image })) } : {}),
     }))
     chat.messages.push({ id: messageId, role: 'assistant', content: '', tools: [] })
     chat.draft = ''
+    chat.images = []
     try {
       startPromise = (async () => {
         await ensureListener()
@@ -210,7 +253,8 @@ export const useAgentStore = defineStore('agent', () => {
 
   function clear() {
     if (busy.value) return
-    sessions.value[currentKey.value] = { messages: [], draft: '', skillId: '' }
+    const previous = getConversation()
+    sessions.value[currentKey.value] = { ...newConversation(), includeDocument: previous.includeDocument, dismissedSelection: previous.selection ?? previous.dismissedSelection }
     error.value = ''
   }
 
@@ -237,12 +281,14 @@ export const useAgentStore = defineStore('agent', () => {
   function retry() {
     if (busy.value) return
     const chat = getConversation()
+    if (chat.readingImages || chat.draft.trim() || chat.images.length) return
     const last = chat.messages.at(-1)
     const user = chat.messages.at(-2)
     if (last?.role !== 'assistant' || user?.role !== 'user' || !(last.error || last.cancelled)) return
     chat.messages.splice(-2)
     chat.draft = user.content
-    void send()
+    chat.images = user.images?.map(image => ({ ...image })) ?? []
+    void send(user.content, user.contextSnapshot)
   }
 
   onScopeDispose(() => {
@@ -252,5 +298,5 @@ export const useAgentStore = defineStore('agent', () => {
   })
 
   return { visible, settingsOpen, skillsOpen, skills, skillsLoading, skillsError, loadSkills, changeSkills, config, loadingConfig, configError, error, includeDocument, selection, conversation,
-    busy, runningHere, stopping, run, toggle, loadConfig, saveConfig, attachSelection, send, stop, clear, apply, revert, retry }
+    busy, runningHere, stopping, run, toggle, loadConfig, saveConfig, attachSelection, clearSelection, addImages, send, stop, clear, apply, revert, retry }
 })

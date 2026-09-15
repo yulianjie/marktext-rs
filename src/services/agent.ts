@@ -1,7 +1,8 @@
 /** Shared IPC contract and deterministic edit validation. */
 export interface AgentSettings { baseUrl: string; model: string }
 export interface AgentConfig extends AgentSettings { hasKey: boolean }
-export interface AgentMessage { role: 'user' | 'assistant'; content: string }
+export interface AgentImage { name: string; dataUrl: string }
+export interface AgentMessage { role: 'user' | 'assistant'; content: string; images?: AgentImage[] }
 export interface AgentContext { name: string; markdown: string }
 export interface AgentSkill {
   id: string

@@ -103,7 +103,7 @@ onBeforeUnmount(() => {
       <component :is="layout.showSideBar ? PanelLeftClose : PanelLeftOpen" :size="16" :stroke-width="1.6" aria-hidden="true" />
     </button>
     <div class="drag-space" data-tauri-drag-region />
-    <button type="button" class="agent-toggle" :aria-label="t('agent.toggle')" :title="t('agent.toggle') + ' (Ctrl/Cmd+Shift+A)'" :aria-expanded="agent.visible" aria-controls="agent-panel" @click="agent.toggle()"><Sparkles :size="15" /><span>{{ t('agent.toggle') }}</span><i v-if="agent.busy" /></button>
+    <button type="button" class="agent-toggle" :aria-label="t('agent.toggle')" :title="t('agent.toggle') + ' (Ctrl/Cmd+Shift+A)'" :aria-expanded="agent.visible" aria-controls="agent-panel" @mousedown.prevent @click="agent.toggle()"><Sparkles :size="15" /><span>{{ t('agent.toggle') }}</span><i v-if="agent.busy" /></button>
     <div v-if="customChrome" class="window-controls">
       <button type="button" :aria-label="t('chrome.minimize')" :title="t('chrome.minimize')"
         :disabled="!appWindow" @click="run(() => appWindow!.minimize())">

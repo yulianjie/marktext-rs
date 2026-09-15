@@ -70,6 +70,17 @@
 .agent-send-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .agent-send-row small { font-size: 10px; color: var(--mt-fg-muted); }
 .agent-send-row button { width: 30px; height: 30px; padding: 0; }
+.agent-send-row small { flex: 1; text-align: center; }
+.agent-image-input { display: none; }
+.agent-images { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.agent-image-card { position: relative; width: 56px; height: 56px; }
+.agent-panel .agent-image-preview, .agent-sent-images button { padding: 0; width: 56px; height: 56px; overflow: hidden; }
+.agent-images img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.agent-panel .agent-image-remove { position: absolute; top: -5px; right: -5px; min-height: 20px; width: 20px; height: 20px; padding: 2px; border-radius: 50%; }
+.agent-image-hint { color: var(--mt-fg-muted); font-size: 10px; line-height: 1.5; margin: 8px 0 0; }
+.agent-selection-preview { margin-top: 5px; font-size: 11px; color: var(--mt-fg-muted); }
+.agent-selection-preview summary { cursor: pointer; }
+.agent-selection-preview pre { max-height: 96px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; margin: 6px 0; padding-left: 8px; border-left: 2px solid var(--mt-accent); font: inherit; line-height: 1.6; color: var(--mt-fg); }
 .agent-privacy-note { margin: 7px 12px 10px; text-align: center; color: var(--mt-fg-muted); font-size: 10px; line-height: 1.5; }
 .agent-panel .agent-jump { align-self: center; flex-shrink: 0; border-radius: 16px; box-shadow: 0 2px 8px #0001; }
 .agent-banner, .agent-composer-error { font-size: 12px; line-height: 1.6; margin: 10px 12px 0; padding: 8px 10px; border: 1px solid var(--mt-border); border-radius: 6px; }

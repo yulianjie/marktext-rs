@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import { markdownSelection, proposalMarkdown, type AgentEvent } from '../../src/services/agent'
+import { markdownSelection, proposalMarkdown, type AgentEvent, type AgentImage } from '../../src/services/agent'
+import { readAgentImage } from '../../src/services/agent-images'
 
 const transport = vi.hoisted(() => ({ getConfig: vi.fn(), saveConfig: vi.fn(), testConnection: vi.fn(), start: vi.fn(), cancel: vi.fn(), listen: vi.fn(), listSkills: vi.fn(), importSkill: vi.fn() }))
 vi.mock('@/services/agent-transport', () => ({ agentTransport: transport }))
+vi.mock('@/services/agent-images', async importOriginal => ({ ...await importOriginal<typeof import('../../src/services/agent-images')>(), readAgentImage: vi.fn() }))
 vi.mock('@/services/tauri-invoke', () => ({ readMarkdown: vi.fn(), saveMarkdown: vi.fn(), saveAsDialog: vi.fn(), renameFile: vi.fn() }))
 vi.mock('element-plus', () => ({ ElMessageBox: { confirm: vi.fn() }, ElNotification: vi.fn() }))
 
@@ -24,6 +26,98 @@ beforeEach(() => {
 
 const snapshot = { tabId: 'doc', name: 'note.md', markdown: 'same\nhello world\nsame', from: 5, to: 16 }
 describe('Agent document edits', () => {
+  const picture: AgentImage = { name: 'image.png', dataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a5WQAAAAASUVORK5CYII=' }
+  it('automatically captures reversed source selections, respects removal and isolates attachment settings', () => {
+    const editor = useEditorStore(), agent = useAgentStore()
+    const first = editor.newUntitledTab('private\nselected text\nprivate')
+    editor.sourceCodeMode = true
+    first.sourceSelection = { ranges: [{ anchor: 21, head: 8 }], main: 0 }
+    agent.toggle()
+    expect(agent.selection?.markdown.slice(agent.selection.from, agent.selection.to)).toBe('selected text')
+    agent.clearSelection()
+    agent.attachSelection(true)
+    expect(agent.selection).toBeNull()
+    agent.attachSelection()
+    expect(agent.selection).not.toBeNull()
+    agent.includeDocument = false
+    agent.clearSelection()
+    agent.attachSelection(true)
+    expect(agent.includeDocument).toBe(false)
+    expect(agent.selection).toBeNull()
+    editor.newUntitledTab('another')
+    expect(agent.includeDocument).toBe(true)
+    editor.setCurrent(first.id)
+    expect(agent.includeDocument).toBe(false)
+    agent.clear()
+    expect(agent.includeDocument).toBe(false)
+  })
+  it('sends image-only messages, retains images in follow-ups and retries the same immutable context', async () => {
+    const editor = useEditorStore(), agent = useAgentStore()
+    const tab = editor.newUntitledTab('hello world')
+    agent.conversation.images = [{ ...picture }]
+    await agent.send('')
+    expect(transport.start.mock.calls[0]![0].messages).toEqual([{ role: 'user', content: '', images: [picture] }])
+    expect(agent.conversation.images).toEqual([])
+    emit({ requestId: agent.run!.id, kind: 'error', text: 'agent:network' })
+    agent.includeDocument = false
+    agent.retry()
+    await vi.waitFor(() => expect(transport.start).toHaveBeenCalledTimes(2))
+    expect(transport.start.mock.calls[1]![0].context?.markdown).toBe(tab.markdown)
+    expect(transport.start.mock.calls[1]![0].messages[0].images).toEqual([picture])
+    emit({ requestId: agent.run!.id, kind: 'done' })
+    await agent.send('What is in the image?')
+    expect(transport.start.mock.calls[2]![0].messages[0].images).toEqual([picture])
+    expect(transport.start.mock.calls[2]![0].messages.at(-1).images).toBeUndefined()
+  })
+  it('keeps pending image reads with their document and discards reads after clearing a conversation', async () => {
+    const editor = useEditorStore(), agent = useAgentStore()
+    const tab = editor.newUntitledTab('first')
+    let finish!: (image: AgentImage) => void
+    vi.mocked(readAgentImage).mockImplementation(() => new Promise(resolve => { finish = resolve }))
+    const adding = agent.addImages([{} as File])
+    await agent.addImages([{} as File])
+    expect(agent.error).not.toBe('')
+    await agent.send('not ready')
+    expect(transport.start).not.toHaveBeenCalled()
+    editor.newUntitledTab('second')
+    finish(picture)
+    await adding
+    expect(agent.conversation.images).toEqual([])
+    editor.setCurrent(tab.id)
+    expect(agent.conversation.images).toEqual([picture])
+    const discarded = agent.addImages([{} as File])
+    agent.clear()
+    finish(picture)
+    await discarded
+    expect(agent.conversation.images).toEqual([])
+    expect(agent.conversation.readingImages).toBe(false)
+  })
+  it('rejects a failed batch without losing existing images and guards count limits', async () => {
+    const agent = useAgentStore()
+    agent.conversation.images = [{ ...picture }]
+    vi.mocked(readAgentImage).mockResolvedValueOnce(picture).mockRejectedValueOnce(new Error('agent:imageRead'))
+    await agent.addImages([{} as File, {} as File])
+    expect(agent.conversation.images).toEqual([picture])
+    expect(agent.error).not.toBe('')
+    await agent.addImages(Array.from({ length: 4 }, () => ({} as File)))
+    expect(agent.conversation.images).toEqual([picture])
+    expect(agent.conversation.readingImages).toBe(false)
+  })
+  it('refuses stale selection sends and stale retries without sending a different document', async () => {
+    const editor = useEditorStore(), agent = useAgentStore()
+    const tab = editor.newUntitledTab('hello world')
+    editor.sourceCodeMode = true
+    tab.sourceSelection = { ranges: [{ anchor: 0, head: 5 }], main: 0 }
+    agent.attachSelection(true)
+    await agent.send('revise')
+    emit({ requestId: agent.run!.id, kind: 'error', text: 'agent:network' })
+    editor.setMarkdownExternal(tab.id, 'changed document')
+    agent.retry()
+    expect(transport.start).toHaveBeenCalledTimes(1)
+    expect(agent.conversation.draft).toBe('revise')
+    await agent.send()
+    expect(transport.start).toHaveBeenCalledTimes(1)
+  })
   it('keeps document size separate from chat context and defaults to automatic skills', async () => {
     useEditorStore().newUntitledTab('x'.repeat(400_000))
     const agent = useAgentStore()

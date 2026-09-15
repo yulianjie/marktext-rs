@@ -61,6 +61,133 @@ async function markdown(page: Page) {
   return page.evaluate(async () => { const path='/src/stores/editor.ts'; return (await import(path)).useEditorStore().currentFile.markdown })
 }
 
+async function pictureData(page: Page) {
+  return page.evaluate(() => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 480; canvas.height = 280
+    const ctx = canvas.getContext('2d')!
+    ctx.fillStyle = '#f2eee6'; ctx.fillRect(0, 0, 480, 280)
+    ctx.fillStyle = '#456250'; ctx.fillRect(28, 30, 5, 215)
+    ctx.fillStyle = '#23382c'; ctx.font = 'bold 28px sans-serif'; ctx.fillText('Writing notes', 52, 75)
+    ctx.font = '18px sans-serif'; ctx.fillText('1. Keep the original meaning', 52, 124)
+    ctx.fillText('2. Make the next step clear', 52, 164)
+    ctx.fillText('3. Review before applying', 52, 204)
+    return canvas.toDataURL('image/png')
+  })
+}
+
+async function pastePicture(page: Page, dataUrl: string, text = '') {
+  await page.getByRole('textbox', { name: '发送给写作助手的消息' }).evaluate((input, { dataUrl, text }) => {
+    const data = new DataTransfer()
+    const bytes = Uint8Array.from(atob(dataUrl.split(',')[1]), c => c.charCodeAt(0))
+    data.items.add(new File([bytes], 'clipboard.png', { type: 'image/png' }))
+    if (text) data.setData('text/plain', text)
+    input.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }))
+  }, { dataUrl, text })
+}
+
+test('pastes, previews, removes and sends images with follow-up history and retry', async ({ page }) => {
+  await setup(page)
+  await page.locator('.agent-context-row input').uncheck()
+  const input = page.getByRole('textbox', { name: '发送给写作助手的消息' })
+  const dataUrl = await pictureData(page)
+  await input.fill('Review: ')
+  await input.press('End')
+  await pastePicture(page, dataUrl, 'these notes')
+  await expect(input).toHaveValue('Review: these notes')
+  await expect(page.locator('.agent-draft-images img')).toHaveCount(1)
+  expect(await page.locator('.agent-draft-images img').evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(480)
+  await page.getByRole('button', { name: '查看图片 clipboard.png' }).click()
+  await expect(page.locator('.mt-image-preview-img')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await page.getByRole('button', { name: '移除图片 clipboard.png' }).click()
+  await expect(page.locator('.agent-draft-images img')).toHaveCount(0)
+  await pastePicture(page, dataUrl)
+  await input.fill('error')
+  await page.getByRole('button', { name: '发送', exact: true }).click()
+  await expect(page.locator('.agent-message .agent-error')).toBeVisible()
+  await expect(page.locator('.agent-draft-images img')).toHaveCount(0)
+  await expect(page.locator('.agent-sent-images img')).toHaveCount(1)
+  await page.locator('.agent-message-actions').getByRole('button', { name: '重试' }).click()
+  await expect(page.locator('.agent-message .agent-error')).toBeVisible()
+  expect(await page.evaluate(() => (window as any).__agentRequest.messages.at(-1).images)).toEqual([{ name: 'clipboard.png', dataUrl }])
+  await send(page, 'Explain the second note')
+  await expect(page.locator('.agent-working')).toHaveCount(0)
+  expect(await page.evaluate(() => (window as any).__agentRequest.messages[0].images)).toEqual([{ name: 'clipboard.png', dataUrl }])
+  await pastePicture(page, dataUrl)
+  for (const width of [1280, 540]) {
+    await page.setViewportSize({ width, height: 800 })
+    await expect(page.getByRole('button', { name: '发送', exact: true })).toBeInViewport()
+    expect(await page.locator('.agent-panel').evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true)
+    await page.screenshot({ path: `output/agent-multimodal/images-${width}.png` })
+  }
+})
+
+test('supports image-only file input, validation, and ordinary text paste', async ({ page }) => {
+  await setup(page)
+  await page.locator('.agent-context-row input').uncheck()
+  const dataUrl = await pictureData(page)
+  const picker = page.locator('.agent-image-input')
+  await picker.setInputFiles({ name: 'notes.png', mimeType: 'image/png', buffer: Buffer.from(dataUrl.split(',')[1], 'base64') })
+  await expect(page.locator('.agent-draft-images img')).toHaveCount(1)
+  await page.getByRole('button', { name: '发送', exact: true }).click()
+  await expect(page.locator('.agent-working')).toHaveCount(0)
+  expect(await page.evaluate(() => (window as any).__agentRequest.messages.at(-1))).toMatchObject({ content: '', images: [{ name: 'notes.png', dataUrl }] })
+  await picker.setInputFiles({ name: 'bad.svg', mimeType: 'image/svg+xml', buffer: Buffer.from('<svg/>') })
+  await expect(page.locator('.agent-composer-error')).toContainText('支持 PNG')
+  await picker.setInputFiles({ name: 'too-big.png', mimeType: 'image/png', buffer: Buffer.alloc(5 * 1024 * 1024 + 1) })
+  await expect(page.locator('.agent-composer-error')).toContainText('超过 5 MB')
+  await picker.setInputFiles({ name: 'broken.png', mimeType: 'image/png', buffer: Buffer.from('not an image') })
+  await expect(page.locator('.agent-composer-error')).toContainText('无法读取')
+  const file = { name: 'notes.png', mimeType: 'image/png', buffer: Buffer.from(dataUrl.split(',')[1], 'base64') }
+  await picker.setInputFiles(Array.from({ length: 5 }, () => file))
+  await expect(page.locator('.agent-composer-error')).toContainText('最多附加 4 张')
+  const input = page.getByRole('textbox', { name: '发送给写作助手的消息' })
+  // The browser performs the actual default paste after our listener returns.
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
+  await page.evaluate(() => navigator.clipboard.writeText('普通粘贴文字'))
+  await input.click()
+  await page.keyboard.press('Control+V')
+  await expect(input).toHaveValue('普通粘贴文字')
+  await expect(page.locator('.agent-draft-images img')).toHaveCount(0)
+})
+
+for (const source of [false, true]) {
+  test(`automatically attaches editor selections on focus and open in ${source ? 'source' : 'wysiwyg'} mode`, async ({ page }) => {
+    await setup(page, source)
+    const input = page.getByRole('textbox', { name: '发送给写作助手的消息' })
+    const select = async () => {
+      const line = source ? page.locator('.source-pane .cm-line').filter({ hasText: 'hello world' }) : page.locator('.muya-host').getByText('hello world', { exact: true })
+      await line.click()
+      await page.keyboard.press('Home')
+      await page.keyboard.press('Shift+End')
+    }
+    await select()
+    await input.click()
+    await expect(page.locator('.agent-context-row label')).toContainText('选中内容')
+    await page.locator('.agent-selection-preview summary').click()
+    await expect(page.locator('.agent-selection-preview pre')).toHaveText('hello world')
+    await page.getByRole('button', { name: '切换为整篇文档' }).click()
+    await input.click()
+    await expect(page.locator('.agent-context-row label')).toContainText('当前文档')
+    await select()
+    await page.keyboard.press('Shift+ArrowLeft') // a fresh, shorter selection
+    await page.getByRole('button', { name: 'AI 助手', exact: true }).click()
+    await page.keyboard.press('Control+Shift+A')
+    await expect(page.locator('.agent-context-row label')).toContainText('选中内容')
+    await send(page)
+    await expect(page.locator('.agent-working')).toHaveCount(0)
+    expect(await page.evaluate(() => (window as any).__agentRequest.context.markdown)).toBe('hello worl')
+    await page.locator('.agent-context-row input').uncheck()
+    await select()
+    await input.click()
+    await expect(page.locator('.agent-context-row input')).not.toBeChecked()
+    await send(page, 'No document')
+    await expect(page.locator('.agent-working')).toHaveCount(0)
+    expect(await page.evaluate(() => (window as any).__agentRequest.context)).toBeNull()
+  })
+}
+
 test('imports, selects, inspects, disables and removes writing skills', async ({ page }) => {
   await setup(page)
   await expect(page.locator('.agent-context-row')).toContainText('按需读取')
