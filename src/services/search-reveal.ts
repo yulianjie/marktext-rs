@@ -16,6 +16,8 @@ export interface SearchRevealRequest extends SearchRevealCoordinates {
   tabId: string
   path: string
   mode: SearchRevealMode
+  /** Exact snapshot-backed UTF-16 range, used for multiline Agent sources. */
+  exactRange?: { markdown: string; from: number; to: number }
 }
 
 export type NewSearchRevealRequest = Omit<SearchRevealRequest, 'requestId'>
@@ -39,6 +41,17 @@ export interface EditorSearchRange {
   /** UTF-16 document offsets, suitable for CodeMirror 6. */
   from: number
   to: number
+  endLine?: number
+}
+
+export function revealRequestToEditorRange(markdown: string, request: SearchRevealRequest): EditorSearchRange | null {
+  const exact = request.exactRange
+  if (!exact) return searchCoordinatesToEditorRange(markdown, request)
+  const { from, to } = exact
+  if (markdown !== exact.markdown || !Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < from || to > markdown.length) return null
+  const position = (offset: number) => { const lines = markdown.slice(0, offset).split('\n'); return { line: lines.length - 1, ch: lines.at(-1)!.length } }
+  const start = position(from), end = position(to)
+  return { from, to, line: start.line, startCh: start.ch, endLine: end.line, endCh: end.ch }
 }
 
 export interface SearchRevealGuardState {

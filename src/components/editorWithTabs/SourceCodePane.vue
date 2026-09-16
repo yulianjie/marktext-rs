@@ -35,7 +35,7 @@ import {
 import {
   emptySearchRevealGuard,
   enqueueSearchReveal,
-  searchCoordinatesToEditorRange,
+  revealRequestToEditorRange,
   settleSearchReveal,
 } from '@/services/search-reveal'
 import { publishSourceDocumentChange, restoreSourceEditorState } from '@/services/source-editor-state'
@@ -165,7 +165,8 @@ function tryRevealSearchHit() {
   const view = viewRef.value
   if (!request || !view) return
 
-  const range = searchCoordinatesToEditorRange(view.state.doc.toString(), request)
+  const range = revealRequestToEditorRange(view.state.doc.toString(), request)
+  if (!range) return
   view.dispatch({
     selection: { anchor: range.from, head: range.to },
     effects: EditorView.scrollIntoView(range.from, { y: 'center' }),

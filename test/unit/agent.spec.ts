@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import { markdownSelection, proposalMarkdown, type AgentEvent, type AgentImage } from '../../src/services/agent'
+import { changeDiff, markdownSelection, proposalMarkdown, reviewProposal, type AgentEvent, type AgentImage } from '../../src/services/agent'
 import { readAgentImage } from '../../src/services/agent-images'
 
 const transport = vi.hoisted(() => ({ getConfig: vi.fn(), saveConfig: vi.fn(), testConnection: vi.fn(), start: vi.fn(), cancel: vi.fn(), listen: vi.fn(), listSkills: vi.fn(), importSkill: vi.fn() }))
@@ -159,6 +159,69 @@ describe('Agent document edits', () => {
   it('maps reversed Markdown selections and rejects invalid coordinates', () => {
     expect(markdownSelection('你好\nworld', { anchor: { line: 1, ch: 3 }, focus: { line: 0, ch: 1 } })).toEqual({ from: 1, to: 6 })
     expect(markdownSelection('hi', { anchor: { line: 4, ch: 0 }, focus: { line: 0, ch: 0 } })).toBeNull()
+  })
+  it('validates disjoint UTF-16 edits, adjacent edits, and bounded nonempty batches', () => {
+    const snapshot = { tabId: 'doc', name: 'note', markdown: '😀one\n中文two\nthree', from: 0, to: 17 }
+    const proposal = { title: 'Batch', changes: [{ oldText: 'one', newText: 'ONE' }, { oldText: '中文two', newText: '二' }] }
+    expect(proposalMarkdown(snapshot, proposal)).toBe('😀ONE\n二\nthree')
+    expect(reviewProposal(snapshot, proposal).changes.map(c => [c.from, c.startLine])).toEqual([[2, 1], [6, 2]])
+    expect(proposalMarkdown(snapshot, { title: 'Adjacent', changes: [{ oldText: '😀', newText: '😎' }, { oldText: 'one', newText: 'ONE' }] })).toBe('😎ONE\n中文two\nthree')
+    for (const changes of [[], [{ oldText: 'one', newText: 'ONE' }, { oldText: '😀one', newText: 'x' }], [{ oldText: '', newText: 'a' }, { oldText: '', newText: 'b' }], [{ oldText: 'one\n', newText: 'one\r\n' }], Array.from({ length: 33 }, () => ({ oldText: '', newText: 'a' }))]) {
+      expect(() => proposalMarkdown(snapshot, { title: 'Invalid', changes })).toThrow('agent:invalidEdit')
+    }
+    expect(() => proposalMarkdown({ ...snapshot, markdown: 'aaa', to: 3 }, { title: 'Ambiguous', oldText: 'aa', newText: 'b' })).toThrow()
+    expect(changeDiff({ oldText: 'same\nold\ntail', newText: 'same\nnew\ntail' })).toEqual([
+      { kind: 'same', text: 'same' }, { kind: 'removed', text: 'old' }, { kind: 'added', text: 'new' }, { kind: 'same', text: 'tail' },
+    ])
+  })
+  it('accepts disjoint changes sequentially, rejects external typing, and reverts only selected changes', async () => {
+    const editor = useEditorStore(), agent = useAgentStore()
+    const tab = editor.newUntitledTab('😀one\n中文two\nthree')
+    const handler = vi.fn((text: string) => editor.setMarkdownExternal(tab.id, text))
+    editor.registerAgentEditHandler('wysiwyg', handler)
+    await agent.send('edit')
+    const id = agent.run!.id
+    emit({ requestId: id, kind: 'proposal', proposal: { title: 'Batch', changes: [
+      { oldText: 'one', newText: 'a longer first part' }, { oldText: '中文two', newText: '二' }, { oldText: 'three', newText: 'THREE' },
+    ] } })
+    emit({ requestId: id, kind: 'done' })
+    const edit = agent.conversation.messages.at(-1)!.edit!
+    agent.apply(edit, 0)
+    expect(tab.markdown).toBe('😀a longer first part\n中文two\nthree')
+    agent.apply(edit, 1)
+    expect(tab.markdown).toBe('😀a longer first part\n二\nthree')
+    expect(edit.status).toBe('partial')
+    const expected = tab.markdown
+    editor.setMarkdownExternal(tab.id, expected + '!')
+    agent.apply(edit, 2)
+    agent.revert(edit, 0)
+    expect(tab.markdown).toBe(expected + '!')
+    expect(edit.changes.map(c => c.status)).toEqual(['applied', 'applied', 'pending'])
+    editor.setMarkdownExternal(tab.id, expected)
+    agent.revert(edit, 0)
+    expect(tab.markdown).toBe('😀one\n二\nthree')
+    agent.dismiss(edit, 2)
+    agent.revert(edit)
+    expect(tab.markdown).toBe('😀one\n中文two\nthree')
+    expect(edit.changes.map(c => c.status)).toEqual(['reverted', 'reverted', 'dismissed'])
+  })
+  it('applies a batch in one editor transaction and keeps dismissed changes out', async () => {
+    const editor = useEditorStore(), agent = useAgentStore()
+    const tab = editor.newUntitledTab('one two three')
+    const handler = vi.fn((text: string) => editor.setMarkdownExternal(tab.id, text))
+    editor.registerAgentEditHandler('wysiwyg', handler)
+    await agent.send('edit')
+    const id = agent.run!.id
+    emit({ requestId: id, kind: 'proposal', proposal: { title: 'Batch', changes: ['one', 'two', 'three'].map(oldText => ({ oldText, newText: oldText.toUpperCase() })) } })
+    emit({ requestId: id, kind: 'done' })
+    const edit = agent.conversation.messages.at(-1)!.edit!
+    agent.dismiss(edit, 1)
+    agent.apply(edit)
+    expect(handler).toHaveBeenCalledOnce()
+    expect(tab.markdown).toBe('ONE two THREE')
+    expect(edit.changes.map(c => c.status)).toEqual(['applied', 'dismissed', 'applied'])
+    agent.revert(edit)
+    expect(tab.markdown).toBe('one two three')
   })
   it('requires explicit apply and refuses stale documents, then supports exact revert', async () => {
     const editor = useEditorStore(), agent = useAgentStore()

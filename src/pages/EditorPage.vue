@@ -118,6 +118,7 @@ function requestWindowClose(): Promise<void> {
     }
     const decision = await editor.prepareWindowCloseWithDecision()
     if (decision === 'cancel') return
+    await agent.flushForClose()
     if (ownsDefaultSession) {
       await persistCleanEditorSession({
         writer: sessionWriter,

@@ -30,6 +30,12 @@ pub mod workspace;
 macro_rules! marktext_handler {
     () => {
         tauri::generate_handler![
+            $crate::commands::agent::history::cmd_agent_history_settings,
+            $crate::commands::agent::history::cmd_agent_history_set_enabled,
+            $crate::commands::agent::history::cmd_agent_history_list,
+            $crate::commands::agent::history::cmd_agent_history_read,
+            $crate::commands::agent::history::cmd_agent_history_write,
+            $crate::commands::agent::history::cmd_agent_history_delete,
             $crate::commands::agent::cmd_agent_get_config,
             $crate::commands::agent::cmd_agent_save_config,
             $crate::commands::agent::cmd_agent_test_connection,

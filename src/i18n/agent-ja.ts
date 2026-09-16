@@ -1,4 +1,16 @@
 export default {
+  history: { title: '会話履歴', enable: '会話をローカルに保存', detail: '任意のローカル履歴です。画像は保存されません。オフにしても既存の履歴は削除するまで残ります。最大 100 件 / 128 MB。', search: '会話タイトルを検索', empty: '保存した会話はありません', restore: '復元', export: 'Markdown をエクスポート', delete: '削除', restored: 'ローカル履歴を復元しました。過去の編集は閲覧専用です。原文が同じ場合は章ごとの要約を再開できます。', locked: '過去の編集記録 · 適用と取り消しは無効', imagesOmitted: '画像は履歴に保存されていません。画像について質問する前に再添付してください。' },
+  references: { title: '参考文書', detail: '必要に応じて読む閲覧専用スナップショット。最大 8 ファイル、各 2 MB、合計 4 MB。編集対象は現在の文書のみです。', openTab: '開いているタブを添付', files: 'Markdown ファイルを選択', reading: '参考ファイルを読み込み中…', remove: '参考文書 {name} を削除' },
+
+  referenceDocument: '文書全体を参照し、選択範囲のみ編集',
+  chapterSummary: '章ごとに要約',
+  resumeSummary: '章ごとの要約を再開',
+  summaryCoverage: '原文の処理範囲：{done}/{total} 区間',
+  summaryCalls: '完了したリクエスト：{done}/{total}',
+  summaryNotes: '完了した区間のメモ',
+  summaryStates: { running: '区間を読んでいます', synthesis: '要約を統合中', done: '完了', cancelled: '停止 · 未完了', error: '失敗 · 未完了' },
+
+  useAnswer: '回答を使用', sources: '原文の根拠', locateSource: '原文へ移動', answerActions: { insert: 'カーソル位置に挿入', append: '文末に追加', replace: '選択範囲を置換', new: 'Markdown ノートを新規作成' },
   addImages: '画像を追加', previewImage: '画像 {name} を表示', removeImage: '画像 {name} を削除', readingImages: '画像を読み込み中…',
   visionHint: '画像認識には対応モデルが必要です。1メッセージ4枚まで、各5 MB以内。',
   selectionPreview: '選択したテキストを添付 · {count} 文字',
@@ -12,7 +24,9 @@ export default {
   retry: '再試行', copy: '返信をコピー', latest: '最新へ移動', runningElsewhere: '別の文書でアシスタントが動作中です。', returnToRun: '文書に戻る',
   privacyNote: '文書は必要に応じて読みます。会話、添付画像、使用するスキルは設定したモデルに送信されます。',
   steps: '{count} ステップ完了', viewChanges: '変更を確認', before: '変更前', after: '提案', append: '末尾に追加', deleteText: 'この内容を削除',
-  apply: '変更を適用', dismiss: '見送る', revert: '元に戻す', editStatus: { pending: '確認待ち', applied: '適用済み', dismissed: '見送り', reverted: '取り消し済み' },
+  applyChange: 'この変更を適用', dismissChange: 'この変更を見送る',
+  applyAll: 'すべて適用', dismissAll: 'すべて見送る', revertAll: '適用済みを取り消す', changeLines: '{start}–{end} 行',
+  apply: '変更を適用', dismiss: '見送る', revert: '元に戻す', editStatus: { partial: '一部確認済み', pending: '確認待ち', applied: '適用済み', dismissed: '見送り', reverted: '取り消し済み' },
   actions: { polish: '文章を推敲', summarize: '要約する', outline: '構成を整理', continue: '続きを書く' },
   prompts: {
     polish: '添付した文章の意味と語り口を保ち、自然で簡潔な表現に推敲してください。確認できる変更案を提案してください。',
@@ -20,7 +34,7 @@ export default {
     outline: '添付内容を読み、明確なアウトラインと構成の改善案を提案してください。',
     continue: '添付した文章の語り口に合わせ、次の段落を末尾に追加する変更案を提案してください。',
   },
-  tools: { read_document: '文書の構造や内容を確認', search_document: '文書内を検索', propose_edit: '変更案を準備', read_skill: 'スキルを読み込む', read_skill_file: 'スキルの参考資料を読む' },
+  tools: { cite_document: '原文の根拠を引用', read_document: '文書の構造や内容を確認', search_document: '文書内を検索', propose_edit: '変更案を準備', read_skill: 'スキルを読み込む', read_skill_file: 'スキルの参考資料を読む' },
   skills: {
     title: 'スキル管理', description: '文章作成の手法を追加します。有効なスキルは必要に応じて読み込まれ、入力欄の上で指定することもできます。',
     import: 'SKILL.md をインポート', importHelp: 'スキルフォルダー内の SKILL.md を選択します。同じフォルダーの Markdown、TXT、Mermaid の参考資料も取り込みます。スクリプトは実行しません。',
@@ -46,6 +60,10 @@ export default {
     privacy: '送信時に会話、添付画像、文書の基本情報、有効なスキルの名前と用途をモデルに渡します。文書の段落とスキル本文は必要に応じて読み込みます。接続テストはテストメッセージのみ送信します。',
   },
   errors: {
+    historyRead: 'ローカル会話履歴を読み込めませんでした。', historyWrite: 'ローカル会話履歴を保存できませんでした。', historyInvalid: '保存された会話が無効か未対応の形式です。', historyConflict: '別のウィンドウで変更または削除されました。履歴を開き直してください。', historyDisabled: '別のウィンドウで履歴保存が無効になりました。', historyLimit: '履歴の上限に達しました。古い会話をエクスポートして削除してください。', historyImages: '画像は保存されていません。再添付して新しいメッセージを送信してください。', referenceLimit: '参考文書は最大 8 件、各 2 MB、合計 4 MB までです。', referenceRead: '参考文書を読み込めません。文字コードを確認してください。',
+
+    summaryEmpty: '要約できるテキストがありません。', summaryTooMany: '区間が多すぎます。文書を分割してください。', summaryIncomplete: '区間メモが不足しています。要約をやり直してください。', summaryNoAttachment: '文書または選択範囲を添付してください。', summaryChanged: '文書または添付範囲が変わりました。要約をやり直してください。', summaryOutputTooLarge: 'モデルの区間メモが長すぎます。再開するとこの区間を再試行し、完了済みのメモは保持します。',
+    invalidSource: 'モデルの原文参照が無効です。', sourceChanged: '原文が変更されたか、別の文書が開かれています。正確に移動できません。', answerTargetChanged: '挿入位置または選択範囲が古くなっています。エディターで位置を選び直してください。',
     imageReading: '前の画像を読み込み中です。完了後にもう一度貼り付けてください。',
     imageType: 'PNG、JPEG、WebPの画像を使用してください。', imageSize: '画像が空か、5 MBを超えています。縮小して再度追加してください。',
     imageCount: '1メッセージに添付できる画像は4枚までです。画像を削除してから追加してください。', imageHistoryLimit: 'この会話の画像が12枚または合計20 MBを超えています。新しい会話を開始してください。',

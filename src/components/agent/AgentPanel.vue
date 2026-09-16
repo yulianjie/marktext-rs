@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { ArrowDown, ArrowUp, BookOpen, Check, Copy, FileText, ImagePlus, LoaderCircle, Plus, RotateCcw, Settings2, Sparkles, Square, TextSelect, X } from '@lucide/vue'
+import { ArrowDown, ArrowUp, BookOpen, Check, Copy, FileText, History, ImagePlus, LoaderCircle, Plus, RotateCcw, Settings2, Sparkles, Square, TextSelect, X } from '@lucide/vue'
 import DOMPurify from 'dompurify'
 import marked from 'muya/lib/parser/marked'
 import { useAgentStore } from '@/stores/agent'
@@ -9,7 +9,10 @@ import { useI18n } from '@/i18n'
 import { AGENT_IMAGE_TYPES, MAX_MESSAGE_IMAGES } from '@/services/agent-images'
 import { bus } from '@/bus'
 import AgentSettings from './AgentSettings.vue'
+import AgentHistory from './AgentHistory.vue'
+import AgentReferences from './AgentReferences.vue'
 import AgentSkills from './AgentSkills.vue'
+import AgentEditReview from './AgentEditReview.vue'
 import './agent.css'
 
 const agent = useAgentStore()
@@ -104,33 +107,42 @@ function startResize(event: PointerEvent) {
   window.addEventListener('pointermove', resize)
   window.addEventListener('pointerup', stopResize, { once: true })
 }
+function captureEditorBlur(event: FocusEvent) {
+  if (event.target instanceof Element && event.target.closest('.cm-editor, .muya-host')) agent.captureAnswerTarget(true)
+}
 onMounted(() => {
+  document.addEventListener('focusout', captureEditorBlur)
   try { const width = Number(localStorage.getItem('mt:agentWidth')); if (width >= 320 && width <= 560) panelWidth.value = width } catch { /* optional preference */ }
   input.value?.focus()
   if (!agent.config) void agent.loadConfig()
   void agent.loadSkills()
+  void agent.loadHistory()
 })
-onBeforeUnmount(() => { stopResize(); clearTimeout(copyTimer) })
+onBeforeUnmount(() => { document.removeEventListener('focusout', captureEditorBlur); stopResize(); clearTimeout(copyTimer) })
 </script>
 
 <template>
-  <aside id="agent-panel" class="agent-panel" :style="{ '--agent-width': panelWidth + 'px' }" :aria-label="t('agent.title')">
+  <aside id="agent-panel" class="agent-panel" :style="{ '--agent-width': panelWidth + 'px' }" :aria-label="t('agent.title')" @pointerdown.capture="agent.captureAnswerTarget()">
     <div class="agent-resize" role="separator" tabindex="0" aria-orientation="vertical" :aria-valuenow="panelWidth" :aria-valuemin="320" :aria-valuemax="560" :aria-label="t('agent.resize')"
       @pointerdown="startResize" @keydown.left.prevent="panelWidth = Math.min(560, panelWidth + 20)" @keydown.right.prevent="panelWidth = Math.max(320, panelWidth - 20)" />
     <header class="agent-header">
       <Sparkles :size="16" class="agent-mark" /><h2>{{ t('agent.title') }}</h2>
-      <button type="button" :disabled="agent.busy || !agent.conversation.messages.length" :aria-label="t('agent.newChat')" :title="t('agent.newChat')" @click="agent.clear"><Plus :size="16" /></button>
-      <button type="button" :aria-label="t('agent.skills.title')" :title="t('agent.skills.title')" :aria-pressed="agent.skillsOpen" @click="agent.skillsOpen = !agent.skillsOpen; agent.settingsOpen = false"><BookOpen :size="16" /></button>
-      <button type="button" :aria-label="t('agent.settings.title')" :title="t('agent.settings.title')" :aria-pressed="agent.settingsOpen" @click="agent.settingsOpen = !agent.settingsOpen; agent.skillsOpen = false"><Settings2 :size="16" /></button>
+      <button type="button" :disabled="agent.busy || !agent.historyLoaded || !agent.conversation.messages.length" :aria-label="t('agent.newChat')" :title="t('agent.newChat')" @click="agent.clear"><Plus :size="16" /></button>
+      <button type="button" :aria-label="t('agent.history.title')" :title="t('agent.history.title')" :aria-pressed="agent.historyOpen" @click="agent.openHistory(); agent.settingsOpen = false; agent.skillsOpen = false"><History :size="16" /></button>
+      <button type="button" :aria-label="t('agent.skills.title')" :title="t('agent.skills.title')" :aria-pressed="agent.skillsOpen" @click="agent.skillsOpen = !agent.skillsOpen; agent.settingsOpen = false; agent.historyOpen = false"><BookOpen :size="16" /></button>
+      <button type="button" :aria-label="t('agent.settings.title')" :title="t('agent.settings.title')" :aria-pressed="agent.settingsOpen" @click="agent.settingsOpen = !agent.settingsOpen; agent.skillsOpen = false; agent.historyOpen = false"><Settings2 :size="16" /></button>
       <button type="button" :aria-label="t('common.close')" :title="t('common.close')" @click="agent.visible = false"><X :size="16" /></button>
     </header>
-    <AgentSettings v-if="agent.settingsOpen" />
+    <AgentHistory v-if="agent.historyOpen" />
+    <AgentSettings v-else-if="agent.settingsOpen" />
     <AgentSkills v-else-if="agent.skillsOpen" />
     <template v-else>
       <div class="agent-model-row"><span :title="agent.config?.baseUrl">{{ agent.config?.model || t('agent.notConfigured') }}</span><span>{{ t('agent.reviewFirst') }}</span></div>
       <div v-if="agent.configError" class="agent-banner" role="alert">{{ agent.configError }}<button type="button" @click="agent.loadConfig">{{ t('agent.retry') }}</button></div>
       <div v-if="agent.skillsError" class="agent-banner" role="alert">{{ agent.skillsError }}<button type="button" @click="agent.loadSkills">{{ t('agent.retry') }}</button></div>
-      <div v-if="agent.busy && !agent.runningHere" class="agent-banner" role="status">{{ t('agent.runningElsewhere') }}<button type="button" @click="editor.setCurrent(agent.run!.key)">{{ t('agent.returnToRun') }}</button></div>
+      <div v-if="agent.busy && !agent.runningHere" class="agent-banner" role="status">{{ t('agent.runningElsewhere') }}<button type="button" @click="agent.runningKey && editor.setCurrent(agent.runningKey)">{{ t('agent.returnToRun') }}</button></div>
+      <div v-if="agent.historyError" class="agent-banner" role="alert">{{ agent.historyError }}</div>
+      <div v-if="agent.conversation.restored" class="agent-banner" role="status">{{ t('agent.history.restored') }}</div>
       <div ref="feed" class="agent-feed" role="log" :aria-label="t('agent.conversation')" aria-live="off" @scroll="onScroll">
         <section v-if="!agent.conversation.messages.length" class="agent-welcome">
           <div class="agent-welcome-mark"><Sparkles :size="25" :stroke-width="1.5" /></div>
@@ -142,6 +154,8 @@ onBeforeUnmount(() => { stopResize(); clearTimeout(copyTimer) })
           <template v-if="message.role === 'user'">
             <p v-if="message.content" class="agent-user-text">{{ message.content }}</p>
             <div v-if="message.images?.length" class="agent-images agent-sent-images"><button v-for="(picture, pictureIndex) in message.images" :key="pictureIndex" type="button" :aria-label="t('agent.previewImage', { name: picture.name })" @click="bus.emit('image-preview/open', { src: picture.dataUrl })"><img :src="picture.dataUrl" :alt="picture.name" loading="lazy"></button></div>
+            <p v-if="message.imagesOmitted" class="agent-muted">{{ t('agent.history.imagesOmitted') }}</p>
+            <small v-if="message.references?.length" class="agent-message-context">{{ t('agent.references.title') }}: {{ message.references.map(ref => ref.snapshot.name).join(', ') }}</small>
             <small class="agent-message-context"><FileText :size="11" />{{ message.attachment }}</small>
           </template>
           <template v-else>
@@ -150,14 +164,26 @@ onBeforeUnmount(() => { stopResize(); clearTimeout(copyTimer) })
             <!-- Sanitized allowlist; no links, images or remote content in replies. -->
             <!-- eslint-disable-next-line vue/no-v-html -->
             <div class="agent-markdown" v-html="message.html" />
-            <section v-if="message.edit" class="agent-edit">
-              <strong>{{ message.edit.title }}</strong>
-              <details open><summary>{{ t('agent.viewChanges') }}</summary><div class="agent-diff-label">{{ t('agent.before') }}</div><pre class="agent-diff-before">{{ message.edit.oldText || t('agent.append') }}</pre><div class="agent-diff-label">{{ t('agent.after') }}</div><pre class="agent-diff-after">{{ message.edit.newText || t('agent.deleteText') }}</pre></details>
-              <footer><span>{{ t(`agent.editStatus.${message.edit.status}`) }}</span><template v-if="message.edit.status === 'pending'"><button type="button" :disabled="agent.busy" @click="message.edit.status = 'dismissed'">{{ t('agent.dismiss') }}</button><button type="button" class="agent-primary" :disabled="agent.busy" @click="agent.apply(message.edit)">{{ t('agent.apply') }}</button></template><button v-if="message.edit.status === 'applied'" type="button" :disabled="agent.busy" @click="agent.revert(message.edit)"><RotateCcw :size="12" />{{ t('agent.revert') }}</button></footer>
+            <section v-if="message.sources?.length" class="agent-sources" :aria-label="t('agent.sources')">
+              <strong>{{ t('agent.sources') }}</strong>
+              <button v-for="(source, sourceIndex) in message.sources" :key="sourceIndex" type="button" :title="source.quote" @click="agent.locateSource(source.snapshot)">{{ source.label }} · {{ source.snapshot.name }} · {{ t('agent.changeLines', { start: source.startLine, end: source.endLine }) }}</button>
             </section>
+            <section v-if="message.summary" class="agent-summary-progress" role="status">
+              <strong>{{ t('agent.chapterSummary') }}</strong>
+              <p>{{ t('agent.summaryCoverage', { done: message.summary.jobs.slice(0, message.summary.chunkCount).filter(job => job.result !== undefined).length, total: message.summary.chunkCount }) }}</p>
+              <p>{{ t('agent.summaryCalls', { done: message.summary.jobs.filter(job => job.result !== undefined).length, total: message.summary.jobs.length }) }} · {{ t(`agent.summaryStates.${message.summary.status === 'running' && message.summary.activeJob >= message.summary.chunkCount ? 'synthesis' : message.summary.status}`) }}</p>
+              <progress :value="message.summary.jobs.filter(job => job.result !== undefined).length" :max="message.summary.jobs.length" />
+              <button v-if="message.summary.status === 'error' || message.summary.status === 'cancelled'" type="button" :disabled="agent.busy" @click="agent.summarizeChapters(message.id)">{{ t('agent.resumeSummary') }}</button>
+              <details v-if="message.summary.jobs.some(job => job.chunk && job.result)"><summary>{{ t('agent.summaryNotes') }}</summary><section v-for="(job, jobIndex) in message.summary.jobs.slice(0, message.summary.chunkCount)" :key="jobIndex"><template v-if="job.result"><strong>{{ jobIndex + 1 }} · {{ t('agent.changeLines', { start: job.chunk!.startLine, end: job.chunk!.endLine }) }}</strong><pre>{{ job.result }}</pre></template></section></details>
+            </section>
+            <AgentEditReview v-if="message.edit" :edit="message.edit" />
+            <details v-if="message.content" class="agent-answer-actions">
+              <summary>{{ t('agent.useAnswer') }}</summary>
+              <div><button v-for="action in (['insert', 'append', 'replace', 'new'] as const)" :key="action" type="button" :disabled="!agent.canUseAnswer(message)" @click="agent.useAnswer(message.id, action)">{{ t(`agent.answerActions.${action}`) }}</button></div>
+            </details>
             <p v-if="message.error" class="agent-error" role="alert">{{ message.error }}</p>
             <p v-if="message.cancelled" class="agent-muted">{{ t('agent.stopped') }}</p>
-            <div v-if="message.content || message.error || message.cancelled" class="agent-message-actions"><button v-if="message.content" type="button" :aria-label="t('agent.copy')" :title="t('agent.copy')" @click="copy(message.id, message.content)"><component :is="copied === message.id ? Check : Copy" :size="13" /></button><button v-if="(message.error || message.cancelled) && index === renderedMessages.length - 1" type="button" :disabled="agent.busy || agent.conversation.readingImages || !!agent.conversation.draft.trim() || !!agent.conversation.images.length" @click="agent.retry"><RotateCcw :size="12" />{{ t('agent.retry') }}</button></div>
+            <div v-if="message.content || message.error || message.cancelled" class="agent-message-actions"><button v-if="message.content" type="button" :aria-label="t('agent.copy')" :title="t('agent.copy')" @click="copy(message.id, message.content)"><component :is="copied === message.id ? Check : Copy" :size="13" /></button><button v-if="!message.summary && (message.error || message.cancelled) && index === renderedMessages.length - 1" type="button" :disabled="agent.busy || agent.conversation.readingImages || !!agent.conversation.draft.trim() || !!agent.conversation.images.length" @click="agent.retry"><RotateCcw :size="12" />{{ t('agent.retry') }}</button></div>
           </template>
         </article>
         <div v-if="agent.runningHere" class="agent-working" role="status"><LoaderCircle :size="14" class="agent-spin" />{{ t(agent.stopping ? 'agent.stopping' : 'agent.working') }}</div>
@@ -165,7 +191,10 @@ onBeforeUnmount(() => { stopResize(); clearTimeout(copyTimer) })
       <button v-if="!nearBottom" type="button" class="agent-jump" @click="scrollBottom(true)"><ArrowDown :size="13" />{{ t('agent.latest') }}</button>
       <div v-if="agent.error" class="agent-composer-error" role="alert">{{ agent.error }}<button type="button" :aria-label="t('common.close')" @click="agent.error = ''"><X :size="13" /></button></div>
       <div class="agent-composer">
+        <AgentReferences />
         <div class="agent-context-row"><label :title="attachmentName"><input v-model="agent.includeDocument" type="checkbox" :disabled="!editor.currentFile"><FileText :size="12" /><span>{{ attachmentName }}</span></label><button v-if="selected" type="button" :aria-label="t('agent.clearSelection')" :title="t('agent.clearSelection')" @click="agent.clearSelection"><X :size="12" /></button><button type="button" :disabled="!editor.currentFile" :aria-label="t('agent.attachSelection')" :title="t('agent.attachSelection')" @mousedown.prevent @click="agent.attachSelection()"><TextSelect :size="14" /></button></div>
+        <label v-if="selected && agent.includeDocument" class="agent-reference-scope"><input v-model="agent.referenceDocument" type="checkbox" :disabled="agent.busy">{{ t('agent.referenceDocument') }}</label>
+        <button type="button" class="agent-chapter-summary" :disabled="agent.busy || !agent.includeDocument || !editor.currentFile || !agent.config || agent.conversation.readingImages" @click="agent.summarizeChapters()">{{ t('agent.chapterSummary') }}</button>
         <details v-if="selected && agent.includeDocument" class="agent-selection-preview"><summary>{{ t('agent.selectionPreview', { count: selected.to - selected.from }) }}</summary><pre>{{ selected.markdown.slice(selected.from, selected.to) }}</pre></details>
         <div class="agent-skill-picker"><BookOpen :size="12" /><select v-model="agent.conversation.skillId" :disabled="agent.skillsLoading || agent.busy" :aria-label="t('agent.skills.choose')"><option value="">{{ t('agent.skills.auto') }}</option><option v-for="skill in agent.skills.filter(s => s.enabled)" :key="skill.id" :value="skill.id">{{ skill.builtin ? t(`agent.skills.builtins.${skill.name}.name`) : skill.name }}</option></select></div>
         <div v-if="agent.conversation.images.length" class="agent-images agent-draft-images">
@@ -178,7 +207,7 @@ onBeforeUnmount(() => { stopResize(); clearTimeout(copyTimer) })
         <p v-else-if="agent.conversation.images.length" class="agent-image-hint">{{ t('agent.visionHint') }}</p>
         <textarea ref="input" v-model="agent.conversation.draft" :aria-label="t('agent.inputLabel')" :placeholder="t('agent.placeholder')" rows="3" @keydown="onKey" @paste="paste" @focus="agent.attachSelection(true)" />
         <input ref="imageInput" class="agent-image-input" type="file" :accept="AGENT_IMAGE_TYPES.join(',')" multiple :aria-label="t('agent.addImages')" @change="chooseImages">
-        <div class="agent-send-row"><button type="button" :disabled="agent.conversation.readingImages || agent.conversation.images.length >= MAX_MESSAGE_IMAGES" :aria-label="t('agent.addImages')" :title="t('agent.addImages')" @click="imageInput?.click()"><ImagePlus :size="16" /></button><small>{{ t('agent.keyboardHint') }}</small><button v-if="agent.busy" type="button" class="agent-stop" :disabled="agent.stopping" :aria-label="t('agent.stop')" :title="t('agent.stop')" @click="agent.stop"><Square :size="14" /></button><button v-else type="button" class="agent-primary" :disabled="(!agent.conversation.draft.trim() && !agent.conversation.images.length) || agent.conversation.readingImages || agent.loadingConfig || agent.skillsLoading || !agent.config" :aria-label="t('agent.send')" :title="t('agent.send')" @click="send"><ArrowUp :size="17" /></button></div>
+        <div class="agent-send-row"><button type="button" :disabled="agent.conversation.readingImages || agent.conversation.images.length >= MAX_MESSAGE_IMAGES" :aria-label="t('agent.addImages')" :title="t('agent.addImages')" @click="imageInput?.click()"><ImagePlus :size="16" /></button><small>{{ t('agent.keyboardHint') }}</small><button v-if="agent.busy" type="button" class="agent-stop" :disabled="agent.stopping" :aria-label="t('agent.stop')" :title="t('agent.stop')" @click="agent.stop"><Square :size="14" /></button><button v-else type="button" class="agent-primary" :disabled="(!agent.conversation.draft.trim() && !agent.conversation.images.length) || agent.conversation.readingImages || agent.conversation.readingReferences || agent.loadingConfig || agent.skillsLoading || !agent.config" :aria-label="t('agent.send')" :title="t('agent.send')" @click="send"><ArrowUp :size="17" /></button></div>
       </div>
       <p class="agent-privacy-note">{{ t('agent.privacyNote') }}</p>
     </template>

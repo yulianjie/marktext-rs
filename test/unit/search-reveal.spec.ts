@@ -178,7 +178,7 @@ describe('folder-search reveal component contract', () => {
     expect(muyaEditor).toContain("consumerMode: 'wysiwyg'")
     expect(muyaEditor).toContain('muya.setCursor({')
     expect(muyaEditor).toContain('anchor: { line: range.line, ch: range.startCh }')
-    expect(muyaEditor).toContain('focus: { line: range.line, ch: range.endCh }')
+    expect(muyaEditor).toContain('focus: { line: range.endLine ?? range.line, ch: range.endCh }')
     expect(muyaEditor).toContain('muya.focus()')
     expect(muyaEditor).toContain('window.requestAnimationFrame(centerMuyaSelection)')
   })

@@ -167,6 +167,12 @@ The writing agent is native to the Tauri edition (no legacy Electron channel).
 | `cmd_agent_save_config` | Save base URL / model and optionally update or remove OS-vault credential |
 | `cmd_agent_test_connection` | Send a test message with the saved model settings |
 | `cmd_agent_start` | Start a bounded writing-agent run on an explicit document snapshot |
+| `cmd_agent_history_settings` | Read local-history opt-in (default false) |
+| `cmd_agent_history_set_enabled` | Persist history opt-in; existing records remain until explicitly deleted |
+| `cmd_agent_history_list` | List bounded local archive metadata without broadcasting transcripts |
+| `cmd_agent_history_read` | Read and validate one UUID record |
+| `cmd_agent_history_write` | Atomically write one record with optimistic revision checking; rejects disabled storage, stale versions and tombstones |
+| `cmd_agent_history_delete` | Replace a matching revision with a content-free tombstone |
 | `cmd_agent_cancel` | Cancel only the calling window's matching request |
 | `cmd_agent_list_skills` | List built-in/imported skill metadata and enabled state |
 | `cmd_agent_import_skill` | Open native SKILL.md picker and import its bounded text package |
@@ -174,3 +180,6 @@ The writing agent is native to the Tauri edition (no legacy Electron channel).
 | `cmd_agent_remove_skill` | Remove an imported copy without changing its source files |
 | `cmd_agent_read_skill` | Read skill instructions and reference filenames for the management UI |
 | `mt://agent/event` | Window-targeted delta, tool, proposal and terminal events, correlated by request ID |
+
+
+Agent requests may include `references: [{documentId, name, markdown}]` (up to 8 read-only snapshots, 2 MB each / 4 MB combined). `read_document`, `search_document`, and `cite_document` accept `documentId`; omitted or `current` targets the current attachment. Unknown IDs and attempts to edit references are rejected. Citation event JSON includes `documentId`, exact lines, label and quote. The initial model payload contains reference metadata only; bodies are demand-loaded. History records use schemaVersion 1 and stable UUID/revision metadata; full immutable snapshots are interned with per-use ranges. Keys and image bytes are never stored in history.

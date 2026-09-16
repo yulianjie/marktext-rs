@@ -7,6 +7,7 @@ let handler; let active; let timers = [];
 let config = {baseUrl:'https://api.deepseek.com',model:'deepseek-flash',hasKey:false};
 let skills = ['eli5','mermaid-diagrams','writing-clearly-and-concisely','crafting-effective-readmes','internal-comms','markdown-coauthor'].map(name=>({id:'builtin:'+name,name,description:name,license:name==='internal-comms'?'Apache-2.0':'MIT',source:'https://github.com/DreambigOu/ELI5',builtin:true,enabled:true}));
 export const agentTransport = {
+  historySettings: async()=>({enabled:false}), historyList: async()=>[],
   getConfig: async()=>({...config}),
   saveConfig: async(settings, apiKey)=>{config={...settings,hasKey:apiKey === '' ? false : !!apiKey || config.hasKey};return {...config}},
   testConnection: async()=>{},

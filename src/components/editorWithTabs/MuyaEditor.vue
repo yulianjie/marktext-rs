@@ -59,7 +59,7 @@ import {
 import {
   emptySearchRevealGuard,
   enqueueSearchReveal,
-  searchCoordinatesToEditorRange,
+  revealRequestToEditorRange,
   settleSearchReveal,
 } from '@/services/search-reveal'
 import { bus } from '@/bus'
@@ -660,10 +660,11 @@ function tryRevealSearchHit() {
   if (!request || !muya) return
 
   const markdown = muya.getMarkdown?.() ?? editor.currentFile?.markdown ?? ''
-  const range = searchCoordinatesToEditorRange(markdown, request)
+  const range = revealRequestToEditorRange(markdown, request)
+  if (!range) return
   muya.setCursor({
     anchor: { line: range.line, ch: range.startCh },
-    focus: { line: range.line, ch: range.endCh },
+    focus: { line: range.endLine ?? range.line, ch: range.endCh },
   })
   muya.focus()
   window.requestAnimationFrame(centerMuyaSelection)

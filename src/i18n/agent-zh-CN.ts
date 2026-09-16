@@ -1,4 +1,16 @@
 export default {
+  history: { title: '历史对话', enable: '在本地保存对话', detail: '可选的本地历史，不保存图片。关闭后停止保存，已有历史仍可查看和删除。最多 100 条对话 / 128 MB。', search: '搜索对话标题', empty: '暂无已保存的对话', restore: '恢复', export: '导出 Markdown', delete: '删除', restored: '已恢复本地历史。历史修改仅供查阅；原文未变时可继续分章总结。', locked: '历史修改记录 · 已禁用应用与撤销', imagesOmitted: '历史未保存图片。继续询问图片相关内容前，请重新附加图片。' },
+  references: { title: '参考文档', detail: '只读快照，按需读取。最多 8 个文件，单个 2 MB、总计 4 MB。仅可修改当前文档。', openTab: '附加已打开的标签页', files: '选择 Markdown 文件', reading: '正在读取参考文件…', remove: '移除参考文档 {name}' },
+
+  referenceDocument: '参考全文，仅修改选区',
+  chapterSummary: '分章总结',
+  resumeSummary: '继续分章总结',
+  summaryCoverage: '原文覆盖：{done}/{total} 段',
+  summaryCalls: '已完成请求：{done}/{total}',
+  summaryNotes: '查看已完成的分段笔记',
+  summaryStates: { running: '正在分段阅读', synthesis: '正在综合总结', done: '总结完成', cancelled: '已停止 · 尚未完成', error: '失败 · 尚未完成' },
+
+  useAnswer: '使用回答', sources: '原文依据', locateSource: '定位原文', answerActions: { insert: '插入到光标处', append: '追加到文末', replace: '替换选区', new: '新建 Markdown 笔记' },
   title: '写作助手', toggle: 'AI 助手', newChat: '新对话', resize: '调整助手宽度', conversation: '与 AI 的对话',
   notConfigured: '尚未配置模型', reviewFirst: '修改由你确认', welcome: '一起把想法写好',
   welcomeDetail: '从草稿到定稿。整理思路、润色表达，或让助手帮你接着写。每一处修改都可以先查看。',
@@ -12,7 +24,9 @@ export default {
   retry: '重试', copy: '复制回复', latest: '回到最新', runningElsewhere: '助手正在另一篇文档中工作。', returnToRun: '返回该文档',
   privacyNote: '文档按需读取；对话、附加图片和使用的技能会发送至所配置的模型。',
   steps: '已执行 {count} 个步骤', viewChanges: '查看修改', before: '原文', after: '建议', append: '在末尾追加', deleteText: '删除这段内容',
-  apply: '应用修改', dismiss: '忽略', revert: '撤回', editStatus: { pending: '等待确认', applied: '已应用', dismissed: '已忽略', reverted: '已撤回' },
+  applyChange: '应用此处', dismissChange: '忽略此处',
+  applyAll: '全部应用', dismissAll: '全部忽略', revertAll: '撤回已应用', changeLines: '第 {start}–{end} 行',
+  apply: '应用修改', dismiss: '忽略', revert: '撤回', editStatus: { partial: '部分已处理', pending: '等待确认', applied: '已应用', dismissed: '已忽略', reverted: '已撤回' },
   actions: { polish: '润色文字', summarize: '提炼摘要', outline: '整理提纲', continue: '继续写作' },
   prompts: {
     polish: '请润色附加的内容，保留原意和作者的语气，让表达更自然、简洁。请提出可供我确认的修改。',
@@ -20,7 +34,7 @@ export default {
     outline: '请阅读附加内容，帮我梳理文章结构，给出清晰的提纲与改进建议。',
     continue: '请延续附加内容的语气和思路，写出下一段，并提出追加到文末的修改建议。',
   },
-  tools: { read_document: '查看文档结构或内容', search_document: '查找文档内容', propose_edit: '准备修改建议', read_skill: '加载写作技能', read_skill_file: '读取技能参考资料' },
+  tools: { cite_document: '引用原文依据', read_document: '查看文档结构或内容', search_document: '查找文档内容', propose_edit: '准备修改建议', read_skill: '加载写作技能', read_skill_file: '读取技能参考资料' },
   skills: {
     title: '技能管理', description: '为写作助手添加专业方法。启用后会按任务需要加载，也可以在输入框上方指定技能。',
     import: '导入 SKILL.md', importHelp: '选择技能文件夹中的 SKILL.md，同时导入同目录下的 Markdown、TXT 和 Mermaid 参考文件。只使用文本指导，不运行脚本。',
@@ -46,6 +60,10 @@ export default {
     privacy: '点击发送后，会将对话、附加图片、文档基本信息和启用技能的名称与用途交给配置的服务。文档段落及技能正文按需读取。测试连接仅发送测试消息。',
   },
   errors: {
+    historyRead: '无法读取本地对话历史。', historyWrite: '无法保存本地对话历史。', historyInvalid: '这条历史对话无效或版本不受支持。', historyConflict: '该对话已被其他窗口修改或删除，请重新打开历史列表。', historyDisabled: '其他窗口已关闭本地历史保存。', historyLimit: '历史存储已达到上限，请导出并删除旧对话后重试。', historyImages: '历史未保存图片，请重新附加图片并发送新消息。', referenceLimit: '最多附加 8 份参考文档，单份不超过 2 MB，总计不超过 4 MB。', referenceRead: '无法解码这份参考文档，请检查文件编码。',
+
+    summaryEmpty: '附加内容没有可总结的文字。', summaryTooMany: '分段数量过多，请拆分文档后再总结。', summaryIncomplete: '部分分段笔记缺失，请重新分章总结。', summaryNoAttachment: '请先附加文档或选区。', summaryChanged: '文档或附加范围已变化，请重新分章总结。', summaryOutputTooLarge: '模型返回的分段笔记过长。继续总结可重试当前部分，已完成部分会保留。',
+    invalidSource: '模型提供的原文引用无效。', sourceChanged: '原文已变化或当前文档不同，无法准确定位。', answerTargetChanged: '插入位置或选区已过期，请在编辑器中重新定位后操作。',
     imageReading: '正在读取上一批图片，请稍后再次粘贴。',
     imageType: '支持 PNG、JPEG 和 WebP 图片，请转换格式后再添加。', imageSize: '图片为空或超过 5 MB，请缩小后再添加。',
     imageCount: '每条消息最多附加 4 张图片，请先移除部分图片。', imageHistoryLimit: '本次对话的图片已超过 12 张或总计 20 MB，请新建对话。',

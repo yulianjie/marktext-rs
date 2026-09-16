@@ -1,4 +1,16 @@
 export default {
+  history: { title: 'Conversation history', enable: 'Save conversations locally', detail: 'Optional local history. Images are excluded. Turning this off stops new saves; existing history remains available until deleted. Up to 100 conversations / 128 MB.', search: 'Search conversation titles', empty: 'No saved conversations', restore: 'Restore', export: 'Export Markdown', delete: 'Delete', restored: 'Restored from local history. Archived edits are read-only; unchanged chapter summaries can resume.', locked: 'Archived review · editing and undo are disabled', imagesOmitted: 'Images were not saved. Attach them again before asking image-dependent questions.' },
+  references: { title: 'Reference documents', detail: 'Read-only snapshots, loaded on demand. Up to 8 files, 2 MB each, 4 MB total. Only the current document can be edited.', openTab: 'Attach an open tab', files: 'Choose Markdown files', reading: 'Reading reference files…', remove: 'Remove reference {name}' },
+
+  referenceDocument: 'Reference full document; edit selection only',
+  chapterSummary: 'Summarize by chapter',
+  resumeSummary: 'Resume chapter summary',
+  summaryCoverage: 'Source coverage: {done}/{total} chunks',
+  summaryCalls: 'Requests completed: {done}/{total}',
+  summaryNotes: 'Completed chunk notes',
+  summaryStates: { running: 'Reading chunks', synthesis: 'Combining notes', done: 'Complete', cancelled: 'Stopped · incomplete', error: 'Failed · incomplete' },
+
+  useAnswer: 'Use answer', sources: 'Document sources', locateSource: 'Locate original', answerActions: { insert: 'Insert at cursor', append: 'Append to document', replace: 'Replace selection', new: 'New Markdown note' },
   addImages: 'Add images', previewImage: 'Preview image {name}', removeImage: 'Remove image {name}', readingImages: 'Reading images…',
   visionHint: 'Images require a vision model. Up to 4 images per message, 5 MB each.',
   selectionPreview: 'Selected text attached · {count} characters',
@@ -12,7 +24,9 @@ export default {
   retry: 'Retry', copy: 'Copy reply', latest: 'Jump to latest', runningElsewhere: 'The assistant is working in another document.', returnToRun: 'Return to document',
   privacyNote: 'Reads documents on demand. Chat, attached images and used skills are sent to your model.',
   steps: '{count} steps completed', viewChanges: 'Review changes', before: 'Original', after: 'Suggested', append: 'Append at the end', deleteText: 'Remove this text',
-  apply: 'Apply edit', dismiss: 'Dismiss', revert: 'Revert', editStatus: { pending: 'Awaiting review', applied: 'Applied', dismissed: 'Dismissed', reverted: 'Reverted' },
+  applyChange: 'Apply change', dismissChange: 'Dismiss change',
+  applyAll: 'Apply all', dismissAll: 'Dismiss all', revertAll: 'Revert applied', changeLines: 'Lines {start}–{end}',
+  apply: 'Apply edit', dismiss: 'Dismiss', revert: 'Revert', editStatus: { partial: 'Partially reviewed', pending: 'Awaiting review', applied: 'Applied', dismissed: 'Dismissed', reverted: 'Reverted' },
   actions: { polish: 'Polish writing', summarize: 'Summarize', outline: 'Build an outline', continue: 'Continue writing' },
   prompts: {
     polish: 'Polish the attached text while preserving its meaning and voice. Propose an edit for me to review.',
@@ -20,7 +34,7 @@ export default {
     outline: 'Read the attached content and suggest a clear outline and improvements to its structure.',
     continue: 'Continue the attached text in the same voice. Propose appending the next paragraph to the end.',
   },
-  tools: { read_document: 'Inspect document outline or content', search_document: 'Search document', propose_edit: 'Prepare an edit', read_skill: 'Load writing skill', read_skill_file: 'Read skill reference' },
+  tools: { cite_document: 'Cite document passage', read_document: 'Inspect document outline or content', search_document: 'Search document', propose_edit: 'Prepare an edit', read_skill: 'Load writing skill', read_skill_file: 'Read skill reference' },
   skills: {
     title: 'Skills', description: 'Add writing methods to your assistant. Enabled skills load when relevant, or you can choose one above the message box.',
     import: 'Import SKILL.md', importHelp: 'Choose SKILL.md inside a skill folder. Markdown, TXT and Mermaid references in that folder are included. Text guidance only; scripts are not executed.',
@@ -46,6 +60,10 @@ export default {
     privacy: 'Sending shares the conversation, attached images, document metadata, and enabled skill names and descriptions with your service. Passages and skill instructions load on demand. Connection tests send only a test message.',
   },
   errors: {
+    historyRead: 'Could not read local conversation history.', historyWrite: 'Could not save local conversation history.', historyInvalid: 'This saved conversation is invalid or unsupported.', historyConflict: 'This conversation was changed or deleted in another window. Reopen history to refresh.', historyDisabled: 'Local history was disabled in another window.', historyLimit: 'History storage limit reached. Export and delete older conversations, then retry.', historyImages: 'Images were excluded from history. Attach them again and send a new message.', referenceLimit: 'Attach up to 8 references, at most 2 MB each and 4 MB combined.', referenceRead: 'This reference could not be decoded. Check its text encoding.',
+
+    summaryEmpty: 'The attachment has no text to summarize.', summaryTooMany: 'This document needs too many chunks. Split it into smaller documents.', summaryIncomplete: 'Some chunk notes are missing. Restart the chapter summary.', summaryNoAttachment: 'Attach a document or selection to summarize.', summaryChanged: 'The document or attached range changed. Start a new chapter summary.', summaryOutputTooLarge: 'The model returned oversized notes. Resume to retry this part; completed parts are retained.',
+    invalidSource: 'The model returned an invalid source reference.', sourceChanged: 'The source changed or another document is active. Exact navigation is unavailable.', answerTargetChanged: 'The saved cursor or selection is stale. Select a position in the editor again.',
     imageReading: 'The previous images are still loading. Please paste again when they finish.',
     imageType: 'Use a PNG, JPEG or WebP image.', imageSize: 'The image is empty or larger than 5 MB. Resize it and try again.',
     imageCount: 'Attach up to 4 images per message. Remove an image to add another.', imageHistoryLimit: 'This conversation exceeds 12 images or 20 MB of images. Start a new chat.',
