@@ -118,7 +118,18 @@ pub fn cmd_set_menu_accelerators_enabled(app: AppHandle, enabled: bool) -> AppRe
 }
 
 #[tauri::command]
-pub async fn cmd_open_settings(app: AppHandle) -> AppResult<()> {
+pub async fn cmd_show_window(window: WebviewWindow) -> AppResult<()> {
+    crate::window_placement::show(&window, None)?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn cmd_open_settings(app: AppHandle, window: WebviewWindow) -> AppResult<()> {
+    let preferred = window
+        .current_monitor()
+        .ok()
+        .flatten()
+        .or_else(|| window.primary_monitor().ok().flatten());
     let label = "settings";
     if let Some(win) = app.get_webview_window(label) {
         // Preferences is a utility window, not an editor window. Reassert the
@@ -126,11 +137,7 @@ pub async fn cmd_open_settings(app: AppHandle) -> AppResult<()> {
         // app-wide menu rebuild occurred while it was hidden/minimized.
         win.remove_menu()
             .map_err(|e| AppError::Other(e.to_string()))?;
-        win.show().map_err(|e| AppError::Other(e.to_string()))?;
-        win.unminimize()
-            .map_err(|e| AppError::Other(e.to_string()))?;
-        win.set_focus()
-            .map_err(|e| AppError::Other(e.to_string()))?;
+        crate::window_placement::show(&win, preferred.as_ref())?;
         return Ok(());
     }
     let window = WebviewWindowBuilder::new(
@@ -151,6 +158,9 @@ pub async fn cmd_open_settings(app: AppHandle) -> AppResult<()> {
     window
         .remove_menu()
         .map_err(|e| AppError::Other(e.to_string()))?;
+    if let Err(error) = crate::window_placement::ensure_reachable(&window, preferred.as_ref()) {
+        tracing::warn!(%error, "initial settings placement deferred until show");
+    }
     // Renderer teardown cannot reliably await an IPC call. Restore the
     // app-wide menu accelerator lease from Rust after Preferences is actually
     // destroyed. CloseRequested may be cancelled while a draft save fails.

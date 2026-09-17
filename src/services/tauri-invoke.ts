@@ -163,6 +163,10 @@ export const trashWorkspaceEntry = (root: string, path: string) =>
 
 export const newWindow = (label?: string) => invoke<void>('cmd_new_window', { label })
 
+export const showWindow = () => isTauriRuntime()
+  ? invoke<void>('cmd_show_window')
+  : Promise.resolve()
+
 export const closeWindow = (label: string) =>
   invoke<void>('cmd_close_window', { label })
 

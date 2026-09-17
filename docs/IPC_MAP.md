@@ -59,9 +59,20 @@ Channel naming convention:
 | `mt::window-toggle-always-on-top` | `invoke('cmd_set_always_on_top')` |
 | `app-create-editor-window` | `invoke('cmd_new_window')` |
 | `app-create-settings-window` | `invoke('cmd_open_settings')` |
+| First renderer paint | `invoke('cmd_show_window')` validates geometry, then reveals the calling window |
 | `window-close-by-id` | `invoke('cmd_close_window', { label })` |
 | `window-reload-by-id` | `WebviewWindow.reload()` via Tauri JS API |
 | `mt::app-try-quit` | `invoke('process:plugin:exit')` from `@tauri-apps/plugin-process` |
+
+Opening Preferences reuses its existing window on the invoking editor's monitor.
+Rust checks title-bar/content visibility against monitor work areas before showing
+or refocusing windows, and after display layout changes. Background recovery
+preserves minimized windows and does not take focus.
+
+Native geometry smoke test: `cargo run --manifest-path src-tauri/Cargo.toml
+--example window_placement_check`. This creates disposable blank windows and
+checks recovery on the connected monitors without changing the display layout
+or reading/writing the user's preferences.
 
 ## Preferences / user data
 

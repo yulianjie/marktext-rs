@@ -1,4 +1,11 @@
 fn main() {
+    // Tauri embeds this dependency in application binaries, but Cargo examples
+    // do not receive that resource. Native window smoke tests need Common
+    // Controls v6 as well (TaskDialogIndirect is absent from v5).
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
+        println!("cargo:rustc-link-arg-examples=/MANIFEST:EMBED");
+        println!("cargo:rustc-link-arg-examples=/MANIFESTDEPENDENCY:type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'");
+    }
     // Embed the vendored skill packages in every native build, including portable binaries.
     // include_str! also makes Cargo track changes to each file.
     let root =

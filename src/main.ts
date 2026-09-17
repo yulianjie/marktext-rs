@@ -4,7 +4,7 @@ import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
 import 'element-plus/theme-chalk/dark/css-vars.css'
 import { getCurrentWindow } from '@tauri-apps/api/window'
-import { enableWindowBackdrop } from './services/tauri-invoke'
+import { enableWindowBackdrop, showWindow } from './services/tauri-invoke'
 
 import App from './App.vue'
 import router from './router'
@@ -76,7 +76,7 @@ async function bootstrap() {
   // Reveal after the first paint. Browser-only Vite development skips this.
   if (appWindow) {
     requestAnimationFrame(() => {
-      void appWindow.show().then(() => appWindow.setFocus())
+      void showWindow().catch(error => console.error('[window] failed to show window', error))
     })
   }
 }

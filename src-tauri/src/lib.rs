@@ -13,6 +13,7 @@ pub mod filesystem;
 pub mod ipc;
 pub mod menu;
 pub mod preferences;
+mod window_placement;
 
 use tauri::{Emitter, LogicalSize, Manager, Size};
 use tauri_plugin_window_state::StateFlags;
@@ -54,11 +55,12 @@ pub fn run() {
     // When the user hasn't opted in, drop SIZE from the restored state set so
     // every launch uses the conf-default 1200×900 (4:3). Position and the
     // maximized/fullscreen flags are still restored so the window opens
-    // where the user left it.
+    // where the user left it. The renderer owns first visibility so geometry
+    // can be checked after restoration, before the first painted frame.
     let window_state_flags = if remember_window_size {
-        StateFlags::all()
+        StateFlags::all() - StateFlags::VISIBLE
     } else {
-        StateFlags::all() - StateFlags::SIZE
+        StateFlags::all() - StateFlags::SIZE - StateFlags::VISIBLE
     };
 
     #[allow(unused_mut)]
@@ -88,11 +90,16 @@ pub fn run() {
             let target = app
                 .webview_windows()
                 .into_iter()
-                .find(|(_, w)| w.is_focused().unwrap_or(false))
+                .find(|(label, w)| {
+                    (label.as_str() == "main" || label.starts_with("editor-"))
+                        && w.is_focused().unwrap_or(false)
+                })
                 .map(|(label, _)| label)
                 .unwrap_or_else(|| "main".into());
             if let Some(window) = app.get_webview_window(&target) {
-                let _ = window.set_focus();
+                tauri::async_runtime::spawn(async move {
+                    let _ = window_placement::show(&window, None);
+                });
             }
             for arg in argv.iter().skip(1) {
                 if arg.starts_with("--") || arg.starts_with('-') {
@@ -125,6 +132,18 @@ pub fn run() {
             if matches!(event, tauri::WindowEvent::Destroyed) {
                 commands::agent::cancel_window(window.app_handle(), window.label());
             }
+            if matches!(event, tauri::WindowEvent::Focused(true)) {
+                let app = window.app_handle().clone();
+                let label = window.label().to_owned();
+                // Never perform geometry queries inside the native event callback.
+                tauri::async_runtime::spawn(async move {
+                    if let Some(window) = app.get_webview_window(&label) {
+                        if let Err(error) = window_placement::ensure_reachable(&window, None) {
+                            tracing::debug!(%error, "window recovery on focus deferred");
+                        }
+                    }
+                });
+            }
         })
         .manage(menu::FormatMenuHandles::default())
         .invoke_handler(marktext_handler!())
@@ -153,7 +172,12 @@ pub fn run() {
                 };
 
                 if should_clamp {
-                    if let Ok(Some(monitor)) = window.primary_monitor() {
+                    if let Ok(Some(monitor)) =
+                        window.current_monitor().and_then(|monitor| match monitor {
+                            Some(monitor) => Ok(Some(monitor)),
+                            None => window.primary_monitor(),
+                        })
+                    {
                         let scale = monitor.scale_factor();
                         let logical_w = monitor.size().width as f64 / scale;
                         let logical_h = monitor.size().height as f64 / scale;
@@ -180,6 +204,7 @@ pub fn run() {
 
             menu::install(app)?;
             app::on_startup(app)?;
+            window_placement::watch_displays(app.handle().clone());
             Ok(())
         })
         .run(tauri::generate_context!())
