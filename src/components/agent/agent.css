@@ -97,7 +97,8 @@
 .agent-settings p { font-size: 12px; color: var(--mt-fg-muted); line-height: 1.8; }
 .agent-settings fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
 .agent-settings label { display: flex; align-items: center; gap: 8px; font-size: 12px; margin: 20px 0 7px; }
-.agent-settings :is(input,select) { display: block; width: 100%; border: 1px solid var(--mt-border); border-radius: 6px; background: var(--mt-bg); color: var(--mt-fg); padding: 9px 10px; font: inherit; min-width: 0; }
+.agent-settings :is(input,select,textarea) { display: block; width: 100%; border: 1px solid var(--mt-border); border-radius: 6px; background: var(--mt-bg); color: var(--mt-fg); padding: 9px 10px; font: inherit; min-width: 0; }
+.agent-settings textarea { resize: vertical; line-height: 1.5; }
 .agent-settings small { display: block; color: var(--mt-fg-muted); font-size: 11px; line-height: 1.7; margin-top: 6px; }
 .agent-key-state { display: inline-flex; align-items: center; font-size: 10px; color: var(--mt-accent); }
 .agent-settings .agent-text-button { padding: 4px 0; border: 0; background: transparent; margin-top: 4px; color: var(--mt-fg-muted); }

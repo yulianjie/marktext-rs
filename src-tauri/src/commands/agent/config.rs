@@ -4,7 +4,9 @@ use super::failure;
 use crate::{error::AppResult, filesystem::atomic_write};
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
+use reqwest::header::{HeaderName, HeaderValue};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::{fs, path::PathBuf};
 use tauri::{AppHandle, Manager};
 use url::Url;
@@ -33,6 +35,24 @@ pub struct ConfigView {
     #[serde(flatten)]
     settings: Settings,
     has_key: bool,
+    has_headers: bool,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CustomHeader {
+    pub name: String,
+    pub value: String,
+}
+
+#[derive(Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Credentials {
+    pub(super) version: u8,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub api_key: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub headers: Vec<CustomHeader>,
 }
 
 pub fn validate(mut settings: Settings) -> AppResult<Settings> {
@@ -82,52 +102,127 @@ fn entry(settings: &Settings) -> AppResult<keyring::Entry> {
     keyring::Entry::new("app.marktext.agent", &settings.base_url).map_err(|_| failure("keychain"))
 }
 
-fn key(settings: &Settings) -> AppResult<Option<String>> {
+fn credentials_from_secret(secret: String) -> Credentials {
+    match serde_json::from_str::<Credentials>(&secret) {
+        Ok(credentials) if credentials.version == 1 => credentials,
+        _ => Credentials {
+            version: 1,
+            api_key: Some(secret),
+            headers: vec![],
+        },
+    }
+}
+
+fn credentials_for(settings: &Settings) -> AppResult<Credentials> {
     match entry(settings)?.get_password() {
-        Ok(secret) => Ok(Some(secret)),
-        Err(keyring::Error::NoEntry) => Ok(None),
+        Ok(secret) => Ok(credentials_from_secret(secret)),
+        Err(keyring::Error::NoEntry) => Ok(Credentials::default()),
         Err(_) => Err(failure("keychain")),
     }
+}
+
+fn validate_headers(headers: Vec<CustomHeader>) -> AppResult<Vec<CustomHeader>> {
+    if headers.len() > 32 {
+        return Err(failure("invalidHeaders"));
+    }
+    let blocked = [
+        "connection",
+        "content-length",
+        "content-type",
+        "host",
+        "proxy-authorization",
+        "proxy-connection",
+        "te",
+        "trailer",
+        "transfer-encoding",
+        "upgrade",
+    ];
+    let mut names = HashSet::new();
+    let mut total = 0usize;
+    let mut validated = Vec::with_capacity(headers.len());
+    for header in headers {
+        let name = header.name.trim().to_ascii_lowercase();
+        let value = header.value.trim().to_string();
+        total = total.saturating_add(name.len()).saturating_add(value.len());
+        if name.is_empty()
+            || value.is_empty()
+            || name.len() > 128
+            || value.len() > 8192
+            || total > 32768
+            || blocked.contains(&name.as_str())
+            || !names.insert(name.clone())
+            || HeaderName::from_bytes(name.as_bytes()).is_err()
+            || HeaderValue::from_str(&value).is_err()
+        {
+            return Err(failure("invalidHeaders"));
+        }
+        validated.push(CustomHeader { name, value });
+    }
+    Ok(validated)
+}
+
+fn write_credentials(settings: &Settings, credentials: &Credentials) -> AppResult<()> {
+    let entry = entry(settings)?;
+    if credentials.api_key.is_none() && credentials.headers.is_empty() {
+        return match entry.delete_credential() {
+            Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+            Err(_) => Err(failure("keychain")),
+        };
+    }
+    let secret = serde_json::to_string(credentials).map_err(|_| failure("keychain"))?;
+    entry.set_password(&secret).map_err(|_| failure("keychain"))
 }
 
 pub fn get(app: &AppHandle) -> AppResult<ConfigView> {
     let _guard = CONFIG_LOCK.lock();
     let settings = read(app)?;
-    let has_key = key(&settings)?.is_some();
-    Ok(ConfigView { settings, has_key })
+    let credentials = credentials_for(&settings)?;
+    Ok(ConfigView {
+        settings,
+        has_key: credentials.api_key.is_some(),
+        has_headers: !credentials.headers.is_empty(),
+    })
 }
 
-pub fn save(app: &AppHandle, settings: Settings, api_key: Option<String>) -> AppResult<ConfigView> {
+pub fn save(
+    app: &AppHandle,
+    settings: Settings,
+    api_key: Option<String>,
+    headers: Option<Vec<CustomHeader>>,
+) -> AppResult<ConfigView> {
     let _guard = CONFIG_LOCK.lock();
     let settings = validate(settings)?;
     let config_path = path(app)?;
+    let mut credentials = credentials_for(&settings)?;
     if let Some(secret) = api_key {
         if secret.len() > 4096 || secret.chars().any(char::is_control) {
             return Err(failure("invalidKey"));
         }
-        let entry = entry(&settings)?;
         if secret.trim().is_empty() {
-            match entry.delete_credential() {
-                Ok(()) | Err(keyring::Error::NoEntry) => {}
-                Err(_) => return Err(failure("keychain")),
-            }
+            credentials.api_key = None;
         } else {
-            entry
-                .set_password(secret.trim())
-                .map_err(|_| failure("keychain"))?;
+            credentials.api_key = Some(secret.trim().to_string());
         }
     }
+    if let Some(headers) = headers {
+        credentials.headers = validate_headers(headers)?;
+    }
+    credentials.version = 1;
+    write_credentials(&settings, &credentials)?;
     atomic_write::write(&config_path, &serde_json::to_vec_pretty(&settings)?)
         .map_err(|_| failure("configWrite"))?;
-    let has_key = key(&settings)?.is_some();
-    Ok(ConfigView { settings, has_key })
+    Ok(ConfigView {
+        settings,
+        has_key: credentials.api_key.is_some(),
+        has_headers: !credentials.headers.is_empty(),
+    })
 }
 
-pub fn credentials(app: &AppHandle) -> AppResult<(Settings, Option<String>)> {
+pub fn credentials(app: &AppHandle) -> AppResult<(Settings, Credentials)> {
     let _guard = CONFIG_LOCK.lock();
     let settings = read(app)?;
-    let secret = key(&settings)?;
-    Ok((settings, secret))
+    let credentials = credentials_for(&settings)?;
+    Ok((settings, credentials))
 }
 
 #[cfg(test)]
@@ -161,5 +256,69 @@ mod tests {
             })
             .is_ok());
         }
+    }
+
+    #[test]
+    fn custom_headers_are_bounded_normalized_and_cannot_control_transport() {
+        let headers = validate_headers(vec![
+            CustomHeader {
+                name: "X-Tenant-ID".into(),
+                value: " tenant-1 ".into(),
+            },
+            CustomHeader {
+                name: "Authorization".into(),
+                value: "Token custom".into(),
+            },
+        ])
+        .unwrap();
+        assert_eq!(
+            headers[0],
+            CustomHeader {
+                name: "x-tenant-id".into(),
+                value: "tenant-1".into()
+            }
+        );
+        for name in [
+            "Host",
+            "Content-Length",
+            "Content-Type",
+            "Connection",
+            "Transfer-Encoding",
+        ] {
+            assert!(validate_headers(vec![CustomHeader {
+                name: name.into(),
+                value: "x".into()
+            }])
+            .is_err());
+        }
+        assert!(validate_headers(vec![
+            CustomHeader {
+                name: "X-Test".into(),
+                value: "a".into()
+            },
+            CustomHeader {
+                name: "x-test".into(),
+                value: "b".into()
+            },
+        ])
+        .is_err());
+        assert!(validate_headers(vec![CustomHeader {
+            name: "Bad Header".into(),
+            value: "x".into()
+        }])
+        .is_err());
+    }
+
+    #[test]
+    fn credential_envelope_keeps_legacy_api_keys_compatible() {
+        let legacy = credentials_from_secret("sk-existing".into());
+        assert_eq!(legacy.api_key.as_deref(), Some("sk-existing"));
+        assert!(legacy.headers.is_empty());
+        let current = credentials_from_secret(
+            r#"{"version":1,"apiKey":"sk-new","headers":[{"name":"x-tenant","value":"one"}]}"#
+                .into(),
+        );
+        assert_eq!(current.api_key.as_deref(), Some("sk-new"));
+        assert_eq!(current.headers[0].name, "x-tenant");
     }
 }

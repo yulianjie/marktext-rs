@@ -10,7 +10,7 @@
 
 import { invoke } from '@tauri-apps/api/core'
 import type { HistoryRecord, HistoryMetadata } from './agent-history'
-import type { AgentConfig, AgentRequest, AgentSettings, AgentSkill, AgentSkillDetail } from './agent'
+import type { AgentConfig, AgentHeader, AgentRequest, AgentSettings, AgentSkill, AgentSkillDetail } from './agent'
 
 export const agentGetConfig = () => invoke<AgentConfig>('cmd_agent_get_config')
 export const agentHistorySettings = () => invoke<{ enabled: boolean }>('cmd_agent_history_settings')
@@ -19,8 +19,8 @@ export const agentHistoryList = () => invoke<HistoryMetadata[]>('cmd_agent_histo
 export const agentHistoryRead = (id: string) => invoke<HistoryRecord>('cmd_agent_history_read', { id })
 export const agentHistoryWrite = (record: HistoryRecord) => invoke<HistoryRecord>('cmd_agent_history_write', { record })
 export const agentHistoryDelete = (id: string, revision: number) => invoke<void>('cmd_agent_history_delete', { id, revision })
-export const agentSaveConfig = (settings: AgentSettings, apiKey?: string) =>
-  invoke<AgentConfig>('cmd_agent_save_config', { settings, apiKey })
+export const agentSaveConfig = (settings: AgentSettings, apiKey?: string, headers?: AgentHeader[]) =>
+  invoke<AgentConfig>('cmd_agent_save_config', { settings, apiKey, headers })
 export const agentTestConnection = () => invoke<void>('cmd_agent_test_connection')
 export const agentStart = (request: AgentRequest) => invoke<void>('cmd_agent_start', { request })
 export const agentCancel = (requestId: string) => invoke<void>('cmd_agent_cancel', { requestId })

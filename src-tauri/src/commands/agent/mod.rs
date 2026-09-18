@@ -7,8 +7,9 @@ mod protocol;
 pub mod skills;
 
 use crate::error::{AppError, AppResult};
-use config::{ConfigView, Settings};
+use config::{ConfigView, Credentials, CustomHeader, Settings};
 use parking_lot::Mutex;
+use reqwest::header::{HeaderName, HeaderValue};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{collections::HashMap, sync::Arc, time::Duration};
@@ -138,8 +139,9 @@ pub async fn cmd_agent_save_config(
     app: AppHandle,
     settings: Settings,
     api_key: Option<String>,
+    headers: Option<Vec<CustomHeader>>,
 ) -> AppResult<ConfigView> {
-    tokio::task::spawn_blocking(move || config::save(&app, settings, api_key))
+    tokio::task::spawn_blocking(move || config::save(&app, settings, api_key, headers))
         .await
         .map_err(|_| failure("keychain"))?
 }
@@ -153,7 +155,7 @@ fn client() -> AppResult<reqwest::Client> {
         .map_err(|_| failure("network"))
 }
 
-async fn credentials(app: AppHandle) -> AppResult<(Settings, Option<String>)> {
+async fn credentials(app: AppHandle) -> AppResult<(Settings, Credentials)> {
     tokio::task::spawn_blocking(move || config::credentials(&app))
         .await
         .map_err(|_| failure("keychain"))?
@@ -162,14 +164,26 @@ async fn credentials(app: AppHandle) -> AppResult<(Settings, Option<String>)> {
 async fn post(
     client: &reqwest::Client,
     settings: &Settings,
-    secret: &Option<String>,
+    credentials: &Credentials,
     body: &Value,
 ) -> AppResult<reqwest::Response> {
     let mut req = client
         .post(format!("{}/chat/completions", settings.base_url))
         .json(body);
-    if let Some(key) = secret {
-        req = req.bearer_auth(key);
+    let custom_authorization = credentials
+        .headers
+        .iter()
+        .any(|header| header.name.eq_ignore_ascii_case("authorization"));
+    if !custom_authorization {
+        if let Some(key) = &credentials.api_key {
+            req = req.bearer_auth(key);
+        }
+    }
+    for header in &credentials.headers {
+        let name = HeaderName::from_bytes(header.name.as_bytes())
+            .map_err(|_| failure("invalidHeaders"))?;
+        let value = HeaderValue::from_str(&header.value).map_err(|_| failure("invalidHeaders"))?;
+        req = req.header(name, value);
     }
     let response = req
         .send()
@@ -350,10 +364,10 @@ async fn run(app: AppHandle, window: &WebviewWindow, request: &Request) -> AppRe
     let catalog = tokio::task::spawn_blocking(move || skills::load(&skill_app))
         .await
         .map_err(|_| failure("skillRead"))??;
-    let (settings, secret) = credentials(app).await?;
+    let (settings, credentials) = credentials(app).await?;
     run_loop(
         settings,
-        secret,
+        credentials,
         request,
         &catalog,
         |kind, text, proposal| emit(window, &request.request_id, kind, text, proposal),
@@ -363,7 +377,7 @@ async fn run(app: AppHandle, window: &WebviewWindow, request: &Request) -> AppRe
 
 async fn run_loop(
     settings: Settings,
-    secret: Option<String>,
+    credentials: Credentials,
     request: &Request,
     catalog: &[skills::Skill],
     mut publish: impl FnMut(&str, Option<String>, Option<Proposal>) -> AppResult<()>,
@@ -431,7 +445,7 @@ async fn run_loop(
         {
             return Err(failure("contextTooLarge"));
         }
-        let response = post(&client, &settings, &secret, &json!({
+        let response = post(&client, &settings, &credentials, &json!({
             "model":settings.model, "messages":messages, "tools":protocol::tools(), "stream":true,
         })).await.map_err(|error| {
             if image_size > 0 && error.to_string() == "agent:modelRequest" { failure("imageModelRequest") } else { error }
@@ -682,7 +696,7 @@ mod tests {
                 base_url: url,
                 model: "test".into(),
             },
-            None,
+            Credentials::default(),
             &request,
             &[],
             |kind, text, _| {
@@ -727,7 +741,7 @@ mod tests {
                 base_url: url,
                 model: "vision-fixture".into(),
             },
-            None,
+            Credentials::default(),
             &request,
             &[],
             |_, _, _| Ok(()),
@@ -759,7 +773,7 @@ mod tests {
                 base_url: url,
                 model: "fixture".into(),
             },
-            None,
+            Credentials::default(),
             &request,
             &[],
             |_, _, _| Ok(()),
@@ -780,7 +794,7 @@ mod tests {
                 base_url: url,
                 model: "fixture".into(),
             },
-            None,
+            Credentials::default(),
             &request,
             &catalog,
             |kind, _, _| {
@@ -835,7 +849,7 @@ mod tests {
                 base_url: url,
                 model: "fixture".into(),
             },
-            None,
+            Credentials::default(),
             &request_fixture(),
             &catalog,
             |_, _, proposal| {
@@ -879,7 +893,7 @@ mod tests {
                 base_url: url,
                 model: "fixture".into(),
             },
-            None,
+            Credentials::default(),
             &request,
             &skills::bundled().unwrap(),
             |_, _, _| Ok(()),
@@ -924,7 +938,7 @@ mod tests {
                     base_url: url,
                     model: "fixture".into(),
                 },
-                None,
+                Credentials::default(),
                 &request,
                 &[],
                 |kind, text, proposal| {
@@ -969,12 +983,65 @@ mod tests {
                 base_url: url,
                 model: "fixture".into(),
             },
-            &Some("test-token".into()),
+            &Credentials {
+                version: 1,
+                api_key: Some("test-token".into()),
+                headers: vec![],
+            },
             &json!({}),
         )
         .await;
         assert_eq!(result.unwrap_err().to_string(), "agent:auth");
         server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn custom_headers_are_sent_and_authorization_overrides_bearer_key() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let settings = Settings {
+            base_url: format!("http://{}", listener.local_addr().unwrap()),
+            model: "fixture".into(),
+        };
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let mut bytes = vec![];
+            loop {
+                let mut chunk = [0; 4096];
+                let n = stream.read(&mut chunk).await.unwrap();
+                bytes.extend_from_slice(&chunk[..n]);
+                if bytes.windows(4).any(|part| part == b"\r\n\r\n") {
+                    break;
+                }
+            }
+            let request = String::from_utf8_lossy(&bytes).to_lowercase();
+            stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: 14\r\nConnection: close\r\n\r\ndata: [DONE]\n\n").await.unwrap();
+            request
+        });
+        let _response = post(
+            &client().unwrap(),
+            &settings,
+            &Credentials {
+                version: 1,
+                api_key: Some("bearer-key".into()),
+                headers: vec![
+                    CustomHeader {
+                        name: "authorization".into(),
+                        value: "Token custom".into(),
+                    },
+                    CustomHeader {
+                        name: "x-tenant-id".into(),
+                        value: "tenant-1".into(),
+                    },
+                ],
+            },
+            &json!({}),
+        )
+        .await
+        .unwrap();
+        let request = server.await.unwrap();
+        assert!(request.contains("authorization: token custom\r\n"));
+        assert!(!request.contains("bearer bearer-key"));
+        assert!(request.contains("x-tenant-id: tenant-1\r\n"));
     }
 
     #[test]
@@ -1037,7 +1104,7 @@ mod tests {
                 base_url: url,
                 model: "fixture".into(),
             },
-            None,
+            Credentials::default(),
             &request,
             &[],
             |kind, _, proposal| {
@@ -1078,7 +1145,7 @@ mod tests {
                 base_url: url,
                 model: "fixture".into(),
             },
-            None,
+            Credentials::default(),
             &request,
             &[],
             |kind, _, proposal| {

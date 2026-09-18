@@ -1,6 +1,7 @@
 /** Shared IPC contract and deterministic edit validation. */
 export interface AgentSettings { baseUrl: string; model: string }
-export interface AgentConfig extends AgentSettings { hasKey: boolean }
+export interface AgentHeader { name: string; value: string }
+export interface AgentConfig extends AgentSettings { hasKey: boolean; hasHeaders: boolean }
 export interface AgentImage { name: string; dataUrl: string }
 export interface AgentMessage { role: 'user' | 'assistant'; content: string; images?: AgentImage[] }
 export interface AgentContext { name: string; markdown: string }
@@ -138,3 +139,24 @@ export const AGENT_PRESETS = [
   { id: 'ollama', name: 'Ollama', baseUrl: 'http://localhost:11434/v1', model: '' },
   { id: 'custom', name: 'custom', baseUrl: '', model: '' },
 ] as const
+
+/** Parse one HTTP header per line without ever placing saved values in ordinary config. */
+export function parseAgentHeaders(text: string): AgentHeader[] | undefined {
+  if (!text.trim()) return undefined
+  const headers: AgentHeader[] = []
+  const names = new Set<string>()
+  for (const line of text.split(/\r?\n/)) {
+    if (!line.trim()) continue
+    const separator = line.indexOf(':')
+    const name = line.slice(0, separator).trim()
+    const value = line.slice(separator + 1).trim()
+    const normalized = name.toLowerCase()
+    if (separator <= 0 || !/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(name) || !value
+      || Array.from(value).some(char => { const code = char.charCodeAt(0); return code <= 31 || code === 127 })
+      || names.has(normalized)) throw new Error('agent:invalidHeaders')
+    names.add(normalized)
+    headers.push({ name, value })
+  }
+  if (!headers.length || headers.length > 32) throw new Error('agent:invalidHeaders')
+  return headers
+}

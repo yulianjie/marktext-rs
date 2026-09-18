@@ -4,12 +4,12 @@ import { test, expect, type Page } from '@playwright/test'
 // CodeMirror, review validation and undo paths run unchanged in the browser.
 const transportFixture = `
 let handler; let active; let timers = [];
-let config = {baseUrl:'https://api.deepseek.com',model:'deepseek-flash',hasKey:false};
+let config = {baseUrl:'https://api.deepseek.com',model:'deepseek-flash',hasKey:false,hasHeaders:false};
 let skills = ['eli5','mermaid-diagrams','writing-clearly-and-concisely','crafting-effective-readmes','internal-comms','markdown-coauthor'].map(name=>({id:'builtin:'+name,name,description:name,license:name==='internal-comms'?'Apache-2.0':'MIT',source:'https://github.com/DreambigOu/ELI5',builtin:true,enabled:true}));
 export const agentTransport = {
   historySettings: async()=>({enabled:false}), historyList: async()=>[],
   getConfig: async()=>({...config}),
-  saveConfig: async(settings, apiKey)=>{config={...settings,hasKey:apiKey === '' ? false : !!apiKey || config.hasKey};return {...config}},
+  saveConfig: async(settings, apiKey, headers)=>{config={...settings,hasKey:apiKey === '' ? false : !!apiKey || config.hasKey,hasHeaders:Array.isArray(headers) ? headers.length > 0 : config.hasHeaders};return {...config}},
   testConnection: async()=>{},
   listSkills: async()=>skills.map(s=>({...s})),
   importSkill: async()=>{if(skills.some(s=>s.id==='user:team-style'))throw new Error('agent:skillExists');skills.push({id:'user:team-style',name:'team-style',description:'Team writing rules',license:'MIT',source:null,builtin:false,enabled:true});return skills.map(s=>({...s}));},
@@ -295,9 +295,14 @@ test('protects concurrent edits and supports cancellation, retry and settings', 
   await expect(page.locator('.agent-message .agent-error')).toContainText('身份验证失败')
   await page.getByRole('button', { name:'模型设置', exact:true }).click()
   await page.getByLabel('API Key').fill('test-only-placeholder')
+  await page.getByLabel('自定义请求头').fill('X-Tenant-ID: tenant-1\nAuthorization: Token test')
   await page.getByRole('button', { name:'保存并测试' }).click()
   await expect(page.getByText('连接成功，模型已响应')).toBeVisible()
   await expect(page.getByLabel('API Key')).toHaveValue('')
+  await expect(page.getByLabel('自定义请求头')).toHaveValue('')
+  await expect(page.getByText('已保存', { exact:true })).toHaveCount(2)
+  await page.getByRole('button', { name:'删除此服务的已存请求头' }).click()
+  await expect(page.getByText('此服务的请求头已删除')).toBeVisible()
   await page.getByRole('button', { name:'删除此服务的已存密钥' }).click()
   await expect(page.getByText('此服务的密钥已删除')).toBeVisible()
 })

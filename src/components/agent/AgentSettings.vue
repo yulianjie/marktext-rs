@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { ArrowLeft, Check, LoaderCircle } from '@lucide/vue'
 import { useAgentStore, agentError } from '@/stores/agent'
 import { agentTransport } from '@/services/agent-transport'
-import { AGENT_PRESETS } from '@/services/agent'
+import { AGENT_PRESETS, parseAgentHeaders } from '@/services/agent'
 import { useI18n } from '@/i18n'
 
 const agent = useAgentStore()
@@ -11,6 +11,7 @@ const { t } = useI18n()
 const baseUrl = ref('')
 const model = ref('')
 const apiKey = ref('')
+const headers = ref('')
 const preset = ref('deepseek')
 const saving = ref(false)
 const testing = ref(false)
@@ -23,21 +24,23 @@ watch(() => agent.config, config => {
   model.value = config.model
   preset.value = AGENT_PRESETS.find(p => p.baseUrl === config.baseUrl)?.id ?? 'custom'
 }, { immediate: true })
-watch([baseUrl, model, apiKey], () => { status.value = ''; failure.value = '' })
+watch([baseUrl, model, apiKey, headers], () => { status.value = ''; failure.value = '' })
 
 function choosePreset() {
   const selected = AGENT_PRESETS.find(p => p.id === preset.value)!
   baseUrl.value = selected.baseUrl
   model.value = selected.model
   apiKey.value = ''
+  headers.value = ''
 }
 async function save(test = false) {
   if (saving.value || testing.value) return
   saving.value = true
   failure.value = ''; status.value = ''
   try {
-    await agent.saveConfig({ baseUrl: baseUrl.value, model: model.value }, apiKey.value || undefined)
+    await agent.saveConfig({ baseUrl: baseUrl.value, model: model.value }, apiKey.value || undefined, parseAgentHeaders(headers.value))
     apiKey.value = ''
+    headers.value = ''
     status.value = t('agent.settings.saved')
     if (test) {
       testing.value = true
@@ -58,7 +61,18 @@ async function forget() {
   } catch (error) { failure.value = agentError(error) }
   finally { saving.value = false }
 }
-onBeforeUnmount(() => { apiKey.value = '' })
+async function forgetHeaders() {
+  if (!agent.config || saving.value || testing.value) return
+  saving.value = true
+  failure.value = ''; status.value = ''
+  try {
+    await agent.saveConfig({ baseUrl: agent.config.baseUrl, model: agent.config.model }, undefined, [])
+    headers.value = ''
+    status.value = t('agent.settings.headersForgotten')
+  } catch (error) { failure.value = agentError(error) }
+  finally { saving.value = false }
+}
+onBeforeUnmount(() => { apiKey.value = ''; headers.value = '' })
 </script>
 
 <template>
@@ -81,6 +95,10 @@ onBeforeUnmount(() => { apiKey.value = '' })
         <input id="agent-key" v-model="apiKey" type="password" maxlength="4096" :placeholder="t(sameEndpoint && agent.config?.hasKey ? 'agent.settings.keepKey' : 'agent.settings.keyPlaceholder')" autocomplete="new-password" spellcheck="false">
         <small>{{ t('agent.settings.keyHelp') }}</small>
         <button v-if="sameEndpoint && agent.config?.hasKey" class="agent-text-button" type="button" @click="forget">{{ t('agent.settings.forgetKey') }}</button>
+        <label for="agent-headers">{{ t('agent.settings.headers') }} <span v-if="sameEndpoint && agent.config?.hasHeaders" class="agent-key-state"><Check :size="12" />{{ t('agent.settings.headersSaved') }}</span></label>
+        <textarea id="agent-headers" v-model="headers" rows="4" maxlength="32768" :placeholder="t(sameEndpoint && agent.config?.hasHeaders ? 'agent.settings.keepHeaders' : 'agent.settings.headersPlaceholder')" autocomplete="off" spellcheck="false" />
+        <small>{{ t('agent.settings.headersHelp') }}</small>
+        <button v-if="sameEndpoint && agent.config?.hasHeaders" class="agent-text-button" type="button" @click="forgetHeaders">{{ t('agent.settings.forgetHeaders') }}</button>
         <div class="agent-settings-actions"><button type="submit" class="agent-primary">{{ t('common.save') }}</button><button type="button" @click="save(true)">{{ t('agent.settings.test') }}</button></div>
       </fieldset>
     </form>

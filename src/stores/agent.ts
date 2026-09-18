@@ -12,7 +12,7 @@ import { bus } from '@/bus'
 import { createSearchRevealRequest } from '@/services/search-reveal'
 import {
   markdownSelection, reviewProposal, reviewSource, reviewedMarkdown,
-  type AgentConfig, type AgentEvent, type AgentImage, type AgentSettings, type AgentSkill, type AgentSource, type DocumentSnapshot, type ReviewedEdit, type ReferenceSnapshot,
+  type AgentConfig, type AgentEvent, type AgentHeader, type AgentImage, type AgentSettings, type AgentSkill, type AgentSource, type DocumentSnapshot, type ReviewedEdit, type ReferenceSnapshot,
 } from '@/services/agent'
 
 export interface ChatItem {
@@ -120,8 +120,8 @@ export const useAgentStore = defineStore('agent', () => {
     finally { loadingConfig.value = false }
   }
 
-  async function saveConfig(settings: AgentSettings, apiKey?: string) {
-    config.value = await agentTransport.saveConfig(settings, apiKey)
+  async function saveConfig(settings: AgentSettings, apiKey?: string, headers?: AgentHeader[]) {
+    config.value = await agentTransport.saveConfig(settings, apiKey, headers)
     configError.value = ''
   }
 

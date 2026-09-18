@@ -16,7 +16,7 @@ let handler;
 const loadHistory=()=>JSON.parse(localStorage.getItem('workflow-history')||'{"enabled":false,"records":[]}');
 const saveHistory=value=>localStorage.setItem('workflow-history',JSON.stringify(value));
 export const agentTransport = {
-  getConfig: async()=>({baseUrl:'http://localhost:9999',model:'workflow-fixture',hasKey:false}),
+  getConfig: async()=>({baseUrl:'http://localhost:9999',model:'workflow-fixture',hasKey:false,hasHeaders:false}),
   listSkills: async()=>[],
   historySettings:async()=>({enabled:loadHistory().enabled}),
   historySetEnabled:async(enabled)=>{const h=loadHistory();h.enabled=enabled;saveHistory(h);return {enabled}},

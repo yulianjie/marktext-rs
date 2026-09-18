@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import { changeDiff, markdownSelection, proposalMarkdown, reviewProposal, type AgentEvent, type AgentImage } from '../../src/services/agent'
+import { changeDiff, markdownSelection, parseAgentHeaders, proposalMarkdown, reviewProposal, type AgentEvent, type AgentImage } from '../../src/services/agent'
 import { readAgentImage } from '../../src/services/agent-images'
 
 const transport = vi.hoisted(() => ({ getConfig: vi.fn(), saveConfig: vi.fn(), testConnection: vi.fn(), start: vi.fn(), cancel: vi.fn(), listen: vi.fn(), listSkills: vi.fn(), importSkill: vi.fn() }))
@@ -27,6 +27,16 @@ beforeEach(() => {
 const snapshot = { tabId: 'doc', name: 'note.md', markdown: 'same\nhello world\nsame', from: 5, to: 16 }
 describe('Agent document edits', () => {
   const picture: AgentImage = { name: 'image.png', dataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a5WQAAAAASUVORK5CYII=' }
+  it('parses custom headers without losing colons and rejects ambiguous input', () => {
+    expect(parseAgentHeaders('X-Tenant-ID: tenant-1\nAuthorization: Token abc:def')).toEqual([
+      { name: 'X-Tenant-ID', value: 'tenant-1' },
+      { name: 'Authorization', value: 'Token abc:def' },
+    ])
+    expect(parseAgentHeaders('  ')).toBeUndefined()
+    for (const value of ['Missing separator', 'Bad Header: x', 'X-Test:', 'X-Test: one\nx-test: two', 'X-Test: one\u0007']) {
+      expect(() => parseAgentHeaders(value)).toThrow('agent:invalidHeaders')
+    }
+  })
   it('automatically captures reversed source selections, respects removal and isolates attachment settings', () => {
     const editor = useEditorStore(), agent = useAgentStore()
     const first = editor.newUntitledTab('private\nselected text\nprivate')
