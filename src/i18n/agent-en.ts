@@ -52,7 +52,7 @@ export default {
   settings: {
     title: 'Model settings', back: 'Back to conversation', description: 'Bring your own model service. Start with DeepSeek, a compatible API, or local Ollama.',
     provider: 'Service preset', custom: 'Custom compatible service', baseUrl: 'API base URL', model: 'Model name', modelPlaceholder: 'Model ID provided by your service',
-    urlHelp: 'Base URL, e.g. https://api.deepseek.com, without /chat/completions.',
+    urlHelp: 'HTTP or HTTPS base URL, e.g. https://api.deepseek.com, without /chat/completions. HTTP is unencrypted; use it only on a network you trust.',
     keySaved: 'Saved', keepKey: 'Leave blank to keep the saved key', keyPlaceholder: 'API key; optional for local Ollama',
     keyHelp: 'Keys stay in the OS credential store, outside ordinary settings. Changing the URL never transfers the previous service’s key.',
     headers: 'Custom request headers', headersSaved: 'Saved', keepHeaders: 'Leave blank to keep the saved headers', headersPlaceholder: 'One per line, for example:\nX-Tenant-ID: tenant-1\nAuthorization: Token xxx',
@@ -77,7 +77,7 @@ export default {
     skillLimit: 'Skill limit exceeded: 30 imported skills, 1 MB and 128 text files per skill, 100 KB per file.',
     skillExists: 'A skill with this name is already imported. Remove the old copy or use another name.', skillNotFound: 'The selected skill is disabled or missing. Choose again.',
     unknown: 'Could not complete this action. Check model settings and try again.', desktopOnly: 'AI connections require the MarkText desktop app.',
-    invalidUrl: 'Use an HTTPS base URL without credentials, query parameters or /chat/completions. Local services may use HTTP.',
+    invalidUrl: 'Use an HTTP or HTTPS base URL without a username, password, query, fragment or /chat/completions.',
     invalidModel: 'Enter a valid model name.', invalidKey: 'Invalid key format. Please enter it again.', invalidHeaders: 'Headers are invalid, duplicated, or include transport fields the app cannot override.',
     keychain: 'Cannot access the OS credential store. Unlock or enable it and try again.', configRead: 'Cannot read model settings. Save them again.', configWrite: 'Cannot save model settings. Check local file permissions.',
     network: 'Connection failed or was interrupted. Check your network and API URL.', timeout: 'The model timed out. Retry or choose a faster model.',

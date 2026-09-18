@@ -52,7 +52,7 @@ export default {
   settings: {
     title: '模型设置', back: '返回对话', description: '使用你自己的模型服务。默认推荐 DeepSeek，也可连接兼容接口或本地 Ollama。',
     provider: '服务预设', custom: '自定义兼容服务', baseUrl: 'API 地址', model: '模型名称', modelPlaceholder: '填写服务提供的模型 ID',
-    urlHelp: '填写基础地址，例如 https://api.deepseek.com；不包含 /chat/completions。',
+    urlHelp: '填写 HTTP 或 HTTPS 基础地址，例如 https://api.deepseek.com；不包含 /chat/completions。HTTP 为明文传输，请仅在你信任的网络中使用。',
     keySaved: '已保存', keepKey: '留空保留当前密钥', keyPlaceholder: '输入密钥；本地 Ollama 可留空',
     keyHelp: '密钥保存在系统凭据库中，不写入普通配置文件。更换接口地址不会带走原服务的密钥。',
     headers: '自定义请求头', headersSaved: '已保存', keepHeaders: '留空保留已保存的请求头', headersPlaceholder: '每行一个，例如：\nX-Tenant-ID: tenant-1\nAuthorization: Token xxx',
@@ -77,7 +77,7 @@ export default {
     skillLimit: '技能超过限制：最多 30 个导入技能，每个 1 MB、128 个文本文件，单文件最多 100 KB。',
     skillExists: '同名技能已导入。请先删除旧副本或使用其他技能名称。', skillNotFound: '所选技能已停用或不存在，请重新选择。',
     unknown: '操作未完成，请检查模型设置后重试。', desktopOnly: 'AI 连接需要在 MarkText 桌面应用中使用。',
-    invalidUrl: '请填写 HTTPS 基础地址，且不要包含密码、查询参数或 /chat/completions。本地服务可使用 HTTP。',
+    invalidUrl: '请填写 HTTP 或 HTTPS 基础地址，且不要包含用户名、密码、查询参数、片段或 /chat/completions。',
     invalidModel: '请填写有效的模型名称。', invalidKey: '密钥格式无效，请重新输入。', invalidHeaders: '请求头格式无效、重复或包含不允许由应用覆盖的传输字段。',
     keychain: '无法访问系统凭据库，请解锁或启用凭据库后重试。', configRead: '无法读取模型设置，请重新保存设置。', configWrite: '无法保存模型设置，请检查本机文件权限。',
     network: '连接中断或无法连接。请检查网络及 API 地址后重试。', timeout: '模型响应超时，请重试或选择响应更快的模型。',

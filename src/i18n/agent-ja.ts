@@ -52,7 +52,7 @@ export default {
   settings: {
     title: 'モデル設定', back: '会話に戻る', description: 'DeepSeek、互換 API、またはローカル Ollama を接続できます。',
     provider: 'サービス', custom: 'カスタム互換サービス', baseUrl: 'API ベース URL', model: 'モデル名', modelPlaceholder: 'サービスが提供するモデル ID',
-    urlHelp: 'https://api.deepseek.com などのベース URL。/chat/completions は含めません。',
+    urlHelp: 'HTTP または HTTPS のベース URL（例：https://api.deepseek.com）。/chat/completions は含めません。HTTP は暗号化されないため、信頼できるネットワークでのみ使用してください。',
     keySaved: '保存済み', keepKey: '空欄で保存済みキーを保持', keyPlaceholder: 'API キー（ローカル Ollama は省略可）',
     keyHelp: 'キーは OS の資格情報ストアに保存されます。URL を変更しても前のサービスのキーは送信されません。',
     headers: 'カスタムリクエストヘッダー', headersSaved: '保存済み', keepHeaders: '空欄で保存済みヘッダーを保持', headersPlaceholder: '1 行に 1 つ入力します。例：\nX-Tenant-ID: tenant-1\nAuthorization: Token xxx',
@@ -77,7 +77,7 @@ export default {
     skillLimit: '上限を超えています。追加スキルは 30 個、各 1 MB・128 ファイル、単一ファイルは 100 KB までです。',
     skillExists: '同名のスキルが存在します。古いコピーを削除するか名前を変更してください。', skillNotFound: '選択したスキルは無効か削除済みです。再選択してください。',
     unknown: '処理できませんでした。モデル設定を確認して再試行してください。', desktopOnly: 'AI 接続は MarkText デスクトップアプリで利用できます。',
-    invalidUrl: '認証情報、クエリ、/chat/completions を含まない HTTPS ベース URL を入力してください。ローカルは HTTP も利用できます。',
+    invalidUrl: 'ユーザー名、パスワード、クエリ、フラグメント、/chat/completions を含まない HTTP または HTTPS のベース URL を入力してください。',
     invalidModel: '有効なモデル名を入力してください。', invalidKey: 'キーの形式が無効です。再入力してください。', invalidHeaders: 'ヘッダーが無効、重複、またはアプリが上書きできない通信フィールドを含んでいます。',
     keychain: 'OS の資格情報ストアにアクセスできません。ロック解除または有効化してください。', configRead: 'モデル設定を読み込めません。再度保存してください。', configWrite: '設定を保存できません。ファイル権限を確認してください。',
     network: '接続が失敗または中断しました。ネットワークと URL を確認してください。', timeout: 'モデルがタイムアウトしました。再試行するか別のモデルを選んでください。',

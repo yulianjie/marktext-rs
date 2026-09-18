@@ -57,13 +57,7 @@ pub struct Credentials {
 
 pub fn validate(mut settings: Settings) -> AppResult<Settings> {
     let url = Url::parse(settings.base_url.trim()).map_err(|_| failure("invalidUrl"))?;
-    let local = match url.host() {
-        Some(url::Host::Domain(host)) => host == "localhost",
-        Some(url::Host::Ipv4(ip)) => ip.is_loopback(),
-        Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
-        _ => false,
-    };
-    if !(url.scheme() == "https" || url.scheme() == "http" && local)
+    if !matches!(url.scheme(), "http" | "https")
         || url.host().is_none()
         || !url.username().is_empty()
         || url.password().is_some()
@@ -229,13 +223,13 @@ pub fn credentials(app: &AppHandle) -> AppResult<(Settings, Credentials)> {
 mod tests {
     use super::*;
     #[test]
-    fn urls_cannot_carry_secrets_or_send_keys_over_remote_http() {
+    fn urls_accept_http_and_https_without_embedded_secrets() {
         for base_url in [
-            "http://api.example.com",
             "https://user:pass@example.com",
             "https://a.com/?key=x",
             "https://a.com/#secret",
             "file:///tmp/api",
+            "ftp://api.example.com/v1",
             "https://a.com/v1/chat/completions",
         ] {
             assert!(validate(Settings {
@@ -248,6 +242,7 @@ mod tests {
             "http://localhost:11434/v1",
             "http://127.0.0.1:11434/v1",
             "http://[::1]:11434/v1",
+            "http://api.example.com/v1",
             "https://api.deepseek.com/",
         ] {
             assert!(validate(Settings {
