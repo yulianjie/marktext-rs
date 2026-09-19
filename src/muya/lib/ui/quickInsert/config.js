@@ -20,124 +20,113 @@ import sequenceIcon from '../../assets/pngicon/sequence/2.png'
 import plantumlIcon from '../../assets/pngicon/plantuml/2.png'
 import mermaidIcon from '../../assets/pngicon/mermaid/2.png'
 import vegaIcon from '../../assets/pngicon/chart/2.png'
-import { isOsx } from '../../config'
+import {
+  currentShortcutPlatform,
+  displayAccelerator,
+  getShortcutDefault,
+} from '@/common/shortcut-registry'
 
-const COMMAND_KEY = isOsx ? '⌘' : 'Ctrl'
-const OPTION_KEY = isOsx ? '⌥' : 'Alt'
-const SHIFT_KEY = isOsx ? '⇧' : 'Shift'
+const shortcutPlatform = currentShortcutPlatform()
 
-// Command (or Cmd) ⌘
-// Shift ⇧
-// Option (or Alt) ⌥
-// Control (or Ctrl) ⌃
-// Caps Lock ⇪
-// Fn
+const shortcut = actionId => {
+  const accelerator = getShortcutDefault(actionId)
+  return accelerator ? displayAccelerator(accelerator, shortcutPlatform) : undefined
+}
 
 export const quickInsertObj = {
   'basic block': [{
     title: 'Paragraph',
     subTitle: 'Lorem Ipsum is simply dummy text',
     label: 'paragraph',
-    shortCut: `${COMMAND_KEY}+0`,
     icon: paragraphIcon
   }, {
     title: 'Horizontal Line',
     subTitle: '---',
     label: 'hr',
-    shortCut: `${OPTION_KEY}+${COMMAND_KEY}+-`,
     icon: hrIcon
   }, {
     title: 'Front Matter',
     subTitle: '--- Lorem Ipsum ---',
     label: 'front-matter',
-    shortCut: `${OPTION_KEY}+${COMMAND_KEY}+Y`,
     icon: frontMatterIcon
   }],
   header: [{
     title: 'Header 1',
     subTitle: '# Lorem Ipsum is simply ...',
     label: 'heading 1',
-    shortCut: `${COMMAND_KEY}+1`,
+    shortCut: shortcut('paragraph.h1'),
     icon: header1Icon
   }, {
     title: 'Header 2',
     subTitle: '## Lorem Ipsum is simply ...',
     label: 'heading 2',
-    shortCut: `${COMMAND_KEY}+2`,
+    shortCut: shortcut('paragraph.h2'),
     icon: header2Icon
   }, {
     title: 'Header 3',
     subTitle: '### Lorem Ipsum is simply ...',
     label: 'heading 3',
-    shortCut: `${COMMAND_KEY}+3`,
+    shortCut: shortcut('paragraph.h3'),
     icon: header3Icon
   }, {
     title: 'Header 4',
     subTitle: '#### Lorem Ipsum is simply ...',
     label: 'heading 4',
-    shortCut: `${COMMAND_KEY}+4`,
+    shortCut: shortcut('paragraph.h4'),
     icon: header4Icon
   }, {
     title: 'Header 5',
     subTitle: '##### Lorem Ipsum is simply ...',
     label: 'heading 5',
-    shortCut: `${COMMAND_KEY}+5`,
+    shortCut: shortcut('paragraph.h5'),
     icon: header5Icon
   }, {
     title: 'Header 6',
     subTitle: '###### Lorem Ipsum is simply ...',
     label: 'heading 6',
-    shortCut: `${COMMAND_KEY}+6`,
+    shortCut: shortcut('paragraph.h6'),
     icon: header6Icon
   }],
   'advanced block': [{
     title: 'Table Block',
     subTitle: '|Lorem | Ipsum is simply |',
     label: 'table',
-    shortCut: `${SHIFT_KEY}+${COMMAND_KEY}+T`,
     icon: newTableIcon
   }, {
     title: 'Display Math',
     subTitle: '$$ Lorem Ipsum is simply $$',
     label: 'mathblock',
-    shortCut: `${OPTION_KEY}+${COMMAND_KEY}+M`,
     icon: mathblockIcon
   }, {
     title: 'HTML Block',
     subTitle: '<div> Lorem Ipsum is simply </div>',
     label: 'html',
-    shortCut: `${OPTION_KEY}+${COMMAND_KEY}+J`,
     icon: htmlIcon
   }, {
     title: 'Code Block',
     subTitle: '```java Lorem Ipsum is simply ```',
     label: 'pre',
-    shortCut: `${OPTION_KEY}+${COMMAND_KEY}+C`,
     icon: codeIcon
   }, {
     title: 'Quote Block',
     subTitle: '>Lorem Ipsum is simply ...',
     label: 'blockquote',
-    shortCut: `${OPTION_KEY}+${COMMAND_KEY}+Q`,
     icon: quoteIcon
   }],
   'list block': [{
     title: 'Order List',
     subTitle: '1. Lorem Ipsum is simply ...',
     label: 'ol-order',
-    shortCut: `${OPTION_KEY}+${COMMAND_KEY}+O`,
     icon: orderListIcon
   }, {
     title: 'Bullet List',
     subTitle: '- Lorem Ipsum is simply ...',
     label: 'ul-bullet',
-    shortCut: `${OPTION_KEY}+${COMMAND_KEY}+U`,
     icon: bulletListIcon
   }, {
     title: 'To-do List',
     subTitle: '- [x] Lorem Ipsum is simply ...',
     label: 'ul-task',
-    shortCut: `${OPTION_KEY}+${COMMAND_KEY}+X`,
     icon: todoListIcon
   }],
   diagram: [{

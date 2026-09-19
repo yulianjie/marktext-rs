@@ -1,20 +1,19 @@
 /** Renderer-side user-overridable keyboard shortcuts. */
 import { defineStore } from 'pinia'
+import {
+  defaultKeybindings as registryDefaultKeybindings,
+  isReservedAccelerator,
+  isShortcutRemappable,
+  isSupportedShortcutKey,
+  normaliseAccelerator,
+  serialiseAccelerator,
+  splitAccelerator,
+} from '@/common/shortcut-registry'
 import { setPreference } from '@/services/tauri-invoke'
 
-export const defaultKeybindings: Readonly<Record<string, string>> = Object.freeze({
-  'file.new': 'Ctrl+T',
-  'file.open': 'Ctrl+O',
-  'file.openFolder': 'Ctrl+Shift+O',
-  'file.save': 'Ctrl+S',
-  'file.saveAs': 'Ctrl+Shift+S',
-  'file.closeTab': 'Ctrl+W',
-  'file.print': 'Ctrl+P',
-  'edit.find': 'Ctrl+F',
-  'edit.replace': 'Ctrl+H',
-  'view.toggleSidebar': 'Ctrl+Shift+B',
-  'view.commandPalette': 'Ctrl+Shift+P',
-})
+/** Kept as a store export for existing Preferences and command-palette users. */
+export const defaultKeybindings = registryDefaultKeybindings
+export { eventAccel, normalise } from '@/common/shortcut-registry'
 
 export type KeybindingValidation =
   | { ok: true; normalized: string }
@@ -34,15 +33,6 @@ export type KeybindingUpdateResult = KeybindingValidation | {
 const writeQueues = new WeakMap<object, Promise<void>>()
 const confirmedMaps = new WeakMap<object, Record<string, string>>()
 const pendingCounts = new WeakMap<object, number>()
-
-const reservedAccelerators = new Set([
-  // Predefined Edit/Application menu actions.
-  'ctrl+z', 'ctrl+y', 'ctrl+shift+z', 'ctrl+x', 'ctrl+c', 'ctrl+v', 'ctrl+a', 'ctrl+q',
-  // Fixed document-format/view/window actions.
-  'ctrl+shift+n', 'ctrl+shift+w', 'ctrl+1', 'ctrl+2', 'ctrl+3', 'ctrl+4', 'ctrl+5',
-  'ctrl+6', 'ctrl+b', 'ctrl+i', 'ctrl+d', 'ctrl+`', 'ctrl+l', 'ctrl+shift+i',
-  'ctrl+alt+s', 'ctrl+=', 'ctrl+-', 'ctrl+0', 'ctrl+,',
-])
 
 function markPending(owner: { saving: boolean }, delta: 1 | -1): void {
   const count = Math.max(0, (pendingCounts.get(owner) ?? 0) + delta)
@@ -66,35 +56,18 @@ function enqueue(owner: object, operation: () => Promise<KeybindingUpdateResult>
   return result
 }
 
-function displayAccel(accel: string): string {
-  const tokens = normalise(accel).split('+').filter(Boolean)
-  const labels: Record<string, string> = {
-    ctrl: 'Ctrl',
-    cmd: 'Cmd',
-    shift: 'Shift',
-    alt: 'Alt',
-    esc: 'Esc',
-    space: 'Space',
-    up: 'Up',
-    down: 'Down',
-    left: 'Left',
-    right: 'Right',
-  }
-  return tokens.map(token => labels[token] ?? (token.length === 1 ? token.toUpperCase() : token)).join('+')
-}
-
 export function validateKeybinding(
   map: Record<string, string>,
   actionId: string,
   accel: string,
 ): KeybindingValidation {
-  if (!(actionId in map)) {
+  if (!isShortcutRemappable(actionId) || !(actionId in map)) {
     return { ok: false, code: 'unknown-action', message: `Unknown action: ${actionId}` }
   }
   const shape = validateKeybindingShape(accel)
   if (!shape.ok) return shape
-  const normalized = normalise(shape.normalized)
-  if (reservedAccelerators.has(normalized)) {
+  const normalized = normaliseAccelerator(shape.normalized)
+  if (isReservedAccelerator(normalized)) {
     return {
       ok: false,
       code: 'reserved',
@@ -102,7 +75,7 @@ export function validateKeybinding(
     }
   }
   for (const [otherId, otherAccel] of Object.entries(map)) {
-    if (otherId !== actionId && normalise(otherAccel) === normalized) {
+    if (otherId !== actionId && normaliseAccelerator(otherAccel) === normalized) {
       return {
         ok: false,
         code: 'conflict',
@@ -115,15 +88,15 @@ export function validateKeybinding(
 }
 
 function validateKeybindingShape(accel: string): KeybindingValidation {
-  const normalized = normalise(accel)
-  const tokens = normalized.split('+').filter(Boolean)
+  const normalized = normaliseAccelerator(accel)
+  const tokens = splitAccelerator(normalized).filter(Boolean)
   const modifiers = new Set(['ctrl', 'shift', 'alt'])
   const keys = tokens.filter(token => !modifiers.has(token))
   if (!normalized || keys.length !== 1 || new Set(tokens).size !== tokens.length) {
     return { ok: false, code: 'invalid', message: 'Press exactly one key with optional modifiers.' }
   }
   const key = keys[0]
-  if (!isSupportedKey(key)) {
+  if (!isSupportedShortcutKey(key)) {
     return { ok: false, code: 'invalid', message: `Unsupported shortcut key: ${key}` }
   }
   const hasCommandModifier = tokens.some(token => token === 'ctrl' || token === 'alt')
@@ -134,18 +107,65 @@ function validateKeybindingShape(accel: string): KeybindingValidation {
       message: 'Printable shortcuts must include Ctrl, Cmd, or Alt.',
     }
   }
-  return { ok: true, normalized: displayAccel(normalized) }
+  return { ok: true, normalized: serialiseAccelerator(normalized) }
 }
 
-function isSupportedKey(key: string): boolean {
-  if (/^[a-z0-9]$/.test(key) || "`\\[],=-.';/".includes(key)) return true
-  if (/^f(?:[1-9]|1\d|2[0-4])$/.test(key)) return true
-  return new Set([
-    'esc', 'space', 'backspace', 'capslock', 'enter', 'tab', 'delete', 'end',
-    'home', 'insert', 'pagedown', 'pageup', 'printscreen', 'scrolllock',
-    'up', 'down', 'left', 'right', 'numlock', 'volumedown', 'volumeup',
-    'volumemute',
-  ]).has(key) || /^(?:numpad|num)(?:[0-9]|add|plus|decimal|divide|enter|equal|multiply|subtract)$/.test(key)
+/**
+ * Complete an old or partial persisted map without ever manufacturing an
+ * unassigned action. Persisted values win when they are individually valid;
+ * every remaining action first tries its own default, then an otherwise-unused
+ * registry default. This makes a partial `New = Ctrl+O` deterministic: Open
+ * receives the now-free `Ctrl+T`, while a full New/Open swap remains intact.
+ *
+ * Keep the allocation order in lockstep with
+ * `menu::keybindings_from_value` in Rust. The renderer stores logical Ctrl
+ * spellings; the native layer translates that primary modifier to Cmd on macOS
+ * only when constructing a menu accelerator.
+ */
+export function normaliseKeybindingMap(
+  persisted: Record<string, unknown> | undefined | null,
+): Record<string, string> {
+  const actionIds = Object.keys(defaultKeybindings)
+  const next: Record<string, string> = {}
+  const used = new Set<string>()
+
+  const add = (actionId: string, accelerator: string): boolean => {
+    const normalized = normaliseAccelerator(accelerator)
+    if (!normalized || used.has(normalized)) return false
+    next[actionId] = accelerator
+    used.add(normalized)
+    return true
+  }
+
+  // A legacy map may be partial, but valid explicit choices take precedence
+  // over defaults. Duplicate legacy choices are resolved by declaration order.
+  for (const actionId of actionIds) {
+    const raw = persisted?.[actionId]
+    if (typeof raw !== 'string') continue
+    const validation = validateKeybindingShape(raw)
+    if (!validation.ok || isReservedAccelerator(validation.normalized)) continue
+    add(actionId, validation.normalized)
+  }
+
+  // Preserve each remaining action's own default whenever it is still free.
+  for (const actionId of actionIds) {
+    if (actionId in next) continue
+    add(actionId, defaultKeybindings[actionId])
+  }
+
+  // An explicit remap can occupy another action's default. The registry
+  // defaults are unique, so this final pass always has a safe value available
+  // for every unassigned action.
+  const fallbackDefaults = actionIds.map(actionId => defaultKeybindings[actionId])
+  for (const actionId of actionIds) {
+    if (actionId in next) continue
+    const fallback = fallbackDefaults.find(accelerator => !used.has(normaliseAccelerator(accelerator)))
+    if (!fallback || !add(actionId, fallback)) {
+      throw new Error(`Shortcut registry cannot assign a binding for ${actionId}.`)
+    }
+  }
+
+  return next
 }
 
 export const useKeybindingsStore = defineStore('keybindings', {
@@ -166,42 +186,7 @@ export const useKeybindingsStore = defineStore('keybindings', {
     hydrate(persisted: Record<string, unknown> | undefined | null) {
       if (!persisted) return
       this.revision += 1
-      const desired: Record<string, string> = {}
-      for (const actionId of Object.keys(defaultKeybindings)) {
-        const value = persisted[actionId]
-        const validation = validateKeybindingShape(
-          typeof value === 'string' ? value : defaultKeybindings[actionId],
-        )
-        desired[actionId] = validation.ok && !reservedAccelerators.has(normalise(validation.normalized))
-          ? validation.normalized
-          : defaultKeybindings[actionId]
-      }
-
-      // Validate the completed persisted map, rather than each entry against
-      // the defaults. This preserves legitimate swaps such as exchanging the
-      // shortcuts for New and Open across a restart.
-      const counts = new Map<string, number>()
-      for (const accel of Object.values(desired)) {
-        const normalized = normalise(accel)
-        counts.set(normalized, (counts.get(normalized) ?? 0) + 1)
-      }
-      const next: Record<string, string> = {}
-      const used = new Set<string>()
-      for (const actionId of Object.keys(defaultKeybindings)) {
-        const accel = desired[actionId]
-        const normalized = normalise(accel)
-        if (counts.get(normalized) === 1) {
-          next[actionId] = accel
-          used.add(normalized)
-        }
-      }
-      for (const actionId of Object.keys(defaultKeybindings)) {
-        if (actionId in next) continue
-        const fallback = defaultKeybindings[actionId]
-        const normalized = normalise(fallback)
-        next[actionId] = used.has(normalized) ? '' : fallback
-        if (next[actionId]) used.add(normalized)
-      }
+      const next = normaliseKeybindingMap(persisted)
       this.map = next
       confirmedMaps.set(this, cloneMap(next))
       this.lastError = null
@@ -279,78 +264,13 @@ export const useKeybindingsStore = defineStore('keybindings', {
     defaults: () => defaultKeybindings,
     byAccel: state => {
       const out: Record<string, string> = {}
-      for (const [id, accel] of Object.entries(state.map)) out[normalise(accel)] = id
+      for (const [id, accel] of Object.entries(state.map)) {
+        const normalized = normaliseAccelerator(accel)
+        // Malformed external state must never turn a lone Ctrl/Shift/Alt
+        // event (whose accelerator is also empty) into an application action.
+        if (normalized) out[normalized] = id
+      }
       return out
     },
   },
 })
-
-/** Normalise an accelerator into a canonical comparison form. */
-export function normalise(accel: string): string {
-  return accel
-    .split('+')
-    .map(value => {
-      const token = value.trim().toLowerCase()
-      const aliases: Record<string, string> = {
-        control: 'ctrl',
-        cmd: 'ctrl',
-        command: 'ctrl',
-        meta: 'ctrl',
-        cmdorctrl: 'ctrl',
-        commandorcontrol: 'ctrl',
-        option: 'alt',
-        escape: 'esc',
-        arrowup: 'up',
-        arrowdown: 'down',
-        arrowleft: 'left',
-        arrowright: 'right',
-        '+': '=',
-        '_': '-',
-        '{': '[',
-        '}': ']',
-        '|': '\\',
-        ':': ';',
-        '"': "'",
-        '<': ',',
-        '>': '.',
-        '?': '/',
-        '~': '`',
-      }
-      return aliases[token] ?? token
-    })
-    .filter(Boolean)
-    .sort((a, b) => {
-      const order = ['ctrl', 'cmd', 'shift', 'alt']
-      const ai = order.indexOf(a)
-      const bi = order.indexOf(b)
-      if (ai === -1 && bi === -1) return a.localeCompare(b)
-      if (ai === -1) return 1
-      if (bi === -1) return -1
-      return ai - bi
-    })
-    .join('+')
-}
-
-/** Compute the canonical accelerator for a KeyboardEvent. */
-export function eventAccel(ev: KeyboardEvent): string {
-  const parts: string[] = []
-  // The native menu treats Ctrl/Cmd as the platform primary modifier, so the
-  // renderer stores both under one canonical token for conflict detection.
-  if (ev.ctrlKey || ev.metaKey) parts.push('Ctrl')
-  if (ev.shiftKey) parts.push('Shift')
-  if (ev.altKey) parts.push('Alt')
-  const names: Record<string, string> = {
-    ' ': 'Space',
-    Escape: 'Esc',
-    ArrowUp: 'Up',
-    ArrowDown: 'Down',
-    ArrowLeft: 'Left',
-    ArrowRight: 'Right',
-  }
-  const codeKey = /^(?:Key[A-Z]|Digit[0-9])$/.test(ev.code)
-    ? ev.code.replace(/^Key/, '').replace(/^Digit/, '')
-    : undefined
-  const key = codeKey ?? names[ev.key] ?? (ev.key.length === 1 ? ev.key.toUpperCase() : ev.key)
-  if (!['Control', 'Shift', 'Alt', 'Meta'].includes(ev.key)) parts.push(key)
-  return normalise(parts.join('+'))
-}

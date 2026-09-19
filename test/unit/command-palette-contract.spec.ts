@@ -29,6 +29,11 @@ function lookup(messages: Record<string, unknown>, path: string): unknown {
 const editorPage = readSource('../../src/pages/EditorPage.vue')
 const nativeMenu = readSource('../../src-tauri/src/menu/mod.rs')
 const palette = readSource('../../src/components/commandPalette/CommandPalette.vue')
+// These IDs exist only while Preferences temporarily removes Muda's built-in
+// Cut/Copy/Paste accelerators so the shortcut recorder can observe them.
+// They are not normal commands and must never enter the command palette.
+const recorderOnlyTransientNativeIds = ['edit.cut', 'edit.copy', 'edit.paste'] as const
+const recorderOnlyTransientNativeIdSet = new Set<string>(recorderOnlyTransientNativeIds)
 
 describe('command palette action contract', () => {
   it('registers every static renderer action and every supported Muya action exactly once', () => {
@@ -38,6 +43,7 @@ describe('command palette action contract', () => {
     )
     const rendererActionIds = [...menuActionsBlock.matchAll(/^\s*'([^']+)':/gm)]
       .map(match => match[1])
+      .filter(id => !recorderOnlyTransientNativeIdSet.has(id))
     const editorActionIds = [
       ...Object.keys(PARAGRAPH_MENU_COMMANDS),
       'paragraph.table',
@@ -60,8 +66,9 @@ describe('command palette action contract', () => {
     )].map(match => match[1])
 
     // Dynamic recent/theme entries are data, not stable commands. Copy-as and
-    // paste-plain are renderer-only actions. Quit, minimize and the native
-    // cut/copy/paste items intentionally remain OS-owned.
+    // paste-plain are renderer-only actions. Quit and minimize remain regular
+    // OS-owned items; Cut/Copy/Paste are separately recorder-only transient
+    // native IDs while accelerator recording is active.
     const dynamicNativeIds = new Set(['file.openRecent.empty', 'file.clearRecent'])
     const routedWithoutCustomNativeId = new Set([
       'edit.copyAsMarkdown',
@@ -71,20 +78,18 @@ describe('command palette action contract', () => {
     const predefinedOsOwnedItems = [
       'app.quit',
       'window.minimize',
-      'edit.cut',
-      'edit.copy',
-      'edit.paste',
     ]
 
     const staticNativeIds = [...new Set(nativeIds)]
-      .filter(id => !dynamicNativeIds.has(id))
+      .filter(id => !dynamicNativeIds.has(id) && !recorderOnlyTransientNativeIdSet.has(id))
       .sort()
     const registeredNativeIds = BUILTIN_COMMAND_IDS
       .filter(id => !routedWithoutCustomNativeId.has(id))
       .sort()
 
     expect(staticNativeIds).toEqual(registeredNativeIds)
-    expect(predefinedOsOwnedItems).toHaveLength(5)
+    expect(predefinedOsOwnedItems).toHaveLength(2)
+    expect(recorderOnlyTransientNativeIds).toHaveLength(3)
   })
 
   it('routes every registered command through the same menu action function', () => {

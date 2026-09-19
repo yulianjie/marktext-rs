@@ -55,6 +55,15 @@ import {
   resolveFixedEditorShortcut,
 } from '@/services/editor-shortcuts'
 import {
+  displayAccelerator,
+  getShortcutAccelerators,
+  getShortcutAction,
+  isShortcutAvailable,
+  isShortcutRemappable,
+  resolveShortcutAction,
+  shortcutPlatformFromNavigator,
+} from '@/common/shortcut-registry'
+import {
   BUILTIN_COMMAND_IDS,
   BUILTIN_COMMAND_SPECS,
   commandCategoryOrder,
@@ -143,28 +152,47 @@ function requestWindowClose(): Promise<void> {
 /* ── shortcuts ───────────────────────────────────────────────── */
 function onApplicationKey(ev: KeyboardEvent) {
   if (!rendererHandlesRemappableShortcuts) return
+  const platform = shortcutPlatformFromNavigator(navigator.platform)
   handleApplicationShortcut(ev, keys.byAccel, action => {
     void executeMenuAction(action, 'shortcut')
-  })
+  }, platform)
 }
 
 function onKey(ev: KeyboardEvent) {
-  if (!ev.defaultPrevented && !ev.isComposing && (ev.ctrlKey || ev.metaKey) && ev.shiftKey && !ev.altKey && ev.code === 'KeyA') {
+  if (ev.defaultPrevented || ev.isComposing) return
+
+  const platform = shortcutPlatformFromNavigator(navigator.platform)
+  const availability = {
+    hasEditor: Boolean(editor.currentFile),
+    sourceCodeMode: editor.sourceCodeMode,
+  }
+  const accelerator = eventAccel(ev, platform)
+  const agentAction = resolveShortcutAction(accelerator, {
+    scope: 'agent',
+    dispatch: 'agent',
+    platform,
+  })
+  const agentHandler = agentAction?.id === 'view.toggleAgent'
+    ? () => agent.toggle()
+    : undefined
+  if (agentAction && agentHandler && isShortcutAvailable(agentAction, availability)) {
     ev.preventDefault()
-    if (!ev.repeat) agent.toggle()
+    ev.stopPropagation()
+    if (!ev.repeat) agentHandler()
     return
   }
-  if (!ev.defaultPrevented) {
-    const fixedAction = resolveFixedEditorShortcut(
-      eventAccel(ev),
-      navigator.platform.toLowerCase().includes('mac'),
-    )
-    if (fixedAction && isEditorShortcutTarget(ev.target)) {
-      ev.preventDefault()
-      void executeMenuAction(fixedAction, 'shortcut')
-      return
-    }
-  }
+
+  if (!isEditorShortcutTarget(ev.target)) return
+  const fixedAction = resolveFixedEditorShortcut(
+    accelerator,
+    platform === 'macos',
+    availability,
+  )
+  if (!fixedAction) return
+
+  ev.preventDefault()
+  ev.stopPropagation()
+  if (!ev.repeat) void executeMenuAction(fixedAction, 'shortcut')
 }
 
 async function doOpen() {
@@ -504,8 +532,8 @@ const MENU_ACTIONS: Record<string, () => void | Promise<void>> = {
   'file.preferences': async () => { const { openSettings } = await import('@/services/tauri-invoke'); await openSettings() },
   'file.closeTab': async () => { if (editor.currentFileId) await editor.closeTab(editor.currentFileId) },
   'file.closeWindow': requestWindowClose,
-  'edit.find': () => { editor.findReplaceOpen = true },
-  'edit.replace': () => { editor.findReplaceOpen = true },
+  'edit.find': () => { bus.emit('request-find-replace', { mode: 'find' }) },
+  'edit.replace': () => { bus.emit('request-find-replace', { mode: 'replace' }) },
   'edit.copyAsMarkdown': () => bus.emit('copyAsMarkdown', undefined),
   'edit.copyAsHtml': () => bus.emit('copyAsHtml', undefined),
   'edit.pasteAsPlainText': () => bus.emit('pasteAsPlainText', undefined),
@@ -540,11 +568,18 @@ const MENU_ACTIONS: Record<string, () => void | Promise<void>> = {
 }
 
 type MenuActionSource = 'menu' | 'shortcut' | 'palette'
-type EditBusAction = 'undo' | 'redo' | 'selectAll'
+type EditBusAction = 'undo' | 'redo' | 'selectAll' | 'cut' | 'copy' | 'paste'
 
 const EDIT_ACTIONS: Readonly<Record<string, EditBusAction>> = Object.freeze({
   'edit.undo': 'undo',
   'edit.redo': 'redo',
+  // These IDs are emitted only while Preferences has temporarily replaced
+  // Muda's accelerator-owning predefined clipboard items for shortcut
+  // recording. Keeping a renderer fallback preserves menu clicks in that
+  // brief lease without changing normal native clipboard ownership.
+  'edit.cut': 'cut',
+  'edit.copy': 'copy',
+  'edit.paste': 'paste',
   'edit.selectAll': 'selectAll',
 })
 
@@ -558,6 +593,10 @@ function executeFocusedNativeEdit(action: EditBusAction): void {
 }
 
 function routeEditAction(action: EditBusAction, source: MenuActionSource): void {
+  if (action === 'cut' || action === 'copy' || action === 'paste') {
+    executeFocusedNativeEdit(action)
+    return
+  }
   const active = document.activeElement
   if (
     source === 'menu'
@@ -625,13 +664,29 @@ async function executeMenuAction(id: string, source: MenuActionSource = 'menu'):
 
 /* ── command palette registry ───────────────────────────────── */
 function isBuiltinCommandAvailable(spec: BuiltinCommandSpec): boolean {
-  if (spec.availability === 'always') return true
-  if (!editor.currentFile) return false
-  return spec.availability !== 'wysiwyg' || !editor.sourceCodeMode
+  const legacyAvailability = spec.availability === 'always'
+    || (Boolean(editor.currentFile) && (spec.availability !== 'wysiwyg' || !editor.sourceCodeMode))
+  if (!legacyAvailability) return false
+
+  const declaration = getShortcutAction(spec.id)
+  return !declaration || isShortcutAvailable(declaration, {
+    hasEditor: Boolean(editor.currentFile),
+    sourceCodeMode: editor.sourceCodeMode,
+  })
 }
 
 function registerBuiltinCommands() {
-  const shortcut = (id: string) => keys.accel(id) ? [keys.accel(id)!] : undefined
+  const platform = shortcutPlatformFromNavigator(navigator.platform)
+  const shortcut = (id: string) => {
+    const declaration = getShortcutAction(id)
+    if (!declaration) return undefined
+    if (isShortcutRemappable(declaration)) {
+      const accelerator = keys.accel(id)
+      return accelerator ? [displayAccelerator(accelerator, platform)] : undefined
+    }
+    return getShortcutAccelerators(declaration, platform)
+      .map(accelerator => displayAccelerator(accelerator, platform))
+  }
   for (const spec of BUILTIN_COMMAND_SPECS) {
     const categoryKey = `command.categories.${spec.category}`
     cc.register({
@@ -651,7 +706,8 @@ watch(() => keys.map, map => {
   for (const cmd of cc.subcommands) {
     if (!(cmd.id in map)) continue
     const accel = map[cmd.id]
-    cc.register({ ...cmd, shortcut: accel ? [accel] : undefined })
+    const platform = shortcutPlatformFromNavigator(navigator.platform)
+    cc.register({ ...cmd, shortcut: accel ? [displayAccelerator(accel, platform)] : undefined })
   }
 }, { deep: true })
 

@@ -577,7 +577,7 @@ export default {
       watcherUsePolling: 'Watcher uses polling',
     },
     keybindings: {
-      hint: 'Click a binding, then press a shortcut containing Ctrl/Cmd or Alt. Press Esc to cancel; press Tab to reach the action buttons.',
+      hint: 'Click a binding, then press a shortcut containing Ctrl/Cmd or Alt. Plain Esc cancels and plain Tab reaches the action buttons; modified Esc and Tab can be recorded.',
       action: 'Action',
       shortcut: 'Shortcut',
       controls: 'Controls',

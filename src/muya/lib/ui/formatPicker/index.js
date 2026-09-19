@@ -70,7 +70,7 @@ class FormatPicker extends BaseFloat {
       }
       return h(itemSelector, {
         attrs: {
-          title: `${i.tooltip} ${i.shortcut}`
+          title: i.shortcut ? `${i.tooltip} (${i.shortcut})` : i.tooltip
         },
         on: {
           click: event => {

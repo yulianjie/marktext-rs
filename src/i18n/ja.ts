@@ -575,7 +575,7 @@ export default {
       watcherUsePolling: 'ウォッチャーがポーリングを使用',
     },
     keybindings: {
-      hint: 'バインドをクリックし、Ctrl/Cmd または Alt を含むショートカットを押します。Esc でキャンセル、Tab で操作ボタンへ移動します。',
+      hint: 'バインドをクリックし、Ctrl/Cmd または Alt を含むショートカットを押します。修飾なしの Esc はキャンセル、修飾なしの Tab は操作ボタンへ移動します。修飾付き Esc と Tab は記録できます。',
       action: 'アクション',
       shortcut: 'ショートカット',
       controls: '操作',

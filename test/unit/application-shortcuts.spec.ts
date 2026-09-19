@@ -47,6 +47,49 @@ describe('application shortcut ownership and dispatch', () => {
     expect(execute).toHaveBeenCalledWith('file.save')
   })
 
+  it('will not let a malformed map claim Agent, title-bar, or fixed native actions', () => {
+    const execute = vi.fn()
+    const agent = keyEvent('a', { shiftKey: true })
+    handleApplicationShortcut(agent, { 'ctrl+shift+a': 'view.toggleAgent' }, execute)
+    const titlebar = keyEvent('f', { ctrlKey: false, altKey: true })
+    handleApplicationShortcut(titlebar, { 'alt+f': 'titlebar.fileMenu' }, execute)
+    const native = keyEvent('n', { shiftKey: true })
+    handleApplicationShortcut(native, { 'ctrl+shift+n': 'file.newWindow' }, execute)
+
+    expect(execute).not.toHaveBeenCalled()
+    expect(agent.preventDefault).not.toHaveBeenCalled()
+    expect(titlebar.preventDefault).not.toHaveBeenCalled()
+    expect(native.preventDefault).not.toHaveBeenCalled()
+  })
+
+  it('never dispatches a lone modifier through an empty malformed binding', () => {
+    const event = keyEvent('Control', { code: 'ControlLeft' })
+    const execute = vi.fn()
+    handleApplicationShortcut(event, { '': 'file.save' }, execute)
+
+    expect(execute).not.toHaveBeenCalled()
+    expect(event.preventDefault).not.toHaveBeenCalled()
+  })
+
+  it('uses Meta rather than physical Ctrl on macOS and never claims AltGr', () => {
+    const execute = vi.fn()
+    const physicalCtrl = keyEvent('s')
+    handleApplicationShortcut(physicalCtrl, bindings, execute, 'macos')
+    expect(execute).not.toHaveBeenCalled()
+
+    const command = keyEvent('s', { ctrlKey: false, metaKey: true })
+    handleApplicationShortcut(command, bindings, execute, 'macos')
+    expect(execute).toHaveBeenCalledWith('file.save')
+
+    const altGraph = keyEvent('s', {
+      altKey: true,
+      getModifierState: (modifier: string) => modifier === 'AltGraph',
+    })
+    handleApplicationShortcut(altGraph, bindings, execute, 'windows')
+    expect(execute).toHaveBeenCalledOnce()
+    expect(altGraph.preventDefault).not.toHaveBeenCalled()
+  })
+
   it('consumes repeats without opening duplicate dialogs or closing more tabs', () => {
     const event = keyEvent('w', { repeat: true })
     const execute = vi.fn()

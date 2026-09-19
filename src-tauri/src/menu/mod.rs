@@ -25,10 +25,12 @@
 
 mod i18n;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 
+use once_cell::sync::Lazy;
+use serde::Deserialize;
 use tauri::{
     menu::{
         CheckMenuItem, CheckMenuItemBuilder, Menu, MenuBuilder, MenuItemBuilder,
@@ -51,51 +53,201 @@ const BUILTIN_THEMES: &[&str] = &[
     "github-blue",
 ];
 
-/// Renderer-remappable actions. The native menu reads the same persisted map
-/// so it never keeps a stale hard-coded accelerator after a user edit.
-const DEFAULT_KEYBINDINGS: &[(&str, &str)] = &[
-    ("file.new", "Ctrl+T"),
-    ("file.open", "Ctrl+O"),
-    ("file.openFolder", "Ctrl+Shift+O"),
-    ("file.save", "Ctrl+S"),
-    ("file.saveAs", "Ctrl+Shift+S"),
-    ("file.closeTab", "Ctrl+W"),
-    ("file.print", "Ctrl+P"),
-    ("edit.find", "Ctrl+F"),
-    ("edit.replace", "Ctrl+H"),
-    ("view.toggleSidebar", "Ctrl+Shift+B"),
-    ("view.commandPalette", "Ctrl+Shift+P"),
-];
+/// The renderer and native menu both read this canonical declaration. Keep
+/// shortcut defaults, fixed native accelerators, and the reserved set out of
+/// Rust source so the two runtimes cannot silently drift.
+const SHORTCUT_REGISTRY_JSON: &str = include_str!("../../../src/common/shortcut-registry.json");
 
-const RESERVED_ACCELERATORS: &[&str] = &[
-    "Ctrl+Z",
-    "Ctrl+Y",
-    "Ctrl+Shift+Z",
-    "Ctrl+X",
-    "Ctrl+C",
-    "Ctrl+V",
-    "Ctrl+A",
-    "Ctrl+Q",
-    "Ctrl+Shift+N",
-    "Ctrl+Shift+W",
-    "Ctrl+1",
-    "Ctrl+2",
-    "Ctrl+3",
-    "Ctrl+4",
-    "Ctrl+5",
-    "Ctrl+6",
-    "Ctrl+B",
-    "Ctrl+I",
-    "Ctrl+D",
-    "Ctrl+`",
-    "Ctrl+L",
-    "Ctrl+Shift+I",
-    "Ctrl+Alt+S",
-    "Ctrl+=",
-    "Ctrl+-",
-    "Ctrl+0",
-    "Ctrl+,",
-];
+#[derive(Debug, Deserialize)]
+struct ShortcutRegistry {
+    version: u8,
+    actions: Vec<ShortcutAction>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ShortcutAction {
+    id: String,
+    remappable: bool,
+    #[serde(rename = "default")]
+    default_accelerator: String,
+    #[serde(default)]
+    platform_alternatives: HashMap<String, Vec<String>>,
+    reserved: bool,
+    dispatch: ShortcutDispatch,
+    #[serde(default)]
+    system_owned: bool,
+    #[serde(default)]
+    platforms: Vec<String>,
+}
+
+#[derive(Debug, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "lowercase")]
+enum ShortcutDispatch {
+    Application,
+    Native,
+    System,
+    Editor,
+    Agent,
+    Titlebar,
+}
+
+#[allow(dead_code)] // Target-specific variants are selected at compile time.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ShortcutPlatform {
+    Windows,
+    Macos,
+    Linux,
+}
+
+impl ShortcutPlatform {
+    fn current() -> Self {
+        #[cfg(target_os = "macos")]
+        return Self::Macos;
+        #[cfg(target_os = "linux")]
+        return Self::Linux;
+        #[cfg(target_os = "windows")]
+        return Self::Windows;
+        #[allow(unreachable_code)]
+        Self::Windows
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Windows => "windows",
+            Self::Macos => "macos",
+            Self::Linux => "linux",
+        }
+    }
+}
+
+impl ShortcutAction {
+    fn accelerators(&self) -> impl Iterator<Item = &str> {
+        std::iter::once(self.default_accelerator.as_str()).chain(
+            self.platform_alternatives
+                .values()
+                .flatten()
+                .map(String::as_str),
+        )
+    }
+
+    fn supports_platform(&self, platform: ShortcutPlatform) -> bool {
+        self.platforms.is_empty()
+            || self
+                .platforms
+                .iter()
+                .any(|candidate| candidate == platform.as_str())
+    }
+
+    fn accelerators_for_platform(&self, platform: ShortcutPlatform) -> Vec<&str> {
+        if !self.supports_platform(platform) {
+            return Vec::new();
+        }
+        let mut accelerators = vec![self.default_accelerator.as_str()];
+        if let Some(alternatives) = self.platform_alternatives.get(platform.as_str()) {
+            accelerators.extend(alternatives.iter().map(String::as_str));
+        }
+        accelerators
+    }
+}
+
+impl ShortcutRegistry {
+    fn parse(raw: &str) -> Result<Self, String> {
+        let registry: Self = serde_json::from_str(raw)
+            .map_err(|error| format!("shortcut registry JSON is invalid: {error}"))?;
+        if registry.version != 1 {
+            return Err(format!(
+                "unsupported shortcut registry version {}",
+                registry.version
+            ));
+        }
+
+        let mut action_ids = HashSet::new();
+        let mut accelerators = HashMap::new();
+        for action in &registry.actions {
+            if action.id.trim().is_empty() {
+                return Err("shortcut action id must not be empty".into());
+            }
+            if action.default_accelerator.trim().is_empty() {
+                return Err(format!(
+                    "shortcut action `{}` has an empty default accelerator",
+                    action.id
+                ));
+            }
+            if action.remappable && action.reserved {
+                return Err(format!(
+                    "shortcut action `{}` cannot be both remappable and reserved",
+                    action.id
+                ));
+            }
+            if action.system_owned != (action.dispatch == ShortcutDispatch::System) {
+                return Err(format!(
+                    "shortcut action `{}` system ownership must match system dispatch",
+                    action.id
+                ));
+            }
+            if action
+                .platforms
+                .iter()
+                .any(|platform| !matches!(platform.as_str(), "windows" | "macos" | "linux"))
+            {
+                return Err(format!(
+                    "shortcut action `{}` declares an unknown platform",
+                    action.id
+                ));
+            }
+            let unique_platforms: HashSet<&str> =
+                action.platforms.iter().map(String::as_str).collect();
+            if unique_platforms.len() != action.platforms.len() {
+                return Err(format!(
+                    "shortcut action `{}` declares a platform more than once",
+                    action.id
+                ));
+            }
+            if !action_ids.insert(action.id.as_str()) {
+                return Err(format!("duplicate shortcut action `{}`", action.id));
+            }
+            for accelerator in action.accelerators() {
+                if accelerator.trim().is_empty() {
+                    return Err(format!(
+                        "shortcut action `{}` has an empty accelerator",
+                        action.id
+                    ));
+                }
+                let key = accelerator_key(accelerator);
+                if let Some(previous) = accelerators.insert(key, action.id.as_str()) {
+                    // The same alternate can be declared for Windows and
+                    // Linux on one action (for example Ctrl+Y for redo).
+                    // It must still be unique across distinct actions.
+                    if previous != action.id.as_str() {
+                        return Err(format!(
+                            "shortcut accelerator `{accelerator}` is shared by `{previous}` and `{}`",
+                            action.id
+                        ));
+                    }
+                }
+            }
+        }
+        Ok(registry)
+    }
+
+    fn action(&self, id: &str) -> Option<&ShortcutAction> {
+        self.actions.iter().find(|action| action.id == id)
+    }
+}
+
+static SHORTCUT_REGISTRY: Lazy<ShortcutRegistry> = Lazy::new(|| {
+    ShortcutRegistry::parse(SHORTCUT_REGISTRY_JSON)
+        .unwrap_or_else(|error| panic!("shortcut registry must be valid: {error}"))
+});
+
+fn shortcut_registry() -> &'static ShortcutRegistry {
+    Lazy::force(&SHORTCUT_REGISTRY)
+}
+
+fn shortcut_action(id: &str) -> Option<&'static ShortcutAction> {
+    shortcut_registry().action(id)
+}
 
 // Suspend native accelerators while Preferences records a shortcut. The OS
 // menu would otherwise consume combinations such as Ctrl+S before the
@@ -313,34 +465,147 @@ fn keybindings_from_value(
     persisted: Option<&serde_json::Value>,
     cmd_or_ctrl: &str,
 ) -> HashMap<String, String> {
-    let mut bindings: HashMap<String, String> = DEFAULT_KEYBINDINGS
+    logical_keybindings_from_value(persisted)
+        .into_iter()
+        .map(|(action, accelerator)| {
+            // Logical bindings are normalized using Ctrl so the persisted
+            // representation matches the renderer. Conversion to Cmd belongs
+            // exclusively to native-menu construction on macOS.
+            let native = native_accelerator(&accelerator, cmd_or_ctrl)
+                .expect("the shortcut registry only supplies native-safe defaults");
+            (action, native)
+        })
+        .collect()
+}
+
+/// Produce the complete logical (Ctrl-based) remappable binding map used by
+/// both persisted preferences and native menu construction. This deliberately
+/// accepts partial/legacy values: explicit valid choices are allocated first,
+/// then unassigned actions receive their own unused default or another unused
+/// registry default. No action is ever represented by an empty accelerator.
+///
+/// Keep this allocation order in lockstep with
+/// `keybindings::normaliseKeybindingMap` in the renderer.
+fn logical_keybindings_from_value(
+    persisted: Option<&serde_json::Value>,
+) -> HashMap<String, String> {
+    let actions: Vec<&ShortcutAction> = shortcut_registry()
+        .actions
         .iter()
-        .map(|(action, accel)| {
-            (
-                (*action).to_string(),
-                native_accelerator(accel, cmd_or_ctrl).unwrap_or_default(),
-            )
+        .filter(|action| action.remappable)
+        .collect();
+    let persisted = persisted.and_then(serde_json::Value::as_object);
+    let mut bindings = HashMap::with_capacity(actions.len());
+    let mut used = HashSet::with_capacity(actions.len());
+
+    // Explicit old values win, in registry declaration order. Repeated legacy
+    // values therefore resolve deterministically instead of blanking both
+    // actions as the previous fallback algorithm could do.
+    if let Some(persisted) = persisted {
+        for action in &actions {
+            let Some(raw) = persisted
+                .get(&action.id)
+                .and_then(serde_json::Value::as_str)
+            else {
+                continue;
+            };
+            let Some(accelerator) = native_accelerator(raw, "Ctrl") else {
+                continue;
+            };
+            if is_reserved_accelerator(&accelerator) {
+                continue;
+            }
+            assign_logical_keybinding(&mut bindings, &mut used, action, accelerator);
+        }
+    }
+
+    // Keep each remaining action on its own default if no explicit remap has
+    // occupied it first.
+    for action in &actions {
+        if bindings.contains_key(&action.id) {
+            continue;
+        }
+        let accelerator = native_accelerator(&action.default_accelerator, "Ctrl")
+            .expect("the shortcut registry only supplies native-safe remappable defaults");
+        assign_logical_keybinding(&mut bindings, &mut used, action, accelerator);
+    }
+
+    // Registry defaults are unique, so an unassigned action can always use a
+    // free default. If this ever fails, the registry is internally invalid and
+    // should fail loudly during development rather than write an empty key.
+    let defaults: Vec<String> = actions
+        .iter()
+        .map(|action| {
+            native_accelerator(&action.default_accelerator, "Ctrl")
+                .expect("the shortcut registry only supplies native-safe remappable defaults")
         })
         .collect();
-
-    let Some(persisted) = persisted.and_then(serde_json::Value::as_object) else {
-        return bindings;
-    };
-    for (action, _) in DEFAULT_KEYBINDINGS {
-        let Some(raw) = persisted.get(*action).and_then(serde_json::Value::as_str) else {
+    for action in actions {
+        if bindings.contains_key(&action.id) {
             continue;
-        };
-        // Invalid legacy accelerators disable only that native binding; they
-        // must never make rebuilding the entire menu fail.
-        bindings.insert(
-            (*action).to_string(),
-            native_accelerator(raw, cmd_or_ctrl).unwrap_or_default(),
-        );
+        }
+        let accelerator = defaults
+            .iter()
+            .find(|candidate| !used.contains(&accelerator_key(candidate)))
+            .cloned()
+            .expect("unique shortcut registry defaults must fill every remappable action");
+        let assigned = assign_logical_keybinding(&mut bindings, &mut used, action, accelerator);
+        debug_assert!(assigned, "the selected fallback must be unused");
     }
+
     bindings
 }
 
+/// Canonicalize a persisted keybinding object for renderer hydration. Legacy
+/// partial/conflicting maps are deliberately completed here instead of being
+/// dropped as one invalid preference, matching the renderer's allocator.
+pub(crate) fn normalize_keybindings_value(value: &serde_json::Value) -> serde_json::Value {
+    let bindings = logical_keybindings_from_value(Some(value));
+    serde_json::Value::Object(
+        bindings
+            .into_iter()
+            .map(|(action, accelerator)| (action, serde_json::Value::String(accelerator)))
+            .collect(),
+    )
+}
+
+fn assign_logical_keybinding(
+    bindings: &mut HashMap<String, String>,
+    used: &mut HashSet<String>,
+    action: &ShortcutAction,
+    accelerator: String,
+) -> bool {
+    let key = accelerator_key(&accelerator);
+    if key.is_empty() || !used.insert(key) {
+        return false;
+    }
+    bindings.insert(action.id.clone(), accelerator);
+    true
+}
+
 fn native_accelerator(raw: &str, cmd_or_ctrl: &str) -> Option<String> {
+    native_menu_accelerator(raw, cmd_or_ctrl, true)
+}
+
+/// Resolve one fixed native-menu accelerator declared by the registry. Fixed
+/// actions may use a bare function key (for example F11), while user-created
+/// remappable bindings continue to require Ctrl/Cmd or Alt.
+fn fixed_native_accelerator(id: &str, cmd_or_ctrl: &str) -> Option<String> {
+    let action = shortcut_action(id)?;
+    if action.remappable || action.dispatch != ShortcutDispatch::Native {
+        return None;
+    }
+    action
+        .accelerators_for_platform(ShortcutPlatform::current())
+        .into_iter()
+        .find_map(|accelerator| native_menu_accelerator(accelerator, cmd_or_ctrl, false))
+}
+
+fn native_menu_accelerator(
+    raw: &str,
+    cmd_or_ctrl: &str,
+    require_primary_or_alt: bool,
+) -> Option<String> {
     let mut primary = false;
     let mut shift = false;
     let mut alt = false;
@@ -365,7 +630,7 @@ fn native_accelerator(raw: &str, cmd_or_ctrl: &str) -> Option<String> {
     let key = normalize_accelerator_key(&key.filter(|key| !key.is_empty())?)?;
     // User shortcuts always require the platform command modifier or Alt so
     // navigation/editing keys can never be captured globally by accident.
-    if !primary && !alt {
+    if require_primary_or_alt && !primary && !alt {
         return None;
     }
 
@@ -424,48 +689,27 @@ fn normalize_accelerator_key(key: &str) -> Option<String> {
             return Some(lower.to_ascii_uppercase());
         }
         _ if lower.starts_with("numpad") || lower.starts_with("num") => {
-            let supported = [
-                "numpad0",
-                "numpad1",
-                "numpad2",
-                "numpad3",
-                "numpad4",
-                "numpad5",
-                "numpad6",
-                "numpad7",
-                "numpad8",
-                "numpad9",
-                "numpadadd",
-                "numpadplus",
-                "numpaddecimal",
-                "numpaddivide",
-                "numpadenter",
-                "numpadequal",
-                "numpadmultiply",
-                "numpadsubtract",
-                "num0",
-                "num1",
-                "num2",
-                "num3",
-                "num4",
-                "num5",
-                "num6",
-                "num7",
-                "num8",
-                "num9",
-                "numadd",
-                "numplus",
-                "numdecimal",
-                "numdivide",
-                "numenter",
-                "numequal",
-                "nummultiply",
-                "numsubtract",
-            ];
-            if !supported.contains(&lower.as_str()) {
-                return None;
-            }
-            return Some(key.to_string());
+            let canonical = match lower.as_str() {
+                "numpad0" | "num0" => "Numpad0",
+                "numpad1" | "num1" => "Numpad1",
+                "numpad2" | "num2" => "Numpad2",
+                "numpad3" | "num3" => "Numpad3",
+                "numpad4" | "num4" => "Numpad4",
+                "numpad5" | "num5" => "Numpad5",
+                "numpad6" | "num6" => "Numpad6",
+                "numpad7" | "num7" => "Numpad7",
+                "numpad8" | "num8" => "Numpad8",
+                "numpad9" | "num9" => "Numpad9",
+                "numpadadd" | "numpadplus" | "numadd" | "numplus" => "NumpadAdd",
+                "numpaddecimal" | "numdecimal" => "NumpadDecimal",
+                "numpaddivide" | "numdivide" => "NumpadDivide",
+                "numpadenter" | "numenter" => "NumpadEnter",
+                "numpadequal" | "numequal" => "NumpadEqual",
+                "numpadmultiply" | "nummultiply" => "NumpadMultiply",
+                "numpadsubtract" | "numsubtract" => "NumpadSubtract",
+                _ => return None,
+            };
+            return Some(canonical.into());
         }
         _ => return None,
     };
@@ -477,13 +721,20 @@ pub(crate) fn normalize_user_accelerator(raw: &str) -> Option<String> {
 }
 
 pub(crate) fn is_remappable_action(action: &str) -> bool {
-    DEFAULT_KEYBINDINGS.iter().any(|(id, _)| *id == action)
+    shortcut_action(action).is_some_and(|declaration| declaration.remappable)
 }
 
 pub(crate) fn is_reserved_accelerator(accelerator: &str) -> bool {
+    is_reserved_accelerator_for_platform(accelerator, ShortcutPlatform::current())
+}
+
+fn is_reserved_accelerator_for_platform(accelerator: &str, platform: ShortcutPlatform) -> bool {
     let key = accelerator_key(accelerator);
-    RESERVED_ACCELERATORS
+    shortcut_registry()
+        .actions
         .iter()
+        .filter(|action| action.reserved && action.supports_platform(platform))
+        .flat_map(|action| action.accelerators_for_platform(platform))
         .any(|reserved| accelerator_key(reserved) == key)
 }
 
@@ -492,9 +743,10 @@ fn accelerator_key(accel: &str) -> String {
 }
 
 fn unclaimed_fixed_accel<'a>(
-    candidate: &'a str,
+    candidate: Option<&'a str>,
     keybindings: &HashMap<String, String>,
 ) -> Option<&'a str> {
+    let candidate = candidate?;
     let candidate_key = accelerator_key(candidate);
     if keybindings
         .values()
@@ -522,6 +774,14 @@ fn build_menu(
             .map(String::as_str)
             .filter(|accel| !accel.is_empty())
     };
+    let new_window_accel = fixed_native_accelerator("file.newWindow", cmd_or_ctrl);
+    let preferences_accel = fixed_native_accelerator("file.preferences", cmd_or_ctrl);
+    let close_window_accel = fixed_native_accelerator("file.closeWindow", cmd_or_ctrl);
+    let source_code_accel = fixed_native_accelerator("view.toggleSourceCode", cmd_or_ctrl);
+    let zoom_in_accel = fixed_native_accelerator("view.zoomIn", cmd_or_ctrl);
+    let zoom_out_accel = fixed_native_accelerator("view.zoomOut", cmd_or_ctrl);
+    let zoom_reset_accel = fixed_native_accelerator("view.zoomReset", cmd_or_ctrl);
+    let fullscreen_accel = fixed_native_accelerator("window.fullscreen", cmd_or_ctrl);
 
     // ── Open Recent submenu (dynamic) ──────────────────────────────
     let recent_files: Vec<String> = prefs_store::get(app, "recentFiles")
@@ -561,7 +821,7 @@ fn build_menu(
                 app,
                 "file.newWindow",
                 s.new_window,
-                unclaimed_fixed_accel(&format!("{cmd_or_ctrl}+Shift+N"), &keybindings),
+                unclaimed_fixed_accel(new_window_accel.as_deref(), &keybindings),
             )?,
             &PredefinedMenuItem::separator(app)?,
             &mi(app, "file.open", s.open_file, custom_accel("file.open"))?,
@@ -587,7 +847,7 @@ fn build_menu(
                 app,
                 "file.preferences",
                 s.preferences,
-                unclaimed_fixed_accel(&format!("{cmd_or_ctrl}+,"), &keybindings),
+                unclaimed_fixed_accel(preferences_accel.as_deref(), &keybindings),
             )?,
             &PredefinedMenuItem::separator(app)?,
             &mi(
@@ -600,7 +860,7 @@ fn build_menu(
                 app,
                 "file.closeWindow",
                 s.close_window,
-                unclaimed_fixed_accel(&format!("{cmd_or_ctrl}+Shift+W"), &keybindings),
+                unclaimed_fixed_accel(close_window_accel.as_deref(), &keybindings),
             )?,
             &PredefinedMenuItem::quit(app, None)?,
         ])
@@ -610,20 +870,50 @@ fn build_menu(
     // `mt://menu/action`. They intentionally have no native accelerators:
     // Ctrl/Cmd+Z, redo, and select-all must reach the focused DOM control so
     // the renderer can choose Muya, CodeMirror, or native input history.
-    let edit = SubmenuBuilder::new(app, s.edit)
-        .items(&[
-            &mi(app, "edit.undo", s.undo, None)?,
-            &mi(app, "edit.redo", s.redo, None)?,
-            &PredefinedMenuItem::separator(app)?,
-            &PredefinedMenuItem::cut(app, None)?,
-            &PredefinedMenuItem::copy(app, None)?,
-            &PredefinedMenuItem::paste(app, None)?,
-            &mi(app, "edit.selectAll", s.select_all, None)?,
-            &PredefinedMenuItem::separator(app)?,
-            &mi(app, "edit.find", s.find, custom_accel("edit.find"))?,
-            &mi(app, "edit.replace", s.replace, custom_accel("edit.replace"))?,
-        ])
-        .build()?;
+    //
+    // Muda's predefined Cut/Copy/Paste items carry their own Ctrl/Cmd
+    // accelerators, independently of `mi` and `check_mi`. While Preferences
+    // records a shortcut, replace only those three with ordinary no-accelerator
+    // items so Ctrl/Cmd+X/C/V reach the recorder and can report "reserved".
+    // The regular predefined native items are restored as soon as recording
+    // ends, preserving normal editor clipboard behavior outside that lease.
+    // Reuse Muda's localized predefined labels for the temporary ordinary
+    // items without attaching those predefined items (and their accelerators)
+    // to the menu.
+    let cut_label = PredefinedMenuItem::cut(app, None)?.text()?;
+    let copy_label = PredefinedMenuItem::copy(app, None)?.text()?;
+    let paste_label = PredefinedMenuItem::paste(app, None)?.text()?;
+    let edit = if ACCELERATORS_ENABLED.load(Ordering::SeqCst) {
+        SubmenuBuilder::new(app, s.edit)
+            .items(&[
+                &mi(app, "edit.undo", s.undo, None)?,
+                &mi(app, "edit.redo", s.redo, None)?,
+                &PredefinedMenuItem::separator(app)?,
+                &PredefinedMenuItem::cut(app, None)?,
+                &PredefinedMenuItem::copy(app, None)?,
+                &PredefinedMenuItem::paste(app, None)?,
+                &mi(app, "edit.selectAll", s.select_all, None)?,
+                &PredefinedMenuItem::separator(app)?,
+                &mi(app, "edit.find", s.find, custom_accel("edit.find"))?,
+                &mi(app, "edit.replace", s.replace, custom_accel("edit.replace"))?,
+            ])
+            .build()?
+    } else {
+        SubmenuBuilder::new(app, s.edit)
+            .items(&[
+                &mi(app, "edit.undo", s.undo, None)?,
+                &mi(app, "edit.redo", s.redo, None)?,
+                &PredefinedMenuItem::separator(app)?,
+                &mi(app, "edit.cut", &cut_label, None)?,
+                &mi(app, "edit.copy", &copy_label, None)?,
+                &mi(app, "edit.paste", &paste_label, None)?,
+                &mi(app, "edit.selectAll", s.select_all, None)?,
+                &PredefinedMenuItem::separator(app)?,
+                &mi(app, "edit.find", s.find, custom_accel("edit.find"))?,
+                &mi(app, "edit.replace", s.replace, custom_accel("edit.replace"))?,
+            ])
+            .build()?
+    };
 
     let paragraph = SubmenuBuilder::new(app, s.paragraph)
         .items(&[
@@ -683,7 +973,7 @@ fn build_menu(
                 app,
                 "view.toggleSourceCode",
                 s.toggle_source_code,
-                unclaimed_fixed_accel(&format!("{cmd_or_ctrl}+Alt+S"), &keybindings),
+                unclaimed_fixed_accel(source_code_accel.as_deref(), &keybindings),
             )?,
             &mi(app, "view.toggleTypewriter", s.toggle_typewriter, None)?,
             &mi(app, "view.toggleFocus", s.toggle_focus, None)?,
@@ -699,19 +989,19 @@ fn build_menu(
                 app,
                 "view.zoomIn",
                 s.zoom_in,
-                unclaimed_fixed_accel(&format!("{cmd_or_ctrl}+="), &keybindings),
+                unclaimed_fixed_accel(zoom_in_accel.as_deref(), &keybindings),
             )?,
             &mi(
                 app,
                 "view.zoomOut",
                 s.zoom_out,
-                unclaimed_fixed_accel(&format!("{cmd_or_ctrl}+-"), &keybindings),
+                unclaimed_fixed_accel(zoom_out_accel.as_deref(), &keybindings),
             )?,
             &mi(
                 app,
                 "view.zoomReset",
                 s.zoom_reset,
-                unclaimed_fixed_accel(&format!("{cmd_or_ctrl}+0"), &keybindings),
+                unclaimed_fixed_accel(zoom_reset_accel.as_deref(), &keybindings),
             )?,
         ])
         .build()?;
@@ -748,7 +1038,12 @@ fn build_menu(
         .items(&[
             &PredefinedMenuItem::minimize(app, None)?,
             &mi(app, "window.alwaysOnTop", s.always_on_top, None)?,
-            &mi(app, "window.fullscreen", s.fullscreen, Some("F11"))?,
+            &mi(
+                app,
+                "window.fullscreen",
+                s.fullscreen,
+                fullscreen_accel.as_deref(),
+            )?,
         ])
         .build()?;
 
@@ -816,7 +1111,7 @@ fn display_recent_label(path: &str) -> String {
 }
 
 fn renderer_owns_shortcut(id: &str) -> bool {
-    cfg!(target_os = "windows") && DEFAULT_KEYBINDINGS.iter().any(|(action, _)| *action == id)
+    cfg!(target_os = "windows") && is_remappable_action(id)
 }
 
 /// Helper to build a labelled menu item with an optional accelerator.
@@ -886,7 +1181,62 @@ mod tests {
     use super::*;
 
     #[test]
-    fn persisted_keybindings_override_defaults_and_are_native_normalized() {
+    fn shortcut_registry_contract_is_complete_and_drives_menu_bindings() {
+        let parsed = ShortcutRegistry::parse(SHORTCUT_REGISTRY_JSON)
+            .expect("the embedded shortcut registry must parse");
+        assert_eq!(parsed.version, 1);
+
+        let mut action_ids = std::collections::HashSet::new();
+        let mut accelerators = std::collections::HashMap::new();
+        for action in &parsed.actions {
+            assert!(
+                action_ids.insert(action.id.as_str()),
+                "duplicate id: {}",
+                action.id
+            );
+            for accelerator in action.accelerators() {
+                if let Some(previous) =
+                    accelerators.insert(accelerator_key(accelerator), action.id.as_str())
+                {
+                    assert_eq!(
+                        previous,
+                        action.id.as_str(),
+                        "accelerator is shared by `{previous}` and `{}`: {accelerator}",
+                        action.id
+                    );
+                }
+            }
+        }
+        assert_eq!(
+            parsed
+                .actions
+                .iter()
+                .filter(|action| action.remappable)
+                .count(),
+            11
+        );
+
+        assert!(is_remappable_action("file.save"));
+        assert!(!is_remappable_action("app.quit"));
+        let quit = parsed.action("app.quit").expect("system quit declaration");
+        assert_eq!(quit.dispatch, ShortcutDispatch::System);
+        assert!(quit.system_owned);
+        assert_eq!(quit.platforms, ["macos"]);
+        assert_eq!(
+            fixed_native_accelerator("file.newWindow", "Ctrl").as_deref(),
+            Some("Ctrl+Shift+N")
+        );
+        assert_eq!(
+            fixed_native_accelerator("view.toggleSourceCode", "Cmd").as_deref(),
+            Some("Cmd+Alt+S")
+        );
+        assert_eq!(
+            fixed_native_accelerator("window.fullscreen", "Ctrl").as_deref(),
+            Some("F11")
+        );
+        assert_eq!(fixed_native_accelerator("view.toggleAgent", "Ctrl"), None);
+        assert_eq!(fixed_native_accelerator("app.quit", "Ctrl"), None);
+
         let value = json!({
             "file.save": "ctrl+alt+k",
             "edit.find": "f"
@@ -894,8 +1244,35 @@ mod tests {
         let bindings = keybindings_from_value(Some(&value), "Ctrl");
         assert_eq!(bindings["file.save"], "Ctrl+Alt+K");
         assert_eq!(bindings["file.open"], "Ctrl+O");
-        // A malformed/bare legacy value disables only its own native binding.
-        assert_eq!(bindings["edit.find"], "");
+        // A malformed/bare legacy value falls back to its non-empty default.
+        assert_eq!(bindings["edit.find"], "Ctrl+F");
+    }
+
+    #[test]
+    fn partial_and_conflicting_legacy_maps_normalize_without_empty_bindings() {
+        let partial = json!({ "file.new": "Ctrl+O" });
+        let bindings = logical_keybindings_from_value(Some(&partial));
+        assert_eq!(bindings["file.new"], "Ctrl+O");
+        assert_eq!(bindings["file.open"], "Ctrl+T");
+        assert_eq!(bindings.len(), 11);
+        assert!(bindings.values().all(|accelerator| !accelerator.is_empty()));
+
+        let renderer_value = normalize_keybindings_value(&partial);
+        let renderer_map = renderer_value.as_object().expect("canonical map");
+        assert_eq!(renderer_map["file.new"], json!("Ctrl+O"));
+        assert_eq!(renderer_map["file.open"], json!("Ctrl+T"));
+        assert!(renderer_map
+            .values()
+            .all(|value| value.as_str().is_some_and(|value| !value.is_empty())));
+
+        let duplicate = json!({
+            "file.new": "Ctrl+Alt+K",
+            "file.open": "Ctrl+Alt+K"
+        });
+        let bindings = logical_keybindings_from_value(Some(&duplicate));
+        assert_eq!(bindings["file.new"], "Ctrl+Alt+K");
+        assert_eq!(bindings["file.open"], "Ctrl+O");
+        assert!(bindings.values().all(|accelerator| !accelerator.is_empty()));
     }
 
     #[test]
@@ -913,11 +1290,61 @@ mod tests {
     }
 
     #[test]
+    fn recorder_key_contract_accepts_only_native_safe_named_keys() {
+        // Keep this vector aligned with the renderer's keybinding contract.
+        // Supported named keys are standard editing/navigation keys, F1-F24,
+        // numpad keys, and the three Volume keys — not web-only Media/Browser
+        // or Launch keys that muda cannot register natively.
+        assert_eq!(
+            native_accelerator("Ctrl+NumpadPlus", "Ctrl").as_deref(),
+            Some("Ctrl+NumpadAdd")
+        );
+        assert_eq!(
+            native_accelerator("Alt+AudioVolumeDown", "Ctrl").as_deref(),
+            Some("Alt+VolumeDown")
+        );
+        assert_eq!(
+            native_accelerator("Ctrl+F24", "Ctrl").as_deref(),
+            Some("Ctrl+F24")
+        );
+
+        for accelerator in ["Alt+MediaPlayPause", "Alt+BrowserBack", "Alt+LaunchMail"] {
+            assert_eq!(
+                native_accelerator(accelerator, "Ctrl"),
+                None,
+                "{accelerator}"
+            );
+        }
+    }
+
+    #[test]
+    fn system_quit_reservation_is_platform_specific() {
+        assert!(is_reserved_accelerator_for_platform(
+            "Ctrl+Q",
+            ShortcutPlatform::Macos
+        ));
+        assert!(!is_reserved_accelerator_for_platform(
+            "Ctrl+Q",
+            ShortcutPlatform::Windows
+        ));
+        assert!(!is_reserved_accelerator_for_platform(
+            "Ctrl+Q",
+            ShortcutPlatform::Linux
+        ));
+    }
+
+    #[test]
     fn default_sidebar_binding_does_not_shadow_bold() {
         let bindings = keybindings_from_value(None, "Ctrl");
         assert_eq!(bindings["view.toggleSidebar"], "Ctrl+Shift+B");
-        assert_eq!(unclaimed_fixed_accel("Ctrl+B", &bindings), Some("Ctrl+B"));
-        assert_eq!(unclaimed_fixed_accel("Ctrl+I", &bindings), Some("Ctrl+I"));
+        assert_eq!(
+            unclaimed_fixed_accel(Some("Ctrl+B"), &bindings),
+            Some("Ctrl+B")
+        );
+        assert_eq!(
+            unclaimed_fixed_accel(Some("Ctrl+I"), &bindings),
+            Some("Ctrl+I")
+        );
     }
 
     #[test]

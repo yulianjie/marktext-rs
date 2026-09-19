@@ -18,7 +18,7 @@ describe('editor toolbar component contract', () => {
       "bus.emit('paragraph', type)",
       "bus.emit('format', type)",
       "bus.emit('show-table-dialog', undefined)",
-      'editor.findReplaceOpen = true',
+      "bus.emit('request-find-replace', { mode: 'find' })",
       'editor.toggleSourceCode()',
       'prefs.toggleViewMode(mode)',
     ]) {

@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import {
   defaultKeybindings,
   normalise,
+  normaliseKeybindingMap,
   useKeybindingsStore,
   validateKeybinding,
 } from '../../src/stores/keybindings'
@@ -48,6 +49,39 @@ describe('keybinding validation', () => {
       ok: false,
       code: 'reserved',
     })
+    expect(validateKeybinding({ ...defaultKeybindings }, 'file.save', 'Ctrl+Shift+A')).toMatchObject({
+      ok: false,
+      code: 'reserved',
+    })
+    expect(validateKeybinding({ ...defaultKeybindings }, 'file.save', 'Alt+F')).toMatchObject({
+      ok: false,
+      code: 'reserved',
+    })
+  })
+
+  it('accepts exactly the recorder keys that the Rust native accelerator supports', () => {
+    expect(validateKeybinding({ ...defaultKeybindings }, 'file.save', 'Ctrl+NumpadAdd')).toEqual({
+      ok: true,
+      normalized: 'Ctrl+NumpadAdd',
+    })
+    expect(validateKeybinding({ ...defaultKeybindings }, 'file.save', 'Alt+AudioVolumeDown')).toEqual({
+      ok: true,
+      normalized: 'Alt+VolumeDown',
+    })
+    expect(validateKeybinding({ ...defaultKeybindings }, 'file.save', 'Ctrl+F24')).toEqual({
+      ok: true,
+      normalized: 'Ctrl+F24',
+    })
+
+    // muda's native accelerator grammar has no stable support for these web
+    // media/browser/launch keys. Reject them before persistence rather than
+    // letting the renderer accept a shortcut Rust later refuses.
+    for (const accelerator of ['Alt+MediaPlayPause', 'Alt+BrowserBack', 'Alt+LaunchMail']) {
+      expect(validateKeybinding({ ...defaultKeybindings }, 'file.save', accelerator)).toMatchObject({
+        ok: false,
+        code: 'invalid',
+      })
+    }
   })
 
   it('rejects conflicts with another action', () => {
@@ -78,5 +112,38 @@ describe('keybinding validation', () => {
 
     expect(store.map['file.new']).toBe('Ctrl+O')
     expect(store.map['file.open']).toBe('Ctrl+T')
+  })
+
+  it('normalises partial legacy conflicts into a complete, non-empty map', () => {
+    const normalized = normaliseKeybindingMap({
+      // This used to make both New and Open collide, then could leave one
+      // action with an empty string during the fallback pass.
+      'file.new': 'Ctrl+O',
+    })
+
+    expect(normalized['file.new']).toBe('Ctrl+O')
+    expect(normalized['file.open']).toBe('Ctrl+T')
+    expect(Object.keys(normalized).sort()).toEqual(Object.keys(defaultKeybindings).sort())
+    expect(Object.values(normalized).every(Boolean)).toBe(true)
+    expect(new Set(Object.values(normalized).map(normalise)).size).toBe(Object.keys(defaultKeybindings).length)
+  })
+
+  it('resolves duplicate legacy choices without creating an unassigned binding', () => {
+    const normalized = normaliseKeybindingMap({
+      'file.new': 'Ctrl+Alt+K',
+      'file.open': 'Ctrl+Alt+K',
+    })
+
+    expect(normalized['file.new']).toBe('Ctrl+Alt+K')
+    expect(normalized['file.open']).toBe('Ctrl+O')
+    expect(Object.values(normalized).every(Boolean)).toBe(true)
+  })
+
+  it('does not index empty accelerators from malformed external state', () => {
+    setActivePinia(createPinia())
+    const store = useKeybindingsStore()
+    store.map = { ...defaultKeybindings, 'file.save': '' }
+
+    expect(store.byAccel['']).toBeUndefined()
   })
 })

@@ -70,6 +70,13 @@ pub fn get_all<R: Runtime>(app: &AppHandle<R>) -> AppResult<Value> {
         if key == "_userData" {
             continue;
         }
+        if key == "keybindings" {
+            // Old releases could persist a partial map. Normalize it before
+            // exposing it so the renderer and native menu see the same full,
+            // non-empty effective map even when the on-disk value conflicts.
+            preferences.insert(key, crate::menu::normalize_keybindings_value(&value));
+            continue;
+        }
         match schema::validate_preference(&key, &value) {
             Ok(()) => {
                 preferences.insert(key, value);
@@ -90,6 +97,9 @@ pub fn get<R: Runtime>(app: &AppHandle<R>, key: &str) -> AppResult<Option<Value>
     let _guard = STORE_LOCK.lock();
     let store = open_store(app)?;
     if let Some(value) = store.get(key) {
+        if key == "keybindings" {
+            return Ok(Some(crate::menu::normalize_keybindings_value(&value)));
+        }
         match schema::validate_preference(key, &value) {
             Ok(()) => return Ok(Some(value)),
             Err(error) => {

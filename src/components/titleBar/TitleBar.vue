@@ -11,6 +11,15 @@ import { popupEditorMenu } from '@/services/tauri-invoke'
 import { usePreferencesStore } from '@/stores/preferences'
 import { useNotificationStore } from '@/stores/notification'
 import { useI18n } from '@/i18n'
+import {
+  displayAccelerator,
+  eventAccel,
+  getShortcutDefault,
+  isShortcutAvailable,
+  normaliseAccelerator,
+  resolveShortcutAction,
+  shortcutPlatformFromNavigator,
+} from '@/common/shortcut-registry'
 
 const { t } = useI18n()
 const prefs = usePreferencesStore()
@@ -27,9 +36,39 @@ const menuButtons = ref<HTMLButtonElement[]>([])
 const menuIndex = ref(0)
 let unlisten: (() => void) | undefined
 let disposed = false
-const menus = computed(() => ['file', 'edit', 'paragraph', 'format', 'view', 'theme', 'window', 'help'].map(
-  (key, index) => ({ label: t('chrome.' + key), mnemonic: 'fepovtwh'[index] }),
-))
+const shortcutPlatform = shortcutPlatformFromNavigator(navigator.platform)
+const titlebarMenuActions = [
+  ['file', 'titlebar.fileMenu'],
+  ['edit', 'titlebar.editMenu'],
+  ['paragraph', 'titlebar.paragraphMenu'],
+  ['format', 'titlebar.formatMenu'],
+  ['view', 'titlebar.viewMenu'],
+  ['theme', 'titlebar.themeMenu'],
+  ['window', 'titlebar.windowMenu'],
+  ['help', 'titlebar.helpMenu'],
+] as const
+
+function shortcutMnemonic(actionId: string): string {
+  const key = normaliseAccelerator(getShortcutDefault(actionId) ?? '').split('+').at(-1) ?? ''
+  return /^[a-z]$/.test(key) ? key : ''
+}
+
+const menus = computed(() => titlebarMenuActions.map(([key, actionId]) => {
+  const accelerator = getShortcutDefault(actionId) ?? ''
+  return {
+    actionId,
+    label: t('chrome.' + key),
+    mnemonic: shortcutMnemonic(actionId),
+    shortcut: accelerator ? displayAccelerator(accelerator, shortcutPlatform) : '',
+  }
+}))
+const agentShortcut = computed(() => {
+  const accelerator = getShortcutDefault('view.toggleAgent')
+  return accelerator ? displayAccelerator(accelerator, shortcutPlatform) : ''
+})
+const agentToggleLabel = computed(() => agentShortcut.value
+  ? `${t('agent.toggle')} (${agentShortcut.value})`
+  : t('agent.toggle'))
 async function run(action: () => Promise<unknown>) {
   try { await action() } catch (error) {
     notify.pushToast({ type: 'error', message: String(error) })
@@ -46,7 +85,8 @@ async function openMenu(index: number) {
 function onMenuKey(event: KeyboardEvent, index: number) {
   if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
     event.preventDefault()
-    menuIndex.value = (index + (event.key === 'ArrowRight' ? 1 : 7)) % 8
+    const count = menus.value.length
+    menuIndex.value = (index + (event.key === 'ArrowRight' ? 1 : count - 1)) % count
     menuButtons.value[menuIndex.value]?.focus()
   } else if (event.key === 'ArrowDown') {
     event.preventDefault()
@@ -54,10 +94,17 @@ function onMenuKey(event: KeyboardEvent, index: number) {
   }
 }
 function onAccessKey(event: KeyboardEvent) {
-  if (!customChrome || !event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
-  const index = menus.value.findIndex(menu => menu.mnemonic === event.key.toLowerCase())
+  if (event.defaultPrevented || event.isComposing || !customChrome) return
+  const action = resolveShortcutAction(eventAccel(event, shortcutPlatform), {
+    scope: 'titlebar',
+    dispatch: 'titlebar',
+    platform: shortcutPlatform,
+  })
+  if (!action || !isShortcutAvailable(action, { customChrome })) return
+  const index = menus.value.findIndex(menu => menu.actionId === action.id)
   if (index < 0) return
   event.preventDefault()
+  if (event.repeat) return
   menuIndex.value = index
   menuButtons.value[index]?.focus()
   void openMenu(index)
@@ -88,9 +135,10 @@ onBeforeUnmount(() => {
       <strong data-tauri-drag-region>MarkText</strong>
     </div>
     <nav v-if="customChrome" class="app-menu" role="menubar" :aria-label="t('chrome.menu')">
-      <button v-for="(menu, index) in menus" :key="menu.mnemonic" ref="menuButtons"
+      <button v-for="(menu, index) in menus" :key="menu.actionId" ref="menuButtons"
         type="button" role="menuitem" aria-haspopup="menu" :tabindex="menuIndex === index ? 0 : -1"
-        :aria-keyshortcuts="'Alt+' + menu.mnemonic.toUpperCase()"
+        :aria-keyshortcuts="menu.shortcut"
+        :data-shortcut-action="menu.actionId"
         @mousedown.prevent @click="openMenu(index)" @keydown="onMenuKey($event, index)">
         {{ menu.label }}<span class="mnemonic">({{ menu.mnemonic.toUpperCase() }})</span>
       </button>
@@ -103,7 +151,7 @@ onBeforeUnmount(() => {
       <component :is="layout.showSideBar ? PanelLeftClose : PanelLeftOpen" :size="16" :stroke-width="1.6" aria-hidden="true" />
     </button>
     <div class="drag-space" data-tauri-drag-region />
-    <button type="button" class="agent-toggle" :aria-label="t('agent.toggle')" :title="t('agent.toggle') + ' (Ctrl/Cmd+Shift+A)'" :aria-expanded="agent.visible" aria-controls="agent-panel" @mousedown.prevent @click="agent.toggle()"><Sparkles :size="15" /><span>{{ t('agent.toggle') }}</span><i v-if="agent.busy" /></button>
+    <button type="button" class="agent-toggle" :aria-label="agentToggleLabel" :title="agentToggleLabel" :aria-keyshortcuts="agentShortcut" :aria-expanded="agent.visible" aria-controls="agent-panel" @mousedown.prevent @click="agent.toggle()"><Sparkles :size="15" /><span>{{ t('agent.toggle') }}</span><i v-if="agent.busy" /></button>
     <div v-if="customChrome" class="window-controls">
       <button type="button" :aria-label="t('chrome.minimize')" :title="t('chrome.minimize')"
         :disabled="!appWindow" @click="run(() => appWindow!.minimize())">

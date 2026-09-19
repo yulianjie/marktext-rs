@@ -109,15 +109,20 @@ test('translated descriptions fit beside shortcuts and the whole menu remains re
   await seed(page)
   await page.keyboard.type('@')
   const menu = page.locator('.ag-quick-insert')
+  await expect(menu.locator('.short-cut')).toHaveCount(6)
+  expect(await menu.locator('.short-cut').allTextContents()).toEqual([
+    'Ctrl+1', 'Ctrl+2', 'Ctrl+3', 'Ctrl+4', 'Ctrl+5', 'Ctrl+6',
+  ])
   for (const language of ['zh-CN', 'ja', 'en']) {
     await setPreferences(page, { language })
     await expect(menu.locator('.item')).toHaveCount(22)
     await expect(menu.locator('..')).toHaveAttribute('x-placement', /.+/)
     const rowsFit = await menu.locator('.item').evaluateAll(items => items.every(item => {
       const description = item.querySelector<HTMLElement>('.description')!
-      const shortcut = item.querySelector('.short-cut')!.getBoundingClientRect()
+      const shortcut = item.querySelector('.short-cut')?.getBoundingClientRect()
       const text = description.getBoundingClientRect()
-      return description.scrollWidth <= description.clientWidth + 1 && text.right <= shortcut.left
+      return description.scrollWidth <= description.clientWidth + 1
+        && (!shortcut || text.right <= shortcut.left)
     }))
     expect(rowsFit).toBe(true)
     expect(await menu.evaluate(el => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1)

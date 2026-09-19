@@ -270,6 +270,9 @@ mod tests {
     #[test]
     fn only_explicit_runtime_keys_are_allowed() {
         assert!(validate_preference("keybindings", &json!({ "file.save": "Ctrl+S" })).is_ok());
+        // The menu's registry owns this classification: fixed/reserved actions
+        // such as app.quit may never be persisted as remappable bindings.
+        assert!(validate_preference("keybindings", &json!({ "app.quit": "Ctrl+Q" })).is_err());
         assert!(validate_preference("recentFiles", &json!(["a.md"])).is_ok());
         assert!(validate_preference("recentFolders", &json!([1])).is_err());
         assert!(validate_preference("futureTypo", &json!(true)).is_err());

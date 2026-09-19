@@ -575,7 +575,7 @@ export default {
       watcherUsePolling: '监听器使用轮询',
     },
     keybindings: {
-      hint: '点击绑定项后，按下包含 Ctrl/Cmd 或 Alt 的快捷键。按 Esc 取消，按 Tab 移至操作按钮。',
+      hint: '点击绑定项后，按下包含 Ctrl/Cmd 或 Alt 的快捷键。单独按 Esc 取消、单独按 Tab 移至操作按钮；带修饰键的 Esc 和 Tab 可以录制。',
       action: '动作',
       shortcut: '快捷键',
       controls: '操作',

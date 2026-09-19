@@ -17,6 +17,11 @@ import {
   type TabSize,
 } from '@/stores/preferences'
 import { useKeybindingsStore, eventAccel } from '@/stores/keybindings'
+import {
+  displayAccelerator,
+  serialiseAccelerator,
+  shortcutPlatformFromNavigator,
+} from '@/common/shortcut-registry'
 import { refreshUserTheme } from '@/services/preferences-applier'
 import {
   destroySettingsWindow,
@@ -39,6 +44,7 @@ const availableDictionaries = ref<string[]>([])
 const dictionariesLoading = ref(false)
 const dictionariesLoadFailed = ref(false)
 const { t } = useI18n()
+const shortcutPlatform = shortcutPlatformFromNavigator(navigator.platform)
 
 // Keep text input responsive while avoiding one IPC write per keystroke. Dirty
 // drafts are not replaced by cross-window events; they are debounced during
@@ -231,21 +237,27 @@ async function startEdit(actionId: string) {
 
 function onAccelKey(ev: KeyboardEvent) {
   if (!editingAccel.value) return
-  if (ev.key === 'Escape') {
+  const hasCommandModifier = ev.ctrlKey || ev.metaKey || ev.altKey
+  // Plain Escape remains a convenient cancellation key. Ctrl/Cmd/Alt+Escape
+  // is a real, recorder-safe accelerator and must reach validation instead.
+  // Shift+Escape preserves the same cancellation behavior as plain Escape.
+  if (ev.key === 'Escape' && !hasCommandModifier) {
     ev.preventDefault()
     ev.stopPropagation()
     cancelEdit()
     return
   }
-  // Keep Tab's native focus movement so the Set/Cancel buttons are reachable.
-  if (ev.key === 'Tab') return
+  // Plain Tab keeps native focus movement so Set/Cancel remain reachable;
+  // Ctrl/Cmd/Alt+Tab is recorded just like every other modified shortcut.
+  // Shift+Tab must continue to move focus backwards rather than become a key.
+  if (ev.key === 'Tab' && !hasCommandModifier) return
   // Ignore lone modifier keys — wait for the user to press the actual key.
   if (['Control', 'Shift', 'Alt', 'Meta'].includes(ev.key)) {
     ev.preventDefault()
     return
   }
   ev.preventDefault()
-  recordedAccel.value = eventAccel(ev)
+  recordedAccel.value = serialiseAccelerator(eventAccel(ev, shortcutPlatform))
   accelResultMessage.value = ''
 }
 
@@ -1275,11 +1287,11 @@ watchEffect(() => {
                   :disabled="keys.saving"
                   :aria-label="t('prefs.keybindings.editLabel', {
                     action: keybindingActionLabel(id),
-                    shortcut: accel || t('prefs.keybindings.unassigned'),
+                    shortcut: accel ? displayAccelerator(accel, shortcutPlatform) : t('prefs.keybindings.unassigned'),
                   })"
                   @click="startEdit(id)"
                 >
-                  {{ accel || '—' }}
+                  {{ accel ? displayAccelerator(accel, shortcutPlatform) : '—' }}
                 </button>
                 <input
                   v-else
@@ -1287,7 +1299,7 @@ watchEffect(() => {
                   type="text"
                   class="kb-input"
                   autofocus
-                  :value="recordedAccel"
+                  :value="displayAccelerator(recordedAccel, shortcutPlatform)"
                   :placeholder="t('prefs.keybindings.pressKeys')"
                   :aria-label="t('prefs.keybindings.recordLabel', { action: keybindingActionLabel(id) })"
                   :aria-describedby="accelFeedback ? `keybinding-error-${id}` : undefined"

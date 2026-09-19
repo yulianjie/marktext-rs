@@ -1,45 +1,27 @@
-export type FixedEditorShortcutAction =
-  | 'edit.undo'
-  | 'edit.redo'
-  | 'edit.selectAll'
-  | 'paragraph.h1'
-  | 'paragraph.h2'
-  | 'paragraph.h3'
-  | 'paragraph.h4'
-  | 'paragraph.h5'
-  | 'paragraph.h6'
-  | 'format.bold'
-  | 'format.italic'
-  | 'format.strikethrough'
-  | 'format.inlineCode'
-  | 'format.link'
-  | 'format.image'
+import {
+  isShortcutAvailable,
+  resolveShortcutAction,
+  type ShortcutAvailabilityContext,
+  type ShortcutAction,
+} from '@/common/shortcut-registry'
 
-const FIXED_EDITOR_SHORTCUTS: Readonly<Record<string, FixedEditorShortcutAction>> = Object.freeze({
-  'ctrl+z': 'edit.undo',
-  'ctrl+shift+z': 'edit.redo',
-  'ctrl+a': 'edit.selectAll',
-  'ctrl+1': 'paragraph.h1',
-  'ctrl+2': 'paragraph.h2',
-  'ctrl+3': 'paragraph.h3',
-  'ctrl+4': 'paragraph.h4',
-  'ctrl+5': 'paragraph.h5',
-  'ctrl+6': 'paragraph.h6',
-  'ctrl+b': 'format.bold',
-  'ctrl+i': 'format.italic',
-  'ctrl+d': 'format.strikethrough',
-  'ctrl+`': 'format.inlineCode',
-  'ctrl+l': 'format.link',
-  'ctrl+shift+i': 'format.image',
-})
+/** Registered ids are strings at runtime; resolution is restricted below. */
+export type FixedEditorShortcutAction = ShortcutAction['id']
 
 /** Resolve a canonical accelerator produced by `eventAccel`. */
 export function resolveFixedEditorShortcut(
   accelerator: string,
   isMac: boolean,
+  context: ShortcutAvailabilityContext = { hasEditor: true },
 ): FixedEditorShortcutAction | null {
-  if (accelerator === 'ctrl+y') return isMac ? null : 'edit.redo'
-  return FIXED_EDITOR_SHORTCUTS[accelerator] ?? null
+  const declaration = resolveShortcutAction(accelerator, {
+    scope: 'editor',
+    dispatch: 'editor',
+    platform: isMac ? 'macos' : 'windows',
+  })
+  return declaration && isShortcutAvailable(declaration, context)
+    ? declaration.id
+    : null
 }
 
 /** Fixed editor commands only run while Muya or CodeMirror owns the key event. */

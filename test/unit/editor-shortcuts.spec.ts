@@ -22,4 +22,12 @@ describe('fixed editor shortcut routing', () => {
     expect(resolveFixedEditorShortcut('ctrl+shift+b', false)).toBeNull()
     expect(resolveFixedEditorShortcut('ctrl+alt+z', false)).toBeNull()
   })
+
+  it('does not claim WYSIWYG-only formatting while CodeMirror owns source mode', () => {
+    const sourceContext = { hasEditor: true, sourceCodeMode: true }
+    expect(resolveFixedEditorShortcut('ctrl+b', false, sourceContext)).toBeNull()
+    expect(resolveFixedEditorShortcut('ctrl+3', false, sourceContext)).toBeNull()
+    // Editor history remains available to the CodeMirror consumer.
+    expect(resolveFixedEditorShortcut('ctrl+z', false, sourceContext)).toBe('edit.undo')
+  })
 })

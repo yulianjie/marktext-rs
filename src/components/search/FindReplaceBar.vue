@@ -6,7 +6,7 @@
  *
  * Keyboard: Esc closes; Enter finds next; Shift+Enter finds previous.
  */
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Close, Search, ArrowDown, ArrowUp, Refresh } from '@element-plus/icons-vue'
 import { useEditorStore } from '@/stores/editor'
 import { bus, type SearchOpt } from '@/bus'
@@ -16,6 +16,7 @@ const editor = useEditorStore()
 const visible = computed(() => editor.findReplaceOpen)
 
 const findInput = ref<HTMLInputElement | null>(null)
+const replaceInput = ref<HTMLInputElement | null>(null)
 const findText = ref('')
 const replaceText = ref('')
 const showReplace = ref(false)
@@ -29,6 +30,21 @@ const matchInfo = computed(() => {
 
 function close() {
   editor.findReplaceOpen = false
+}
+
+/**
+ * The editor menu and renderer shortcut layer both send this transient bus
+ * request. It deliberately does not rely only on `findReplaceOpen`: a second
+ * Ctrl/Cmd+F must restore focus even if the bar was already visible.
+ */
+async function requestOpen(mode: 'find' | 'replace') {
+  if (mode === 'replace') showReplace.value = true
+  editor.findReplaceOpen = true
+  await nextTick()
+  const input = mode === 'replace' ? replaceInput.value : findInput.value
+  input?.focus()
+  input?.select()
+  performFind()
 }
 
 function performFind() {
@@ -64,16 +80,18 @@ function onKey(ev: KeyboardEvent) {
 
 watch(visible, async (open) => {
   if (open) {
-    await nextTick()
-    findInput.value?.focus()
-    findInput.value?.select()
-    performFind()
+    await requestOpen(showReplace.value ? 'replace' : 'find')
   }
 })
 
 watch(findText, () => { if (visible.value) performFind() })
 
-onBeforeUnmount(() => { /* nothing to clean — listeners are inline */ })
+let unsubRequest: (() => void) | null = null
+onMounted(() => {
+  unsubRequest = bus.on('request-find-replace', request => { void requestOpen(request.mode) })
+})
+
+onBeforeUnmount(() => { unsubRequest?.() })
 </script>
 
 <template>
@@ -84,6 +102,7 @@ onBeforeUnmount(() => { /* nothing to clean — listeners are inline */ })
         ref="findInput"
         v-model="findText"
         class="input"
+        data-find-input
         :placeholder="t('find.findPlaceholder')"
         spellcheck="false"
       />
@@ -99,8 +118,10 @@ onBeforeUnmount(() => { /* nothing to clean — listeners are inline */ })
     <div v-if="showReplace" class="row">
       <el-icon class="row-icon"><Refresh /></el-icon>
       <input
+        ref="replaceInput"
         v-model="replaceText"
         class="input"
+        data-replace-input
         :placeholder="t('find.replacePlaceholder')"
         spellcheck="false"
       />

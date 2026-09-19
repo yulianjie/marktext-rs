@@ -94,9 +94,9 @@ class QuickInsert extends BaseScrollFloat {
             h('div.big-title', title),
             h('div.sub-title', subTitle)
           ])
-          const shortCutVnode = h('div.short-cut', [
-            h('span', shortCut)
-          ])
+          const shortCutVnode = shortCut
+            ? h('div.short-cut', [h('span', shortCut)])
+            : null
           const selector = activeItem.label === label ? 'div.item.active' : 'div.item'
           items.push(h(selector, {
             dataset: { label },
@@ -105,7 +105,7 @@ class QuickInsert extends BaseScrollFloat {
                 this.selectItem(item)
               }
             }
-          }, [iconVnode, description, shortCutVnode]))
+          }, shortCutVnode ? [iconVnode, description, shortCutVnode] : [iconVnode, description]))
         }
 
         return h('section', [titleVnode, ...items])

@@ -74,9 +74,9 @@ class FrontMenu extends BaseFloat {
       }, '')))
 
       const textWrapper = h('span', title)
-      const shortCutWrapper = h('div.short-cut', [
-        h('span', shortCut)
-      ])
+      const shortCutWrapper = shortCut
+        ? h('div.short-cut', [h('span', shortCut)])
+        : null
       let itemSelector = `li.item.${label}`
       if (label === getLabel(this.outmostBlock)) {
         itemSelector += '.active'
@@ -87,7 +87,7 @@ class FrontMenu extends BaseFloat {
             this.selectItem(event, { label })
           }
         }
-      }, [iconWrapper, textWrapper, shortCutWrapper])
+      }, shortCutWrapper ? [iconWrapper, textWrapper, shortCutWrapper] : [iconWrapper, textWrapper])
     })
     let subMenuSelector = 'div.submenu'
     if (windowHeight - rect.bottom < MAX_SUBMENU_HEIGHT - (ITEM_HEIGHT + PADDING)) {
@@ -109,11 +109,13 @@ class FrontMenu extends BaseFloat {
         }
       }, '')))
       const textWrapper = h('span', text)
-      const shortCutWrapper = h('div.short-cut', [
-        h('span', shortCut)
-      ])
+      const shortCutWrapper = shortCut
+        ? h('div.short-cut', [h('span', shortCut)])
+        : null
       let itemSelector = `li.item.${label}`
-      const itemChildren = [iconWrapper, textWrapper, shortCutWrapper]
+      const itemChildren = shortCutWrapper
+        ? [iconWrapper, textWrapper, shortCutWrapper]
+        : [iconWrapper, textWrapper]
       if (label === 'turnInto' && subMenu.length !== 0) {
         itemChildren.push(this.renderSubMenu(subMenu))
       }

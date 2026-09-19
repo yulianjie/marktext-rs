@@ -48,6 +48,11 @@ import { normalizeMarkdown } from '@/services/trailing-newline'
 import { setFormatMenuState } from '@/services/tauri-invoke'
 import { spellchecker } from '@/services/spellchecker'
 import {
+  currentShortcutPlatform,
+  displayAccelerator,
+  getShortcutAccelerators,
+} from '@/common/shortcut-registry'
+import {
   buildEditorContextMenuItems,
   extractContextWord,
   LatestContextMenuRequest,
@@ -99,15 +104,17 @@ function captureContextCursor(selection: ContextSelection): CapturedMuyaCursor |
 }
 
 function contextMenuShortcuts() {
-  const isMac = navigator.platform.toLowerCase().includes('mac')
-  const mod = isMac ? '⌘' : 'Ctrl+'
+  const platform = currentShortcutPlatform()
+  const shortcut = (actionId: string) => getShortcutAccelerators(actionId, platform)
+    .map(accelerator => displayAccelerator(accelerator, platform))
+    .join(' / ')
   return {
-    undo: `${mod}Z`,
-    redo: isMac ? '⇧⌘Z' : 'Ctrl+Y',
-    cut: `${mod}X`,
-    copy: `${mod}C`,
-    paste: `${mod}V`,
-    selectAll: `${mod}A`,
+    undo: shortcut('edit.undo'),
+    redo: shortcut('edit.redo'),
+    cut: shortcut('edit.cut'),
+    copy: shortcut('edit.copy'),
+    paste: shortcut('edit.paste'),
+    selectAll: shortcut('edit.selectAll'),
   }
 }
 

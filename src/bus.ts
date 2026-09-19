@@ -46,6 +46,12 @@ export interface BusEventMap {
   'replaceValue': string
   'findInFolder': void
   'reveal-search-hit': import('./services/search-reveal').SearchRevealRequest
+  /**
+   * A transient request owned by FindReplaceBar. Unlike `findReplaceOpen`, it
+   * is delivered even when the bar is already visible so repeated shortcuts
+   * can restore focus.
+   */
+  'request-find-replace': { mode: 'find' | 'replace' }
 
   // Tabs
   'TABS::close-this': string

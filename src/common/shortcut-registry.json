@@ -1,0 +1,481 @@
+{
+  "version": 1,
+  "actions": [
+    {
+      "id": "file.new",
+      "display": "New tab",
+      "scope": "application",
+      "availability": "always",
+      "dispatch": "application",
+      "remappable": true,
+      "default": "Ctrl+T",
+      "reserved": false
+    },
+    {
+      "id": "file.open",
+      "display": "Open file",
+      "scope": "application",
+      "availability": "always",
+      "dispatch": "application",
+      "remappable": true,
+      "default": "Ctrl+O",
+      "reserved": false
+    },
+    {
+      "id": "file.openFolder",
+      "display": "Open folder",
+      "scope": "application",
+      "availability": "always",
+      "dispatch": "application",
+      "remappable": true,
+      "default": "Ctrl+Shift+O",
+      "reserved": false
+    },
+    {
+      "id": "file.save",
+      "display": "Save",
+      "scope": "application",
+      "availability": "always",
+      "dispatch": "application",
+      "remappable": true,
+      "default": "Ctrl+S",
+      "reserved": false
+    },
+    {
+      "id": "file.saveAs",
+      "display": "Save as",
+      "scope": "application",
+      "availability": "always",
+      "dispatch": "application",
+      "remappable": true,
+      "default": "Ctrl+Shift+S",
+      "reserved": false
+    },
+    {
+      "id": "file.closeTab",
+      "display": "Close tab",
+      "scope": "application",
+      "availability": "always",
+      "dispatch": "application",
+      "remappable": true,
+      "default": "Ctrl+W",
+      "reserved": false
+    },
+    {
+      "id": "file.print",
+      "display": "Print",
+      "scope": "application",
+      "availability": "always",
+      "dispatch": "application",
+      "remappable": true,
+      "default": "Ctrl+P",
+      "reserved": false
+    },
+    {
+      "id": "edit.find",
+      "display": "Find",
+      "scope": "application",
+      "availability": "always",
+      "dispatch": "application",
+      "remappable": true,
+      "default": "Ctrl+F",
+      "reserved": false
+    },
+    {
+      "id": "edit.replace",
+      "display": "Replace",
+      "scope": "application",
+      "availability": "always",
+      "dispatch": "application",
+      "remappable": true,
+      "default": "Ctrl+H",
+      "reserved": false
+    },
+    {
+      "id": "view.toggleSidebar",
+      "display": "Toggle sidebar",
+      "scope": "application",
+      "availability": "always",
+      "dispatch": "application",
+      "remappable": true,
+      "default": "Ctrl+Shift+B",
+      "reserved": false
+    },
+    {
+      "id": "view.commandPalette",
+      "display": "Command palette",
+      "scope": "application",
+      "availability": "always",
+      "dispatch": "application",
+      "remappable": true,
+      "default": "Ctrl+Shift+P",
+      "reserved": false
+    },
+    {
+      "id": "file.newWindow",
+      "display": "New window",
+      "scope": "application",
+      "availability": "always",
+      "dispatch": "native",
+      "remappable": false,
+      "default": "Ctrl+Shift+N",
+      "reserved": true
+    },
+    {
+      "id": "file.preferences",
+      "display": "Preferences",
+      "scope": "application",
+      "availability": "always",
+      "dispatch": "native",
+      "remappable": false,
+      "default": "Ctrl+,",
+      "reserved": true
+    },
+    {
+      "id": "file.closeWindow",
+      "display": "Close window",
+      "scope": "application",
+      "availability": "always",
+      "dispatch": "native",
+      "remappable": false,
+      "default": "Ctrl+Shift+W",
+      "reserved": true
+    },
+    {
+      "id": "app.quit",
+      "display": "Quit",
+      "scope": "application",
+      "availability": "always",
+      "dispatch": "system",
+      "remappable": false,
+      "default": "Ctrl+Q",
+      "reserved": true,
+      "systemOwned": true,
+      "platforms": ["macos"]
+    },
+    {
+      "id": "view.toggleSourceCode",
+      "display": "Toggle source code mode",
+      "scope": "application",
+      "availability": "always",
+      "dispatch": "native",
+      "remappable": false,
+      "default": "Ctrl+Alt+S",
+      "reserved": true
+    },
+    {
+      "id": "view.zoomIn",
+      "display": "Zoom in",
+      "scope": "application",
+      "availability": "always",
+      "dispatch": "native",
+      "remappable": false,
+      "default": "Ctrl+=",
+      "reserved": true
+    },
+    {
+      "id": "view.zoomOut",
+      "display": "Zoom out",
+      "scope": "application",
+      "availability": "always",
+      "dispatch": "native",
+      "remappable": false,
+      "default": "Ctrl+-",
+      "reserved": true
+    },
+    {
+      "id": "view.zoomReset",
+      "display": "Reset zoom",
+      "scope": "application",
+      "availability": "always",
+      "dispatch": "native",
+      "remappable": false,
+      "default": "Ctrl+0",
+      "reserved": true
+    },
+    {
+      "id": "window.fullscreen",
+      "display": "Toggle fullscreen",
+      "scope": "application",
+      "availability": "always",
+      "dispatch": "native",
+      "remappable": false,
+      "default": "F11",
+      "reserved": true
+    },
+    {
+      "id": "view.toggleAgent",
+      "display": "Toggle writing agent",
+      "scope": "agent",
+      "availability": "always",
+      "dispatch": "agent",
+      "remappable": false,
+      "default": "Ctrl+Shift+A",
+      "reserved": true
+    },
+    {
+      "id": "edit.undo",
+      "display": "Undo",
+      "scope": "editor",
+      "availability": "editor",
+      "dispatch": "editor",
+      "remappable": false,
+      "default": "Ctrl+Z",
+      "reserved": true
+    },
+    {
+      "id": "edit.redo",
+      "display": "Redo",
+      "scope": "editor",
+      "availability": "editor",
+      "dispatch": "editor",
+      "remappable": false,
+      "default": "Ctrl+Shift+Z",
+      "platformAlternatives": {
+        "windows": ["Ctrl+Y"],
+        "linux": ["Ctrl+Y"]
+      },
+      "reserved": true
+    },
+    {
+      "id": "edit.selectAll",
+      "display": "Select all",
+      "scope": "editor",
+      "availability": "editor",
+      "dispatch": "editor",
+      "remappable": false,
+      "default": "Ctrl+A",
+      "reserved": true
+    },
+    {
+      "id": "edit.cut",
+      "display": "Cut",
+      "scope": "editor",
+      "availability": "editor",
+      "dispatch": "native",
+      "remappable": false,
+      "default": "Ctrl+X",
+      "reserved": true
+    },
+    {
+      "id": "edit.copy",
+      "display": "Copy",
+      "scope": "editor",
+      "availability": "editor",
+      "dispatch": "native",
+      "remappable": false,
+      "default": "Ctrl+C",
+      "reserved": true
+    },
+    {
+      "id": "edit.paste",
+      "display": "Paste",
+      "scope": "editor",
+      "availability": "editor",
+      "dispatch": "native",
+      "remappable": false,
+      "default": "Ctrl+V",
+      "reserved": true
+    },
+    {
+      "id": "paragraph.h1",
+      "display": "Heading 1",
+      "scope": "editor",
+      "availability": "wysiwyg",
+      "dispatch": "editor",
+      "remappable": false,
+      "default": "Ctrl+1",
+      "reserved": true
+    },
+    {
+      "id": "paragraph.h2",
+      "display": "Heading 2",
+      "scope": "editor",
+      "availability": "wysiwyg",
+      "dispatch": "editor",
+      "remappable": false,
+      "default": "Ctrl+2",
+      "reserved": true
+    },
+    {
+      "id": "paragraph.h3",
+      "display": "Heading 3",
+      "scope": "editor",
+      "availability": "wysiwyg",
+      "dispatch": "editor",
+      "remappable": false,
+      "default": "Ctrl+3",
+      "reserved": true
+    },
+    {
+      "id": "paragraph.h4",
+      "display": "Heading 4",
+      "scope": "editor",
+      "availability": "wysiwyg",
+      "dispatch": "editor",
+      "remappable": false,
+      "default": "Ctrl+4",
+      "reserved": true
+    },
+    {
+      "id": "paragraph.h5",
+      "display": "Heading 5",
+      "scope": "editor",
+      "availability": "wysiwyg",
+      "dispatch": "editor",
+      "remappable": false,
+      "default": "Ctrl+5",
+      "reserved": true
+    },
+    {
+      "id": "paragraph.h6",
+      "display": "Heading 6",
+      "scope": "editor",
+      "availability": "wysiwyg",
+      "dispatch": "editor",
+      "remappable": false,
+      "default": "Ctrl+6",
+      "reserved": true
+    },
+    {
+      "id": "format.bold",
+      "display": "Bold",
+      "scope": "editor",
+      "availability": "wysiwyg",
+      "dispatch": "editor",
+      "remappable": false,
+      "default": "Ctrl+B",
+      "reserved": true
+    },
+    {
+      "id": "format.italic",
+      "display": "Italic",
+      "scope": "editor",
+      "availability": "wysiwyg",
+      "dispatch": "editor",
+      "remappable": false,
+      "default": "Ctrl+I",
+      "reserved": true
+    },
+    {
+      "id": "format.strikethrough",
+      "display": "Strikethrough",
+      "scope": "editor",
+      "availability": "wysiwyg",
+      "dispatch": "editor",
+      "remappable": false,
+      "default": "Ctrl+D",
+      "reserved": true
+    },
+    {
+      "id": "format.inlineCode",
+      "display": "Inline code",
+      "scope": "editor",
+      "availability": "wysiwyg",
+      "dispatch": "editor",
+      "remappable": false,
+      "default": "Ctrl+`",
+      "reserved": true
+    },
+    {
+      "id": "format.link",
+      "display": "Insert link",
+      "scope": "editor",
+      "availability": "wysiwyg",
+      "dispatch": "editor",
+      "remappable": false,
+      "default": "Ctrl+L",
+      "reserved": true
+    },
+    {
+      "id": "format.image",
+      "display": "Insert image",
+      "scope": "editor",
+      "availability": "wysiwyg",
+      "dispatch": "editor",
+      "remappable": false,
+      "default": "Ctrl+Shift+I",
+      "reserved": true
+    },
+    {
+      "id": "titlebar.fileMenu",
+      "display": "File menu",
+      "scope": "titlebar",
+      "availability": "custom-chrome",
+      "dispatch": "titlebar",
+      "remappable": false,
+      "default": "Alt+F",
+      "reserved": true
+    },
+    {
+      "id": "titlebar.editMenu",
+      "display": "Edit menu",
+      "scope": "titlebar",
+      "availability": "custom-chrome",
+      "dispatch": "titlebar",
+      "remappable": false,
+      "default": "Alt+E",
+      "reserved": true
+    },
+    {
+      "id": "titlebar.paragraphMenu",
+      "display": "Paragraph menu",
+      "scope": "titlebar",
+      "availability": "custom-chrome",
+      "dispatch": "titlebar",
+      "remappable": false,
+      "default": "Alt+P",
+      "reserved": true
+    },
+    {
+      "id": "titlebar.formatMenu",
+      "display": "Format menu",
+      "scope": "titlebar",
+      "availability": "custom-chrome",
+      "dispatch": "titlebar",
+      "remappable": false,
+      "default": "Alt+O",
+      "reserved": true
+    },
+    {
+      "id": "titlebar.viewMenu",
+      "display": "View menu",
+      "scope": "titlebar",
+      "availability": "custom-chrome",
+      "dispatch": "titlebar",
+      "remappable": false,
+      "default": "Alt+V",
+      "reserved": true
+    },
+    {
+      "id": "titlebar.themeMenu",
+      "display": "Theme menu",
+      "scope": "titlebar",
+      "availability": "custom-chrome",
+      "dispatch": "titlebar",
+      "remappable": false,
+      "default": "Alt+T",
+      "reserved": true
+    },
+    {
+      "id": "titlebar.windowMenu",
+      "display": "Window menu",
+      "scope": "titlebar",
+      "availability": "custom-chrome",
+      "dispatch": "titlebar",
+      "remappable": false,
+      "default": "Alt+W",
+      "reserved": true
+    },
+    {
+      "id": "titlebar.helpMenu",
+      "display": "Help menu",
+      "scope": "titlebar",
+      "availability": "custom-chrome",
+      "dispatch": "titlebar",
+      "remappable": false,
+      "default": "Alt+H",
+      "reserved": true
+    }
+  ]
+}

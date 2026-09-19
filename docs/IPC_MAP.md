@@ -111,10 +111,10 @@ or reading/writing the user's preferences.
 
 | Original | New |
 |---|---|
-| `mt::request-keybindings` | renderer reads JSON file directly via `@tauri-apps/plugin-fs` |
-| `mt::open-keybindings-config` | `tauri-plugin-shell::open()` on the keybindings file |
-| `mt::keybinding-get-pref-keybindings` | renderer reads from preferences store |
-| `mt::keybinding-save-user-keybindings` | renderer writes via plugin-fs |
+| `mt::request-keybindings` | renderer reads the canonical declarations from `src/common/shortcut-registry.json`; user overrides are hydrated from the `keybindings` preference |
+| `mt::open-keybindings-config` | replaced by the in-app **Preferences → Keybindings** recorder; there is no external keybindings file |
+| `mt::keybinding-get-pref-keybindings` | `invoke('cmd_get_preference', { key: 'keybindings' })`; values are stored under `keybindings` in `preferences.json` |
+| `mt::keybinding-save-user-keybindings` | `invoke('cmd_set_preference', { key: 'keybindings', value })`; Rust validates and normalizes the map before persistence |
 | `mt::keybinding-get-keyboard-info` | `@tauri-apps/plugin-os::platform()` / `arch()` |
 | `mt::keybinding-debug-dump-keyboard-info` | renderer-side log only |
 

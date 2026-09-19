@@ -16,14 +16,23 @@ import {
 } from '@lucide/vue'
 import { bus } from '@/bus'
 import { useEditorStore } from '@/stores/editor'
+import { useKeybindingsStore } from '@/stores/keybindings'
 import { usePreferencesStore } from '@/stores/preferences'
 import { useI18n } from '@/i18n'
+import {
+  displayAccelerator,
+  getShortcutDefault,
+  isShortcutRemappable,
+  shortcutPlatformFromNavigator,
+} from '@/common/shortcut-registry'
 
 type ToolbarMenu = 'paragraph' | 'more'
 
 const editor = useEditorStore()
+const keys = useKeybindingsStore()
 const prefs = usePreferencesStore()
 const { locale } = useI18n()
+const shortcutPlatform = shortcutPlatformFromNavigator(navigator.platform)
 
 const toolbarCopy = {
   en: {
@@ -137,26 +146,35 @@ const documentDisabled = computed(() => !hasDocument.value)
 const wysiwygDisabled = computed(() => documentDisabled.value || editor.sourceCodeMode)
 
 const paragraphActions = computed(() => [
-  { type: 'paragraph', glyph: 'P', label: copy.value.paragraph },
+  { type: 'paragraph', glyph: 'P', label: copy.value.paragraph, actionId: undefined },
   ...Array.from({ length: 6 }, (_, index) => {
     const level = index + 1
     return {
       type: `heading ${level}`,
       glyph: `H${level}`,
       label: copy.value.heading.replace('{level}', String(level)),
+      actionId: `paragraph.h${level}`,
     }
   }),
 ])
 
 const inlineActions = computed(() => [
-  { type: 'strong', icon: Bold, label: copy.value.bold, className: 'strong' },
-  { type: 'em', icon: Italic, label: copy.value.italic, className: 'emphasis' },
+  { type: 'strong', icon: Bold, label: copy.value.bold, className: 'strong', actionId: 'format.bold' },
+  { type: 'em', icon: Italic, label: copy.value.italic, className: 'emphasis', actionId: 'format.italic' },
 ])
 
 const listActions = computed(() => [
   { type: 'ul-bullet', icon: List, label: copy.value.bulletList },
   { type: 'ol-order', icon: ListOrdered, label: copy.value.orderedList },
 ])
+
+function shortcutTitle(label: string, actionId?: string): string {
+  if (!actionId) return label
+  const accelerator = isShortcutRemappable(actionId)
+    ? keys.accel(actionId)
+    : getShortcutDefault(actionId)
+  return accelerator ? `${label} (${displayAccelerator(accelerator, shortcutPlatform)})` : label
+}
 
 function emitParagraph(type: string): void {
   if (!wysiwygDisabled.value) bus.emit('paragraph', type)
@@ -183,7 +201,7 @@ function insertTable(): void {
 }
 
 function showFind(): void {
-  if (hasDocument.value) editor.findReplaceOpen = true
+  if (hasDocument.value) bus.emit('request-find-replace', { mode: 'find' })
 }
 
 function toggleSource(): void {
@@ -308,7 +326,7 @@ onBeforeUnmount(() => {
             data-action="undo"
             :disabled="documentDisabled"
             :aria-label="copy.undo"
-            :title="`${copy.undo} (Ctrl+Z)`"
+            :title="shortcutTitle(copy.undo, 'edit.undo')"
             @mousedown.prevent
             @click="undo"
           >
@@ -320,7 +338,7 @@ onBeforeUnmount(() => {
             data-action="redo"
             :disabled="documentDisabled"
             :aria-label="copy.redo"
-            :title="copy.redo"
+            :title="shortcutTitle(copy.redo, 'edit.redo')"
             @mousedown.prevent
             @click="redo"
           >
@@ -363,7 +381,7 @@ onBeforeUnmount(() => {
             :disabled="wysiwygDisabled"
             :aria-label="action.label"
             :aria-pressed="formatActive(action.type)"
-            :title="action.label"
+            :title="shortcutTitle(action.label, action.actionId)"
             @mousedown.prevent
             @click="emitFormat(action.type)"
           >
@@ -371,8 +389,8 @@ onBeforeUnmount(() => {
           </button>
           <button
             v-for="action in [
-              { type: 'del', icon: Strikethrough, label: copy.strike, className: 'strike' },
-              { type: 'inline_code', icon: Code, label: copy.inlineCode, className: 'code' },
+              { type: 'del', icon: Strikethrough, label: copy.strike, className: 'strike', actionId: 'format.strikethrough' },
+              { type: 'inline_code', icon: Code, label: copy.inlineCode, className: 'code', actionId: 'format.inlineCode' },
             ]"
             :key="action.type"
             type="button"
@@ -382,7 +400,7 @@ onBeforeUnmount(() => {
             :disabled="wysiwygDisabled"
             :aria-label="action.label"
             :aria-pressed="formatActive(action.type)"
-            :title="action.label"
+            :title="shortcutTitle(action.label, action.actionId)"
             @mousedown.prevent
             @click="emitFormat(action.type)"
           >
@@ -396,7 +414,7 @@ onBeforeUnmount(() => {
             :disabled="wysiwygDisabled"
             :aria-label="copy.link"
             :aria-pressed="formatActive('link')"
-            :title="`${copy.link} (Ctrl+L)`"
+            :title="shortcutTitle(copy.link, 'format.link')"
             @mousedown.prevent
             @click="emitFormat('link')"
           >
@@ -461,7 +479,7 @@ onBeforeUnmount(() => {
             data-action="format:image"
             :disabled="wysiwygDisabled"
             :aria-label="copy.image"
-            :title="copy.image"
+            :title="shortcutTitle(copy.image, 'format.image')"
             @mousedown.prevent
             @click="emitFormat('image')"
           >
@@ -490,7 +508,7 @@ onBeforeUnmount(() => {
             data-action="find"
             :disabled="!hasDocument"
             :aria-label="copy.find"
-            :title="`${copy.find} (Ctrl+F)`"
+            :title="shortcutTitle(copy.find, 'edit.find')"
             @mousedown.prevent
             @click="showFind"
           >
@@ -536,6 +554,7 @@ onBeforeUnmount(() => {
           class="menu-item"
           role="menuitem"
           :data-action="`paragraph:${action.type}`"
+          :title="shortcutTitle(action.label, action.actionId)"
           @click="runMenuAction(() => emitParagraph(action.type), $event)"
         >
           <span class="menu-glyph" aria-hidden="true">{{ action.glyph }}</span>
@@ -600,6 +619,7 @@ onBeforeUnmount(() => {
           role="menuitem"
           :disabled="wysiwygDisabled"
           data-action="format:image"
+          :title="shortcutTitle(copy.image, 'format.image')"
           @click="runMenuAction(() => emitFormat('image'), $event)"
         >
           <el-icon><Picture /></el-icon><span>{{ copy.image }}</span>

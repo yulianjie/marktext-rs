@@ -1,4 +1,3 @@
-import { isOsx } from '../../config'
 import strongIcon from '../../assets/pngicon/format_strong/2.png'
 import emphasisIcon from '../../assets/pngicon/format_emphasis/2.png'
 import underlineIcon from '../../assets/pngicon/format_underline/2.png'
@@ -9,59 +8,65 @@ import strikeIcon from '../../assets/pngicon/format_strike/2.png'
 import mathIcon from '../../assets/pngicon/format_math/2.png'
 import highlightIcon from '../../assets/pngicon/highlight/2.png'
 import clearIcon from '../../assets/pngicon/format_clear/2.png'
+import {
+  currentShortcutPlatform,
+  displayAccelerator,
+  getShortcutDefault,
+} from '@/common/shortcut-registry'
 
-const COMMAND_KEY = isOsx ? '⌘' : 'Ctrl'
+const shortcutPlatform = currentShortcutPlatform()
+
+const shortcut = actionId => {
+  const accelerator = getShortcutDefault(actionId)
+  return accelerator ? displayAccelerator(accelerator, shortcutPlatform) : undefined
+}
 
 const icons = [
   {
     type: 'strong',
     tooltip: 'Bold',
-    shortcut: `${COMMAND_KEY}+B`,
+    shortcut: shortcut('format.bold'),
     icon: strongIcon
   }, {
     type: 'em',
     tooltip: 'Italic',
-    shortcut: `${COMMAND_KEY}+I`,
+    shortcut: shortcut('format.italic'),
     icon: emphasisIcon
   }, {
     type: 'u',
     tooltip: 'Underline',
-    shortcut: `${COMMAND_KEY}+U`,
     icon: underlineIcon
   }, {
     type: 'del',
     tooltip: 'Strikethrough',
-    shortcut: `${COMMAND_KEY}+D`,
+    shortcut: shortcut('format.strikethrough'),
     icon: strikeIcon
   }, {
     type: 'mark',
     tooltip: 'Highlight',
-    shortcut: `⇧+${COMMAND_KEY}+H`,
     icon: highlightIcon
   }, {
     type: 'inline_code',
     tooltip: 'Inline Code',
-    shortcut: `${COMMAND_KEY}+\``,
+    shortcut: shortcut('format.inlineCode'),
     icon: codeIcon
   }, {
     type: 'inline_math',
     tooltip: 'Inline Math',
-    shortcut: `⇧+${COMMAND_KEY}+M`,
     icon: mathIcon
   }, {
     type: 'link',
     tooltip: 'Link',
-    shortcut: `${COMMAND_KEY}+L`,
+    shortcut: shortcut('format.link'),
     icon: linkIcon
   }, {
     type: 'image',
     tooltip: 'Image',
-    shortcut: `⇧+${COMMAND_KEY}+I`,
+    shortcut: shortcut('format.image'),
     icon: imageIcon
   }, {
     type: 'clear',
     tooltip: 'Clear Formatting',
-    shortcut: `⇧+${COMMAND_KEY}+R`,
     icon: clearIcon
   }
 ]
