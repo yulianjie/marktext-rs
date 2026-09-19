@@ -23,6 +23,8 @@ export default {
   send: '发送', stop: '停止生成', stopping: '正在停止…', stopped: '已停止生成', working: '正在处理…',
   retry: '重试', copy: '复制回复', latest: '回到最新', runningElsewhere: '助手正在另一篇文档中工作。', returnToRun: '返回该文档',
   privacyNote: '文档按需读取；对话、附加图片和使用的技能会发送至所配置的模型。',
+  gitConflictFound: '当前文档中发现 {count} 个 Git 冲突块。',
+  gitConflictReview: '审阅首个冲突',
   steps: '已执行 {count} 个步骤', viewChanges: '查看修改', before: '原文', after: '建议', append: '在末尾追加', deleteText: '删除这段内容',
   applyChange: '应用此处', dismissChange: '忽略此处',
   applyAll: '全部应用', dismissAll: '全部忽略', revertAll: '撤回已应用', changeLines: '第 {start}–{end} 行',

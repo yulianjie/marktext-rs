@@ -13,6 +13,7 @@ pub mod filesystem;
 pub mod ipc;
 pub mod menu;
 pub mod preferences;
+pub mod storage;
 mod window_placement;
 
 use tauri::{Emitter, LogicalSize, Manager, Size};

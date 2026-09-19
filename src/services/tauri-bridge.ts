@@ -9,6 +9,7 @@
 
 import type { App } from 'vue'
 import type { AgentEvent } from './agent'
+import type { StorageStatusEvent } from './cloud-storage'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow'
 
@@ -37,6 +38,7 @@ export interface UpdaterAvailable { version: string; notes?: string }
 
 export interface EventRegistry {
   'mt://agent/event': AgentEvent
+  'mt://storage/status': StorageStatusEvent
   'mt://window/backdrop': boolean
   'mt://second-instance': SecondInstance
   'mt://fs/change': FileWatchEvent

@@ -5,8 +5,12 @@ import DOMPurify from 'dompurify'
 import marked from 'muya/lib/parser/marked'
 import { useAgentStore } from '@/stores/agent'
 import { useEditorStore } from '@/stores/editor'
+import { useCloudStorageStore } from '@/stores/cloudStorage'
 import { useI18n } from '@/i18n'
 import { AGENT_IMAGE_TYPES, MAX_MESSAGE_IMAGES } from '@/services/agent-images'
+import { storageGitConflictStage } from '@/services/tauri-invoke'
+import { referenceSnapshot } from '@/services/agent-references'
+import { buildGitConflictAgentRequest, scanGitConflictHunks } from '@/services/cloud-conflict-agent'
 import { bus } from '@/bus'
 import AgentSettings from './AgentSettings.vue'
 import AgentHistory from './AgentHistory.vue'
@@ -17,7 +21,8 @@ import './agent.css'
 
 const agent = useAgentStore()
 const editor = useEditorStore()
-const { t } = useI18n()
+const cloud = useCloudStorageStore()
+const { locale, t } = useI18n()
 const input = ref<HTMLTextAreaElement | null>(null)
 const imageInput = ref<HTMLInputElement | null>(null)
 const feed = ref<HTMLElement | null>(null)
@@ -32,6 +37,31 @@ const attachmentName = computed(() => {
   return `${selected.value ? t('agent.selection') : t('agent.document')} · ${editor.currentFile.filename}`
 })
 const quickActions = ['polish', 'summarize', 'outline', 'continue'] as const
+function portablePath(value: string): string {
+  let path = value.replace(/\\/g, '/').replace(/\/+$/, '')
+  if (/^\/\/\?\/UNC\//i.test(path)) path = `//${path.slice(8)}`
+  else if (/^\/\/\?\//.test(path)) path = path.slice(4)
+  return path
+}
+function normalizedPath(value: string): string {
+  const path = portablePath(value)
+  return /^[a-z]:\//i.test(path) || path.startsWith('//') ? path.toLowerCase() : path
+}
+const gitConnection = computed(() => {
+  const path = normalizedPath(editor.currentFile?.pathname ?? '')
+  if (!path) return null
+  return cloud.connections.find(connection => {
+    const root = normalizedPath(connection.localRoot)
+    return connection.kind === 'git' && Boolean(root)
+      && (path === root || path.startsWith(`${root}/`))
+  }) ?? null
+})
+const gitConflictHunks = computed(() => {
+  const markdown = editor.currentFile?.markdown
+  if (!gitConnection.value || !markdown?.includes('<<<<<<<')) return []
+  try { return scanGitConflictHunks(markdown) }
+  catch { return [] }
+})
 const renderedMessages = computed(() => agent.conversation.messages.map(message => ({
   ...message,
   html: DOMPurify.sanitize(marked(message.content || ''), {
@@ -60,6 +90,33 @@ function onKey(event: KeyboardEvent) {
 function quick(action: string) {
   agent.conversation.draft = t(`agent.prompts.${action}`)
   input.value?.focus()
+}
+async function reviewFirstGitConflict(): Promise<void> {
+  const tab = editor.currentFile
+  const hunk = gitConflictHunks.value[0]
+  const connection = gitConnection.value
+  if (!tab || !hunk || !connection || agent.busy) return
+  const localPath = portablePath(tab.pathname)
+  const localRoot = portablePath(connection.localRoot)
+  const comparePath = normalizedPath(localPath)
+  const compareRoot = normalizedPath(localRoot)
+  if (!comparePath.startsWith(`${compareRoot}/`)) return
+  const relativePath = localPath.slice(localRoot.length + 1)
+  let base: string | null = null
+  try { base = await storageGitConflictStage(connection.id, relativePath, 1) }
+  catch { /* Add/delete conflicts may not have a common-base stage. */ }
+  const request = buildGitConflictAgentRequest({
+    requestId: crypto.randomUUID(),
+    language: locale.value,
+    fileName: tab.pathname || tab.filename,
+    markdown: tab.markdown,
+    hunk,
+    base,
+  })
+  agent.includeDocument = true
+  agent.referenceDocument = false
+  agent.selection = { ...referenceSnapshot(tab), from: hunk.from, to: hunk.to }
+  await agent.send(request.messages[0]!.content)
 }
 function paste(event: ClipboardEvent) {
   const files = Array.from(event.clipboardData?.items ?? []).filter(item => item.kind === 'file').map(item => item.getAsFile()).filter((file): file is File => Boolean(file))
@@ -115,6 +172,7 @@ onMounted(() => {
   try { const width = Number(localStorage.getItem('mt:agentWidth')); if (width >= 320 && width <= 560) panelWidth.value = width } catch { /* optional preference */ }
   input.value?.focus()
   if (!agent.config) void agent.loadConfig()
+  void cloud.load()
   void agent.loadSkills()
   void agent.loadHistory()
 })
@@ -143,6 +201,12 @@ onBeforeUnmount(() => { document.removeEventListener('focusout', captureEditorBl
       <div v-if="agent.busy && !agent.runningHere" class="agent-banner" role="status">{{ t('agent.runningElsewhere') }}<button type="button" @click="agent.runningKey && editor.setCurrent(agent.runningKey)">{{ t('agent.returnToRun') }}</button></div>
       <div v-if="agent.historyError" class="agent-banner" role="alert">{{ agent.historyError }}</div>
       <div v-if="agent.conversation.restored" class="agent-banner" role="status">{{ t('agent.history.restored') }}</div>
+      <div v-if="gitConflictHunks.length" class="agent-banner" role="status">
+        {{ t('agent.gitConflictFound', { count: gitConflictHunks.length }) }}
+        <button type="button" :disabled="agent.busy" @click="reviewFirstGitConflict">
+          {{ t('agent.gitConflictReview') }}
+        </button>
+      </div>
       <div ref="feed" class="agent-feed" role="log" :aria-label="t('agent.conversation')" aria-live="off" @scroll="onScroll">
         <section v-if="!agent.conversation.messages.length" class="agent-welcome">
           <div class="agent-welcome-mark"><Sparkles :size="25" :stroke-width="1.5" /></div>

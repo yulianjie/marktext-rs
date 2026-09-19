@@ -11,6 +11,14 @@
 import { invoke } from '@tauri-apps/api/core'
 import type { HistoryRecord, HistoryMetadata } from './agent-history'
 import type { AgentConfig, AgentHeader, AgentRequest, AgentSettings, AgentSkill, AgentSkillDetail } from './agent'
+import type {
+  GitSyncResult,
+  StorageConnection,
+  StorageConnectionInput,
+  StoragePluginManifest,
+  StorageProbeResult,
+  StorageSyncResult,
+} from './cloud-storage'
 
 export const agentGetConfig = () => invoke<AgentConfig>('cmd_agent_get_config')
 export const agentHistorySettings = () => invoke<{ enabled: boolean }>('cmd_agent_history_settings')
@@ -30,6 +38,40 @@ export const agentSetSkillEnabled = (id: string, enabled: boolean) =>
   invoke<AgentSkill[]>('cmd_agent_set_skill_enabled', { id, enabled })
 export const agentRemoveSkill = (id: string) => invoke<AgentSkill[]>('cmd_agent_remove_skill', { id })
 export const agentReadSkill = (id: string) => invoke<AgentSkillDetail>('cmd_agent_read_skill', { id })
+
+/* ─── cloud storage ─────────────────────────────────────────── */
+
+export const storageListConnections = () => isTauriRuntime()
+  ? invoke<StorageConnection[]>('cmd_storage_list_connections')
+  : Promise.resolve([])
+
+export const storageSaveConnection = (connection: StorageConnectionInput, secret?: string) =>
+  invoke<StorageConnection>('cmd_storage_save_connection', { connection, secret })
+
+export const storageDeleteConnection = (id: string) =>
+  invoke<void>('cmd_storage_delete_connection', { id })
+
+export const storageProbeConnection = (connection: StorageConnectionInput, secret?: string) =>
+  invoke<StorageProbeResult>('cmd_storage_probe_connection', { connection, secret })
+
+export const storageListPlugins = () => isTauriRuntime()
+  ? invoke<StoragePluginManifest[]>('cmd_storage_list_plugins')
+  : Promise.resolve([])
+
+export const storageSync = (id: string) =>
+  invoke<StorageSyncResult>('cmd_storage_sync', { id })
+
+export const storageGitSync = (id: string) =>
+  invoke<GitSyncResult>('cmd_storage_git_sync', { id })
+
+export const storageGitPrepareMerge = (id: string) =>
+  invoke<GitSyncResult>('cmd_storage_git_prepare_merge', { id })
+
+export const storageGitConflictStage = (id: string, path: string, stage: 1 | 2 | 3) =>
+  invoke<string>('cmd_storage_git_conflict_stage', { id, path, stage })
+
+export const storageGitAbort = (id: string) =>
+  invoke<void>('cmd_storage_git_abort', { id })
 import {
   assertValidEditorSession,
   type EditorSession,

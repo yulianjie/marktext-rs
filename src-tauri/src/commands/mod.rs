@@ -19,6 +19,7 @@ pub mod menu;
 pub mod prefs;
 pub mod search;
 pub mod spellcheck;
+pub mod storage;
 pub mod theme;
 pub mod window;
 pub mod workspace;
@@ -87,6 +88,17 @@ macro_rules! marktext_handler {
             $crate::commands::prefs::cmd_get_editor_session,
             $crate::commands::prefs::cmd_set_editor_session,
             $crate::commands::prefs::cmd_clear_editor_session,
+            // cloud storage
+            $crate::commands::storage::cmd_storage_list_connections,
+            $crate::commands::storage::cmd_storage_save_connection,
+            $crate::commands::storage::cmd_storage_delete_connection,
+            $crate::commands::storage::cmd_storage_probe_connection,
+            $crate::commands::storage::cmd_storage_list_plugins,
+            $crate::commands::storage::cmd_storage_sync,
+            $crate::commands::storage::cmd_storage_git_sync,
+            $crate::commands::storage::cmd_storage_git_prepare_merge,
+            $crate::commands::storage::cmd_storage_git_conflict_stage,
+            $crate::commands::storage::cmd_storage_git_abort,
             // export
             $crate::commands::export::cmd_export_html,
             $crate::commands::export::cmd_export_pdf,

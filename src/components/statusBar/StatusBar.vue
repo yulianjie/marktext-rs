@@ -1,17 +1,16 @@
 <script setup lang="ts">
 /**
- * Read-only document status bar. It intentionally derives every value from
- * the existing editor/preferences stores; changing encoding or line endings
- * remains an explicit document-settings feature rather than an accidental
- * click target in this compact bar.
+ * Read-only document and synchronization status.
  */
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useEditorStore } from '@/stores/editor'
 import { usePreferencesStore } from '@/stores/preferences'
+import { useCloudStorageStore } from '@/stores/cloudStorage'
 import { useI18n } from '@/i18n'
 
 const editor = useEditorStore()
 const prefs = usePreferencesStore()
+const cloud = useCloudStorageStore()
 const { locale, t } = useI18n()
 
 const statusCopy = {
@@ -30,6 +29,12 @@ const statusCopy = {
     sourceMode: 'Source',
     focusMode: 'Focus',
     typewriterMode: 'Typewriter',
+    cloudSynced: 'Cloud synced',
+    cloudPending: 'Cloud pending',
+    cloudSyncing: 'Cloud syncing',
+    cloudOffline: 'Cloud offline',
+    cloudConflict: 'Cloud conflict',
+    cloudError: 'Cloud error',
   },
   'zh-CN': {
     statusBar: '文档状态',
@@ -46,6 +51,12 @@ const statusCopy = {
     sourceMode: '源码',
     focusMode: '专注',
     typewriterMode: '打字机',
+    cloudSynced: '云端已同步',
+    cloudPending: '等待云端同步',
+    cloudSyncing: '正在同步云端',
+    cloudOffline: '云端离线',
+    cloudConflict: '云端冲突',
+    cloudError: '云端同步错误',
   },
   ja: {
     statusBar: 'ドキュメントの状態',
@@ -62,6 +73,12 @@ const statusCopy = {
     sourceMode: 'ソース',
     focusMode: '集中',
     typewriterMode: 'タイプライター',
+    cloudSynced: 'クラウド同期済み',
+    cloudPending: 'クラウド同期待ち',
+    cloudSyncing: 'クラウド同期中',
+    cloudOffline: 'クラウドオフライン',
+    cloudConflict: 'クラウド競合',
+    cloudError: 'クラウド同期エラー',
   },
 } as const
 
@@ -109,6 +126,31 @@ const saveTitle = computed(() => `${saveLabel.value} · ${autoSaveLabel.value}`)
 const modeLabel = computed(() => (
   editor.sourceCodeMode ? copy.value.sourceMode : copy.value.visualMode
 ))
+
+function normalizedPath(value: string): string {
+  let path = value.replace(/\\/g, '/').replace(/\/+$/, '')
+  if (/^\/\/\?\/UNC\//i.test(path)) path = `//${path.slice(8)}`
+  else if (/^\/\/\?\//.test(path)) path = path.slice(4)
+  return /^[a-z]:\//i.test(path) || path.startsWith('//') ? path.toLowerCase() : path
+}
+
+const cloudConnection = computed(() => {
+  const path = normalizedPath(file.value?.pathname ?? '')
+  if (!path) return null
+  return cloud.connections.find(connection => {
+    const root = normalizedPath(connection.localRoot)
+    if (!root) return false
+    return path === root || path.startsWith(`${root}/`)
+  }) ?? null
+})
+const cloudState = computed(() => {
+  const connection = cloudConnection.value
+  return connection ? cloud.syncResults[connection.id]?.state ?? 'pending' : null
+})
+const cloudLabel = computed(() => cloudState.value
+  ? copy.value[`cloud${cloudState.value[0].toUpperCase()}${cloudState.value.slice(1)}` as keyof typeof copy.value]
+  : '')
+onMounted(() => { void cloud.load() })
 </script>
 
 <template>
@@ -155,6 +197,16 @@ const modeLabel = computed(() => (
         </span>
         <span v-if="prefs.autoSave" class="status-hint auto-save" data-status="auto-save">
           {{ autoSaveLabel }}
+        </span>
+        <span
+          v-if="cloudState"
+          class="status-label cloud-state"
+          :class="cloudState"
+          data-status="cloud-state"
+          role="status"
+        >
+          <span class="state-dot" aria-hidden="true" />
+          {{ cloudLabel }}
         </span>
         <span class="status-label mode-label" data-status="editor-mode">{{ modeLabel }}</span>
         <span v-if="prefs.focus" class="status-label mode-label" data-status="focus-mode">
@@ -239,7 +291,6 @@ const modeLabel = computed(() => (
   background: transparent;
   cursor: default;
 }
-
 .status-hint {
   color: var(--mt-fg-muted, #6a737d);
   white-space: nowrap;
@@ -255,6 +306,12 @@ const modeLabel = computed(() => (
 }
 .save-state.dirty .state-dot { background: #bf8700; }
 .save-state.empty .state-dot { background: var(--mt-fg-muted, #8c959f); }
+.cloud-state { gap: 6px; }
+.cloud-state.pending .state-dot,
+.cloud-state.syncing .state-dot { background: #0969da; }
+.cloud-state.offline .state-dot { background: var(--mt-fg-muted, #8c959f); }
+.cloud-state.conflict .state-dot,
+.cloud-state.error .state-dot { background: #cf222e; }
 
 .mode-label { gap: 12px; }
 .mode-label::before {

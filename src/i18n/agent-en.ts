@@ -23,6 +23,8 @@ export default {
   send: 'Send', stop: 'Stop generating', stopping: 'Stopping…', stopped: 'Generation stopped', working: 'Working…',
   retry: 'Retry', copy: 'Copy reply', latest: 'Jump to latest', runningElsewhere: 'The assistant is working in another document.', returnToRun: 'Return to document',
   privacyNote: 'Reads documents on demand. Chat, attached images and used skills are sent to your model.',
+  gitConflictFound: '{count} Git conflict blocks found in this document.',
+  gitConflictReview: 'Review first conflict',
   steps: '{count} steps completed', viewChanges: 'Review changes', before: 'Original', after: 'Suggested', append: 'Append at the end', deleteText: 'Remove this text',
   applyChange: 'Apply change', dismissChange: 'Dismiss change',
   applyAll: 'Apply all', dismissAll: 'Dismiss all', revertAll: 'Revert applied', changeLines: 'Lines {start}–{end}',

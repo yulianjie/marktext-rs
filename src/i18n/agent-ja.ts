@@ -23,6 +23,8 @@ export default {
   send: '送信', stop: '生成を停止', stopping: '停止中…', stopped: '生成を停止しました', working: '処理中…',
   retry: '再試行', copy: '返信をコピー', latest: '最新へ移動', runningElsewhere: '別の文書でアシスタントが動作中です。', returnToRun: '文書に戻る',
   privacyNote: '文書は必要に応じて読みます。会話、添付画像、使用するスキルは設定したモデルに送信されます。',
+  gitConflictFound: 'この文書に {count} 個の Git 競合ブロックがあります。',
+  gitConflictReview: '最初の競合をレビュー',
   steps: '{count} ステップ完了', viewChanges: '変更を確認', before: '変更前', after: '提案', append: '末尾に追加', deleteText: 'この内容を削除',
   applyChange: 'この変更を適用', dismissChange: 'この変更を見送る',
   applyAll: 'すべて適用', dismissAll: 'すべて見送る', revertAll: '適用済みを取り消す', changeLines: '{start}–{end} 行',

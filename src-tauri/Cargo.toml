@@ -1,6 +1,6 @@
 [package]
 name = "marktext-rs"
-version = "0.6.4"
+version = "0.7.0"
 description = "MarkText rewritten with Tauri 2 + Vue 3"
 authors = ["MarkText contributors"]
 license = "MIT"
@@ -39,6 +39,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml_ng = "0.10"
 base64 = "0.22"
+async-trait = "0.1"
 
 # Error handling
 thiserror = "2"
@@ -66,6 +67,7 @@ pulldown-cmark = "0.12"
 
 # HTTP (image upload, Unsplash, GitHub)
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "multipart", "stream"] }
+futures-util = "0.3"
 keyring = { version = "3.6.3", features = ["windows-native", "apple-native", "sync-secret-service", "crypto-rust", "vendored"] }
 
 # Schema validation for preferences
@@ -86,6 +88,9 @@ parking_lot = "0.12"
 spellbook = "0.3"
 url = "2"
 percent-encoding = "2"
+quick-xml = "0.37"
+sha2 = "0.10"
+tempfile = "3"
 uuid = { version = "1", features = ["v4", "serde"] }
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
@@ -110,9 +115,6 @@ wayland-protocols-plasma = { version = "0.3", features = ["client"] }
 [features]
 # This feature is used for production builds or when a dev server is not specified, DO NOT REMOVE!!
 custom-protocol = ["tauri/custom-protocol"]
-
-[dev-dependencies]
-tempfile = "3"
 
 [profile.dev]
 opt-level = 0

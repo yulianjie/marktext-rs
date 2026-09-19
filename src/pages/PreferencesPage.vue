@@ -34,6 +34,7 @@ import {
 import { appIconOptions, type AppIconId } from '@/services/app-icon'
 import type { TrailingNewlinePolicy } from '@/services/trailing-newline'
 import { useI18n } from '@/i18n'
+import CloudStorageSettings from '@/components/cloud/CloudStorageSettings.vue'
 
 const prefs = usePreferencesStore()
 const keys = useKeybindingsStore()
@@ -383,6 +384,7 @@ type SectionId =
   | 'markdown'
   | 'theme'
   | 'image'
+  | 'cloud'
   | 'spellchecker'
   | 'view'
   | 'search'
@@ -394,6 +396,7 @@ const sections = computed<{ id: SectionId; label: string }[]>(() => [
   { id: 'markdown', label: t('prefs.sections.markdown') },
   { id: 'theme', label: t('prefs.sections.theme') },
   { id: 'image', label: t('prefs.sections.image') },
+  { id: 'cloud', label: t('prefs.sections.cloud') },
   { id: 'spellchecker', label: t('prefs.sections.spellchecker') },
   { id: 'view', label: t('prefs.sections.view') },
   { id: 'search', label: t('prefs.sections.search') },
@@ -1105,6 +1108,19 @@ watchEffect(() => {
             />
           </el-form-item>
         </el-form>
+      </section>
+
+      <!-- ── Cloud storage ──────────────────────────────── -->
+      <section
+        v-show="active === 'cloud'"
+        id="prefs-panel-cloud"
+        class="prefs-section"
+        role="tabpanel"
+        aria-labelledby="prefs-tab-cloud"
+        tabindex="0"
+      >
+        <h3>{{ t('prefs.sections.cloud') }}</h3>
+        <CloudStorageSettings />
       </section>
 
       <!-- ── Spellchecker ───────────────────────────────── -->
