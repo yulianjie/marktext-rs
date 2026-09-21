@@ -6,7 +6,7 @@
 
 [Download the latest release](https://github.com/yulianjie/marktext-rs/releases/latest) · [Writing Agent guide](docs/AI_AGENT.md) · [Release notes](docs/releases/v0.7.0.md)
 
-![MarkText editor with outline, tabs, and live Markdown preview](img/marktext-view.png)
+![MarkText editor with outline, tabs, and live Markdown preview](img/marktext-view-en.png)
 
 MarkText keeps the distraction-free, real-time editing experience of the original [MarkText](https://github.com/marktext/marktext), while moving desktop integration, file access, credentials, sync, and AI execution into a Rust backend. It runs on Windows, macOS, and Linux.
 
@@ -29,7 +29,7 @@ Open **AI Assistant** from the title bar, the View menu, the command palette, or
 3. **Review every proposed edit.** The Agent shows line-level before/after diffs. Apply, dismiss, locate, or revert changes individually, or handle a reviewed batch together.
 4. **Reuse the answer.** Insert at the cursor, append to the document, replace the current selection, or create a new unsaved Markdown note.
 
-![Review multiple Agent edits before applying them](img/agent-review.png)
+![Review multiple Agent edits before applying them](img/agent-review-en.png)
 
 ### Agent capabilities
 
@@ -50,11 +50,11 @@ Open **AI Assistant** from the title bar, the View menu, the command palette, or
 
 | Long-document summary | Image conversations |
 | --- | --- |
-| ![Agent chapter summary with progress and reusable answer actions](img/agent-summary.png) | ![Agent conversation with pasted image context](img/agent-images.png) |
+| ![Agent chapter summary with progress and reusable answer actions](img/agent-summary-en.png) | ![Agent conversation with pasted image context](img/agent-images-en.png) |
 
 | Optional local history | Built-in and imported writing skills |
 | --- | --- |
-| ![Local Agent conversation history](img/agent-history.png) | ![Writing skill management](img/agent-skills.png) |
+| ![Local Agent conversation history](img/agent-history-en.png) | ![Writing skill management](img/agent-skills-en.png) |
 
 ### Privacy and safety boundaries
 
