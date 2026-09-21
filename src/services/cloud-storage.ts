@@ -39,6 +39,23 @@ export interface StorageConnectionInput {
   pluginConfig?: string
 }
 
+export type ProjectStorageMode = 'local' | 'git' | 'cloud'
+
+export interface ProjectStorageResolution {
+  mode: ProjectStorageMode
+  connection: StorageConnection | null
+}
+
+export interface RemoteDirectory {
+  name: string
+  path: string
+}
+
+export interface UploadedCloudFile {
+  path: string
+  version: string
+}
+
 export interface StoragePluginManifest {
   id: string
   name: string

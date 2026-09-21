@@ -6,6 +6,24 @@ The Rust storage layer synchronizes that working copy with one configured
 provider. A failed network request must never make a successful local save
 fail.
 
+## Project ownership and single files
+
+- Storage mode belongs to a project root. One canonical project directory has
+  at most one active storage binding: local, Git, self-hosted, WebDAV, or one
+  storage plugin.
+- Opening an unconfigured non-Git directory keeps the project in local mode.
+- Opening a Git repository root defaults to Git mode. MarkText discovers the
+  current branch and preferred remote and creates the project binding when a
+  usable remote exists; a repository without a remote remains visibly in Git
+  mode without inventing one.
+- Opening a file without a project never enrolls it into background sync. The
+  toolbar offers an explicit one-time upload action instead. The user chooses
+  a configured non-Git destination and browses to an existing remote
+  directory.
+- A single-file upload saves locally first and uses create-only conditional
+  write semantics. An existing same-name remote file becomes a conflict and
+  is never silently overwritten.
+
 ## Supported providers
 
 Only four provider families are in scope:

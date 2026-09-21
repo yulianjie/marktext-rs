@@ -44,6 +44,14 @@ describe('sidebar accessibility contract', () => {
     expect(treePane).toMatch(/\.empty-state\s*\{[\s\S]*?display:\s*flex;[\s\S]*?padding:\s*10px 12px;/)
     expect(treePane).toMatch(/\.section-toggle:focus-visible/)
   })
+
+  it('exposes the active project storage mode and project-scoped sync action', () => {
+    expect(treePane).toContain('project.storageMode')
+    expect(treePane).toContain("t(`sideBar.storageMode.${project.storageMode}`)")
+    expect(treePane).toContain('v-if="project.storageConnection"')
+    expect(treePane).toContain('@click.stop="syncProject"')
+    expect(treePane).toContain('@click.stop="openSettings"')
+  })
 })
 
 describe('opened-file row accessibility contract', () => {

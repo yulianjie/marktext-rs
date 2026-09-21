@@ -8,6 +8,7 @@ function readSource(relativePath: string): string {
 
 const toolbar = readSource('../../src/components/editorToolbar/EditorToolbar.vue')
 const statusBar = readSource('../../src/components/statusBar/StatusBar.vue')
+const cloudUpload = readSource('../../src/components/cloud/CloudUploadDialog.vue')
 
 describe('modern editor toolbar contract', () => {
   it('consolidates paragraph levels behind one labelled menu trigger', () => {
@@ -36,6 +37,7 @@ describe('modern editor toolbar contract', () => {
       'insert-table',
       'find',
       'more-menu',
+      'cloud-upload',
     ]) {
       expect(persistentToolbar).toContain(`data-action="${action}"`)
     }
@@ -69,6 +71,17 @@ describe('modern editor toolbar contract', () => {
     expect(toolbar).toContain(':aria-checked="prefs.focus"')
     expect(toolbar).toMatch(/\.tool-button:focus-visible\s*\{/)
     expect(toolbar).toMatch(/\.menu-item:focus-visible\s*\{/)
+  })
+
+  it('keeps ordinary single files local until the user chooses a cloud destination', () => {
+    expect(toolbar).toContain('const singleFileMode = computed(() => hasDocument.value && !project.projectTree)')
+    expect(toolbar).toContain('v-if="singleFileMode"')
+    expect(toolbar).toContain('<CloudUploadDialog v-model="cloudUploadOpen" />')
+    expect(cloudUpload).toContain('await editor.saveCurrent()')
+    expect(cloudUpload).toContain('storageListRemoteDirectories')
+    expect(cloudUpload).toContain('storageUploadFile(connectionId.value, file.pathname, remoteDirectory.value)')
+    expect(cloudUpload).not.toContain("connection.kind === 'git'")
+    expect(cloudUpload).toContain("connection.kind !== 'git'")
   })
 })
 

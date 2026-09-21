@@ -13,11 +13,14 @@ import type { HistoryRecord, HistoryMetadata } from './agent-history'
 import type { AgentConfig, AgentHeader, AgentRequest, AgentSettings, AgentSkill, AgentSkillDetail } from './agent'
 import type {
   GitSyncResult,
+  ProjectStorageResolution,
+  RemoteDirectory,
   StorageConnection,
   StorageConnectionInput,
   StoragePluginManifest,
   StorageProbeResult,
   StorageSyncResult,
+  UploadedCloudFile,
 } from './cloud-storage'
 
 export const agentGetConfig = () => invoke<AgentConfig>('cmd_agent_get_config')
@@ -57,6 +60,15 @@ export const storageProbeConnection = (connection: StorageConnectionInput, secre
 export const storageListPlugins = () => isTauriRuntime()
   ? invoke<StoragePluginManifest[]>('cmd_storage_list_plugins')
   : Promise.resolve([])
+
+export const storageResolveProject = (root: string) =>
+  invoke<ProjectStorageResolution>('cmd_storage_resolve_project', { root })
+
+export const storageListRemoteDirectories = (id: string, path = '') =>
+  invoke<RemoteDirectory[]>('cmd_storage_list_remote_directories', { id, path })
+
+export const storageUploadFile = (id: string, localPath: string, remoteDirectory = '') =>
+  invoke<UploadedCloudFile>('cmd_storage_upload_file', { id, localPath, remoteDirectory })
 
 export const storageSync = (id: string) =>
   invoke<StorageSyncResult>('cmd_storage_sync', { id })

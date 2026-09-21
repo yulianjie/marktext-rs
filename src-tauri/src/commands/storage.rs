@@ -13,6 +13,7 @@ use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager};
+use tokio::process::Command;
 use uuid::Uuid;
 
 use crate::{
@@ -26,7 +27,8 @@ use crate::{
         self_hosted::{SelfHostedConfig, SelfHostedProvider},
         sync::{OneShotSync, SyncAction, SyncConflictReason},
         webdav::{WebDavConfig, WebDavCredentials, WebDavProvider},
-        CredentialStore, DynStorageProvider, ProviderCapabilities, SecretString, StorageError,
+        ConditionalWrite, CredentialStore, DynStorageProvider, ProviderCapabilities,
+        RemoteEntryKind, RemotePath, SecretString, StorageError, WritePrecondition,
     },
 };
 
@@ -185,6 +187,27 @@ pub struct GitSyncView {
     conflicts: Vec<GitConflictView>,
 }
 
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectStorageView {
+    mode: String,
+    connection: Option<ConnectionView>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteDirectoryView {
+    name: String,
+    path: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UploadedFileView {
+    path: String,
+    version: String,
+}
+
 fn invalid(message: &str) -> AppError {
     AppError::InvalidArgument(message.to_owned())
 }
@@ -281,6 +304,13 @@ fn connection_view(saved: &SavedConnection) -> ConnectionView {
         has_secret,
         capabilities: saved.capabilities.clone(),
     }
+}
+
+fn project_root_in_use(file: &ConnectionsFile, root: &Path, existing_index: Option<usize>) -> bool {
+    file.connections
+        .iter()
+        .enumerate()
+        .any(|(index, item)| Some(index) != existing_index && item.local_root == root)
 }
 
 fn clean_optional(value: Option<String>, max: usize) -> AppResult<Option<String>> {
@@ -566,6 +596,9 @@ pub async fn cmd_storage_save_connection(
             connection,
             existing_index.map(|index| &file.connections[index]),
         )?;
+        if project_root_in_use(&file, &saved.local_root, existing_index) {
+            return Err(invalid("storage is already configured for this project"));
+        }
         if let Some(secret) = secret.filter(|secret| !secret.is_empty()) {
             let secret = SecretString::new(secret).map_err(storage_error)?;
             CredentialStore::new(saved.id.clone())
@@ -681,6 +714,253 @@ fn find_saved(app: &AppHandle, id: &str) -> AppResult<SavedConnection> {
         .into_iter()
         .find(|item| item.id == id)
         .ok_or_else(|| AppError::NotFound("storage connection".into()))
+}
+
+async fn git_text(root: &Path, args: &[&str]) -> AppResult<Option<String>> {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(args)
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .output()
+        .await
+        .map_err(|_| AppError::Other("git:unavailable".into()))?;
+    if !output.status.success() {
+        return Ok(None);
+    }
+    let value = String::from_utf8(output.stdout)
+        .map_err(|_| AppError::Other("git:invalidOutput".into()))?;
+    Ok(Some(value.trim().to_owned()))
+}
+
+async fn discover_git_project(root: &Path) -> AppResult<(bool, Option<GitRepositoryConfig>)> {
+    let Some(top_level) = git_text(root, &["rev-parse", "--show-toplevel"]).await? else {
+        return Ok((false, None));
+    };
+    let top_level = tokio::fs::canonicalize(top_level)
+        .await
+        .map_err(|_| AppError::Other("git:notRepository".into()))?;
+    if top_level != root {
+        return Ok((false, None));
+    }
+    let Some(branch) = git_text(root, &["symbolic-ref", "--quiet", "--short", "HEAD"])
+        .await?
+        .filter(|value| !value.is_empty())
+    else {
+        return Ok((true, None));
+    };
+    let remotes = git_text(root, &["remote"])
+        .await?
+        .unwrap_or_default()
+        .lines()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .filter(|value| {
+            !value.starts_with('-')
+                && value
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+        })
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+    if remotes.is_empty() {
+        return Ok((true, None));
+    }
+    let upstream_remote = git_text(
+        root,
+        &[
+            "rev-parse",
+            "--abbrev-ref",
+            "--symbolic-full-name",
+            "@{upstream}",
+        ],
+    )
+    .await?
+    .and_then(|upstream| {
+        upstream
+            .split_once('/')
+            .map(|(remote, _)| remote.to_owned())
+    });
+    let remote = upstream_remote
+        .filter(|candidate| remotes.contains(candidate))
+        .or_else(|| {
+            remotes
+                .iter()
+                .find(|remote| remote.as_str() == "origin")
+                .cloned()
+        })
+        .unwrap_or_else(|| remotes[0].clone());
+    Ok((
+        true,
+        Some(GitRepositoryConfig {
+            repository_path: root.to_path_buf(),
+            remote,
+            branch,
+        }),
+    ))
+}
+
+fn save_discovered_git(
+    app: &AppHandle,
+    root: &Path,
+    config: GitRepositoryConfig,
+) -> AppResult<SavedConnection> {
+    let _guard = CONNECTIONS_LOCK.lock();
+    let path = config_path(app)?;
+    let mut file = read_file(&path)?;
+    if let Some(existing) = file.connections.iter().find(|item| item.local_root == root) {
+        return Ok(existing.clone());
+    }
+    let project_name = root
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .unwrap_or("Git project");
+    let project_name = project_name.chars().take(96).collect::<String>();
+    let saved = SavedConnection {
+        id: Uuid::new_v4().to_string(),
+        name: format!("{project_name} · Git"),
+        kind: ConnectionKind::Git,
+        endpoint: None,
+        username: None,
+        workspace_id: None,
+        local_root: root.to_path_buf(),
+        repository_path: Some(config.repository_path),
+        remote: Some(config.remote),
+        branch: Some(config.branch),
+        plugin_id: None,
+        plugin_config: None,
+        capabilities: vec!["versionHistory".into(), "stableFileId".into()],
+    };
+    file.connections.push(saved.clone());
+    write_file(&path, &file)?;
+    Ok(saved)
+}
+
+#[tauri::command]
+pub async fn cmd_storage_resolve_project(
+    app: AppHandle,
+    root: PathBuf,
+) -> AppResult<ProjectStorageView> {
+    let root = tokio::fs::canonicalize(root).await?;
+    if !root.is_dir() {
+        return Err(invalid("project root is not a directory"));
+    }
+    if let Some(existing) = load_connections(&app)?
+        .connections
+        .into_iter()
+        .find(|item| item.local_root == root)
+    {
+        return Ok(ProjectStorageView {
+            mode: if existing.kind == ConnectionKind::Git {
+                "git"
+            } else {
+                "cloud"
+            }
+            .into(),
+            connection: Some(connection_view(&existing)),
+        });
+    }
+    let (is_git, discovered) = match discover_git_project(&root).await {
+        Ok(result) => result,
+        Err(AppError::Other(message)) if message == "git:unavailable" => (false, None),
+        Err(error) => return Err(error),
+    };
+    if let Some(config) = discovered {
+        let saved = save_discovered_git(&app, &root, config)?;
+        return Ok(ProjectStorageView {
+            mode: "git".into(),
+            connection: Some(connection_view(&saved)),
+        });
+    }
+    Ok(ProjectStorageView {
+        mode: if is_git { "git" } else { "local" }.into(),
+        connection: None,
+    })
+}
+
+#[tauri::command]
+pub async fn cmd_storage_list_remote_directories(
+    app: AppHandle,
+    id: String,
+    path: String,
+) -> AppResult<Vec<RemoteDirectoryView>> {
+    let saved = find_saved(&app, &id)?;
+    if saved.kind == ConnectionKind::Git {
+        return Err(invalid("Git is project-only storage"));
+    }
+    let provider = build_provider(&app, &saved, None)?;
+    let path = RemotePath::new(path).map_err(storage_error)?;
+    let mut directories = provider
+        .list(&path)
+        .await
+        .map_err(storage_error)?
+        .into_iter()
+        .filter(|entry| entry.kind == RemoteEntryKind::Directory)
+        .map(|entry| RemoteDirectoryView {
+            name: entry.path.segments().last().unwrap_or("/").to_owned(),
+            path: entry.path.as_str().to_owned(),
+        })
+        .collect::<Vec<_>>();
+    directories.sort_by(|left, right| left.name.to_lowercase().cmp(&right.name.to_lowercase()));
+    Ok(directories)
+}
+
+#[tauri::command]
+pub async fn cmd_storage_upload_file(
+    app: AppHandle,
+    id: String,
+    local_path: PathBuf,
+    remote_directory: String,
+) -> AppResult<UploadedFileView> {
+    let saved = find_saved(&app, &id)?;
+    if saved.kind == ConnectionKind::Git {
+        return Err(invalid("Git is project-only storage"));
+    }
+    let local_path = tokio::fs::canonicalize(local_path).await?;
+    let metadata = tokio::fs::metadata(&local_path).await?;
+    if !metadata.is_file() {
+        return Err(invalid("upload source is not a file"));
+    }
+    let provider = build_provider(&app, &saved, None)?;
+    let capabilities = provider.probe().await.map_err(storage_error)?;
+    if !capabilities.conditional_write {
+        return Err(AppError::Other("storage:conditionalWriteRequired".into()));
+    }
+    if capabilities
+        .max_object_size
+        .is_some_and(|maximum| metadata.len() > maximum)
+    {
+        return Err(invalid("upload source exceeds provider limit"));
+    }
+    let filename = local_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| invalid("upload filename is not valid Unicode"))?;
+    let directory = RemotePath::new(remote_directory).map_err(storage_error)?;
+    let target = directory.join(filename).map_err(storage_error)?;
+    if provider
+        .list(&directory)
+        .await
+        .map_err(storage_error)?
+        .iter()
+        .any(|entry| entry.path == target)
+    {
+        return Err(AppError::Other("storage:conflict".into()));
+    }
+    let bytes = tokio::fs::read(local_path).await?;
+    let version = provider
+        .write(ConditionalWrite {
+            path: target.clone(),
+            bytes,
+            precondition: WritePrecondition::Missing,
+        })
+        .await
+        .map_err(storage_error)?;
+    Ok(UploadedFileView {
+        path: target.as_str().to_owned(),
+        version: version.opaque,
+    })
 }
 
 #[tauri::command]
@@ -1003,5 +1283,53 @@ mod tests {
         value.endpoint = Some("https://user:secret@example.test/".into());
         value.workspace_id = Some("notes".into());
         assert!(normalize_input(value, None).is_err());
+    }
+
+    #[test]
+    fn one_project_cannot_have_two_storage_bindings() {
+        let root = tempfile::tempdir().unwrap();
+        let saved = normalize_input(
+            {
+                let mut value = input(root.path(), ConnectionKind::Plugin);
+                value.plugin_id = Some("example".into());
+                value.plugin_config = Some("{}".into());
+                value
+            },
+            None,
+        )
+        .unwrap();
+        let file = ConnectionsFile {
+            version: 1,
+            connections: vec![saved.clone()],
+        };
+        assert!(project_root_in_use(&file, &saved.local_root, None));
+        assert!(!project_root_in_use(&file, &saved.local_root, Some(0)));
+    }
+
+    #[tokio::test]
+    async fn git_project_discovery_prefers_origin_and_current_branch() {
+        let root = tempfile::tempdir().unwrap();
+        let initialized = std::process::Command::new("git")
+            .args(["init", "-b", "main"])
+            .arg(root.path())
+            .status()
+            .unwrap();
+        assert!(initialized.success());
+        let remote = std::process::Command::new("git")
+            .arg("-C")
+            .arg(root.path())
+            .args(["remote", "add", "origin", "https://example.test/notes.git"])
+            .status()
+            .unwrap();
+        assert!(remote.success());
+        let canonical = tokio::fs::canonicalize(root.path()).await.unwrap();
+
+        let (is_git, config) = discover_git_project(&canonical).await.unwrap();
+
+        assert!(is_git);
+        let config = config.unwrap();
+        assert_eq!(config.repository_path, canonical);
+        assert_eq!(config.remote, "origin");
+        assert_eq!(config.branch, "main");
     }
 }

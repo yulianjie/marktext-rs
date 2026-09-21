@@ -13,11 +13,13 @@ import {
   Table as Grid, Link, Ellipsis as MoreFilled, Image as Picture,
   Undo2 as RefreshLeft, Redo2 as RefreshRight, Search,
   Bold, Italic, Strikethrough, Code, List, ListOrdered, ListTodo, Quote, Braces,
+  CloudUpload,
 } from '@lucide/vue'
 import { bus } from '@/bus'
 import { useEditorStore } from '@/stores/editor'
 import { useKeybindingsStore } from '@/stores/keybindings'
 import { usePreferencesStore } from '@/stores/preferences'
+import { useProjectStore } from '@/stores/project'
 import { useI18n } from '@/i18n'
 import {
   displayAccelerator,
@@ -25,12 +27,14 @@ import {
   isShortcutRemappable,
   shortcutPlatformFromNavigator,
 } from '@/common/shortcut-registry'
+import CloudUploadDialog from '@/components/cloud/CloudUploadDialog.vue'
 
 type ToolbarMenu = 'paragraph' | 'more'
 
 const editor = useEditorStore()
 const keys = useKeybindingsStore()
 const prefs = usePreferencesStore()
+const project = useProjectStore()
 const { locale } = useI18n()
 const shortcutPlatform = shortcutPlatformFromNavigator(navigator.platform)
 
@@ -66,6 +70,7 @@ const toolbarCopy = {
     source: 'Source-code mode',
     focus: 'Focus mode',
     typewriter: 'Typewriter mode',
+    uploadCloud: 'Upload this file to cloud storage',
   },
   'zh-CN': {
     toolbar: '编辑器工具栏',
@@ -98,6 +103,7 @@ const toolbarCopy = {
     source: '源码模式',
     focus: '专注模式',
     typewriter: '打字机模式',
+    uploadCloud: '将此文件上传到云存储',
   },
   ja: {
     toolbar: 'エディターツールバー',
@@ -130,6 +136,7 @@ const toolbarCopy = {
     source: 'ソースコードモード',
     focus: '集中モード',
     typewriter: 'タイプライターモード',
+    uploadCloud: 'このファイルをクラウドへアップロード',
   },
 } as const
 
@@ -140,10 +147,12 @@ const moreTrigger = ref<HTMLButtonElement | null>(null)
 const menuElement = ref<HTMLElement | null>(null)
 const openMenu = ref<ToolbarMenu | null>(null)
 const menuPosition = ref({ top: 0, left: 0 })
+const cloudUploadOpen = ref(false)
 
 const hasDocument = computed(() => editor.currentFile !== null)
 const documentDisabled = computed(() => !hasDocument.value)
 const wysiwygDisabled = computed(() => documentDisabled.value || editor.sourceCodeMode)
+const singleFileMode = computed(() => hasDocument.value && !project.projectTree)
 
 const paragraphActions = computed(() => [
   { type: 'paragraph', glyph: 'P', label: copy.value.paragraph, actionId: undefined },
@@ -503,6 +512,17 @@ onBeforeUnmount(() => {
 
         <div class="toolbar-group" role="group" :aria-label="copy.moreView">
           <button
+            v-if="singleFileMode"
+            type="button"
+            class="tool-button"
+            data-action="cloud-upload"
+            :aria-label="copy.uploadCloud"
+            :title="copy.uploadCloud"
+            @click="cloudUploadOpen = true"
+          >
+            <CloudUpload aria-hidden="true" />
+          </button>
+          <button
             type="button"
             class="tool-button toolbar-find"
             data-action="find"
@@ -700,6 +720,7 @@ onBeforeUnmount(() => {
       </template>
     </div>
   </Teleport>
+  <CloudUploadDialog v-model="cloudUploadOpen" />
 </template>
 
 <style scoped>

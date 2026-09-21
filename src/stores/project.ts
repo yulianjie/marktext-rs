@@ -26,13 +26,16 @@ import {
   copyWorkspaceEntry,
   moveWorkspaceEntry,
   trashWorkspaceEntry,
+  storageResolveProject,
   type WorkspaceEntryKind,
   type DirEntry,
 } from '@/services/tauri-invoke'
+import type { ProjectStorageMode, StorageConnection } from '@/services/cloud-storage'
 import { listenTyped } from '@/services/tauri-bridge'
 import { useNotificationStore } from './notification'
 import { usePreferencesStore } from './preferences'
 import { useEditorStore } from './editor'
+import { useCloudStorageStore } from './cloudStorage'
 import { t } from '@/i18n'
 
 export interface ClipboardEntry {
@@ -198,8 +201,11 @@ export const useProjectStore = defineStore('project', () => {
   const notify = useNotificationStore()
   const prefs = usePreferencesStore()
   const editor = useEditorStore()
+  const cloud = useCloudStorageStore()
 
   const projectTree = ref<TreeFolder | null>(null)
+  const storageMode = ref<ProjectStorageMode>('local')
+  const storageConnection = ref<StorageConnection | null>(null)
   const activeItem = ref<{ pathname: string; isDirectory: boolean } | null>(null)
   const createCache = ref<{ dirname: string; type: 'file' | 'directory' } | null>(null)
   const renameCache = ref<string | null>(null)
@@ -462,6 +468,8 @@ export const useProjectStore = defineStore('project', () => {
     }
     if (revision !== workspaceRevision) return
     projectTree.value = null
+    storageMode.value = 'local'
+    storageConnection.value = null
 
     let watchedPath = pathname
     try {
@@ -475,6 +483,8 @@ export const useProjectStore = defineStore('project', () => {
       indexFolderTree(root)
       await loadFolder(root)
       if (revision !== workspaceRevision) return
+      await refreshStorage(revision)
+      if (revision !== workspaceRevision) return
       installWatcher()
       void prefs.pushRecentFolder(watchedPath)
     } catch (error) {
@@ -486,7 +496,26 @@ export const useProjectStore = defineStore('project', () => {
         message: errorMessage(error),
       })
       projectTree.value = null
+      storageMode.value = 'local'
+      storageConnection.value = null
       folderIndex.clear()
+    }
+  }
+
+  async function refreshStorage(expectedRevision = workspaceRevision) {
+    const root = projectTree.value
+    if (!root) return
+    try {
+      const resolved = await storageResolveProject(root.pathname)
+      if (expectedRevision !== workspaceRevision) return
+      storageMode.value = resolved.mode
+      storageConnection.value = resolved.connection
+      if (resolved.connection) cloud.rememberConnection(resolved.connection)
+    } catch {
+      // Storage discovery must never prevent a local project from opening.
+      if (expectedRevision !== workspaceRevision) return
+      storageMode.value = 'local'
+      storageConnection.value = null
     }
   }
 
@@ -496,6 +525,8 @@ export const useProjectStore = defineStore('project', () => {
     workspaceRevision += 1
     cancelFilterLoad()
     projectTree.value = null
+    storageMode.value = 'local'
+    storageConnection.value = null
     folderIndex.clear()
     try { await unwatchFolder(root.pathname) } catch { /* ignore */ }
     activeItem.value = null
@@ -715,6 +746,8 @@ export const useProjectStore = defineStore('project', () => {
 
   return {
     projectTree,
+    storageMode,
+    storageConnection,
     activeItem,
     createCache,
     renameCache,
@@ -736,6 +769,7 @@ export const useProjectStore = defineStore('project', () => {
     cancelRename,
     setClipboard,
     refreshTree,
+    refreshStorage,
     createEntry,
     renameEntry,
     copyEntry,

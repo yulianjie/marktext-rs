@@ -10,6 +10,7 @@ const ipc = vi.hoisted(() => ({
   copyWorkspaceEntry: vi.fn(),
   moveWorkspaceEntry: vi.fn(),
   trashWorkspaceEntry: vi.fn(),
+  storageResolveProject: vi.fn(),
 }))
 const bridge = vi.hoisted(() => ({ listenTyped: vi.fn(async () => () => {}) }))
 const preferences = vi.hoisted(() => ({
@@ -70,6 +71,7 @@ describe('lazy project tree', () => {
     ipc.watchFolder.mockImplementation(async (path: string) => path)
     ipc.unwatchFolder.mockResolvedValue(undefined)
     ipc.listWorkspaceDirectory.mockResolvedValue([])
+    ipc.storageResolveProject.mockResolvedValue({ mode: 'local', connection: null })
   })
 
   it('opens a workspace by listing only the root level', async () => {
@@ -85,6 +87,26 @@ describe('lazy project tree', () => {
     expect(ipc.listWorkspaceDirectory).toHaveBeenCalledWith('C:\\notes', 'C:\\notes')
     expect(project.projectTree?.loaded).toBe(true)
     expect(project.projectTree?.folders[0].loaded).toBe(false)
+    expect(ipc.storageResolveProject).toHaveBeenCalledWith('C:\\notes')
+    expect(project.storageMode).toBe('local')
+  })
+
+  it('adopts automatically discovered Git storage for a Git project', async () => {
+    ipc.storageResolveProject.mockResolvedValue({
+      mode: 'git',
+      connection: {
+        id: 'git-notes', name: 'notes · Git', kind: 'git', localRoot: 'C:\\notes',
+        repositoryPath: 'C:\\notes', remote: 'origin', branch: 'main',
+        hasSecret: false, capabilities: ['versionHistory', 'stableFileId'],
+      },
+    })
+    const project = useProjectStore()
+
+    await project.openRoot('C:\\notes')
+
+    expect(project.storageMode).toBe('git')
+    expect(project.storageConnection?.kind).toBe('git')
+    expect(project.storageConnection?.remote).toBe('origin')
   })
 
   it('loads a folder on demand and deduplicates concurrent expand requests', async () => {

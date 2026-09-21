@@ -94,6 +94,12 @@ export const useCloudStorageStore = defineStore('cloudStorage', () => {
     }
   }
 
+  function rememberConnection(connection: StorageConnection): void {
+    const index = connections.value.findIndex(item => item.id === connection.id)
+    if (index >= 0) connections.value[index] = connection
+    else connections.value.push(connection)
+  }
+
   async function remove(id: string): Promise<boolean> {
     lastError.value = null
     busyId.value = id
@@ -172,6 +178,7 @@ export const useCloudStorageStore = defineStore('cloudStorage', () => {
     load,
     probe,
     save,
+    rememberConnection,
     remove,
     sync,
     prepareGitMerge,

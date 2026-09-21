@@ -7,8 +7,9 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import { collectTreeFilterMatches, useProjectStore } from '@/stores/project'
 import { useEditorStore } from '@/stores/editor'
-import { openFolder } from '@/services/tauri-invoke'
+import { openFolder, openSettings } from '@/services/tauri-invoke'
 import { useNotificationStore } from '@/stores/notification'
+import { useCloudStorageStore } from '@/stores/cloudStorage'
 import type { TreeFile } from '@/stores/treeCtrl'
 import {
   CaretRight,
@@ -26,6 +27,7 @@ import OpenedFileRow from './OpenedFileRow.vue'
 const project = useProjectStore()
 const editor = useEditorStore()
 const notify = useNotificationStore()
+const cloud = useCloudStorageStore()
 
 const openedCollapsed = ref(false)
 const projectCollapsed = ref(false)
@@ -122,6 +124,7 @@ async function refreshProject() {
   refreshing.value = true
   try {
     await project.refreshTree()
+    await project.refreshStorage()
   } catch (err) {
     notifyOperationError(err)
   } finally {
@@ -132,6 +135,16 @@ async function refreshProject() {
 async function closeProject() {
   filterText.value = ''
   await project.closeRoot()
+}
+
+async function syncProject() {
+  const connection = project.storageConnection
+  if (!connection) return
+  const ok = await cloud.sync(connection)
+  notify.pushToast({
+    type: ok ? 'success' : 'error',
+    message: ok ? t('tree.projectSyncComplete') : cloud.lastError ?? t('tree.projectSyncFailed'),
+  })
 }
 </script>
 
@@ -185,6 +198,21 @@ async function closeProject() {
           <el-icon class="caret" :class="{ open: !projectCollapsed }"><CaretRight /></el-icon>
           <span class="label">{{ project.projectTree ? project.projectTree.name : t('sideBar.project') }}</span>
         </button>
+        <span v-if="project.projectTree" class="storage-mode" :class="project.storageMode">
+          {{ t(`sideBar.storageMode.${project.storageMode}`) }}
+        </span>
+        <el-button v-if="project.projectTree" size="small" link @click.stop="openSettings">
+          {{ t('sideBar.storage') }}
+        </el-button>
+        <el-button
+          v-if="project.storageConnection"
+          size="small"
+          link
+          :loading="cloud.busyId === project.storageConnection.id"
+          @click.stop="syncProject"
+        >
+          {{ t('prefs.cloud.syncNow') }}
+        </el-button>
         <el-button v-if="project.projectTree" size="small" link class="change-btn" @click.stop="pickFolder">
           {{ t('sideBar.change') }}
         </el-button>
@@ -306,6 +334,20 @@ async function closeProject() {
   flex-shrink: 0;
 }
 .section-header:hover { background: var(--mt-row-hover); }
+.storage-mode {
+  flex: 0 0 auto;
+  margin-left: 6px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--mt-row-hover);
+  color: var(--mt-fg-muted);
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.storage-mode.git { color: #b35c00; }
+.storage-mode.cloud { color: #0969da; }
 .section-toggle {
   display: flex;
   align-items: center;
